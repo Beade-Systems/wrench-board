@@ -5,6 +5,16 @@ const $ = id => document.getElementById(id);
 const count = value => new Intl.NumberFormat('de-DE').format(value);
 const labels = { Computers: 'Computer', Phones: 'Smartphones', 'Game Consoles': 'Konsolen', Drones: 'Drohnen' };
 const folderHash = path => (path ? `#folder/${path.split('/').map(encodeURIComponent).join('/')}` : '#catalog');
+const MAX_VISIBLE_REVISIONS = 8;
+
+/** Revision names without the text they all share, cut back to a separator. */
+function revisionLabels(names) {
+  let prefix = names[0];
+  for (const name of names) while (!name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  prefix = prefix.replace(/[^-_ ]*$/, '');
+  return names.map(name => name.slice(prefix.length) || name);
+}
+
 function folderFromHash() {
   const match = location.hash.match(/^#folder\/(.+)$/);
   if (!match) return '';
@@ -188,7 +198,8 @@ export class CatalogBrowser {
         })) };
       } else {
         const params = new URLSearchParams({ q: $('source-search').value, kind: $('source-kind').value,
-          folder: this.folder, recursive: String(Boolean(query)), sort: $('source-sort').value,
+          folder: this.folder, recursive: String(Boolean(query)),
+          group: String(!query && $('source-kind').value === 'board'), sort: $('source-sort').value,
           offset: String(this.offset), limit: String(this.limit) });
         [result, listing] = await Promise.all([this.request(`/source/files?${params}`, { signal }), this.listing(this.folder)]);
       }
@@ -202,7 +213,8 @@ export class CatalogBrowser {
         ? 'Öffne eine Platine aus xzz_downloads oder importiere eine eigene Datei.'
         : 'Versuche einen anderen Modellnamen oder ändere die Filter.';
       const scope = listing && this.folder ? ` in ${labels[listing.label] || listing.label}` : '';
-      const files = `${count(result.total)} ${result.total === 1 ? 'Datei' : 'Dateien'}`;
+      const fileCount = result.files ?? result.total;
+      const files = `${count(fileCount)} ${fileCount === 1 ? 'Datei' : 'Dateien'}${result.files > result.total ? ` · ${count(result.total)} Boards` : ''}`;
       $('source-results').textContent = query ? `${files} für „${query}“${scope}`
         : subfolders ? `${count(subfolders)} Ordner${result.total ? ` · ${files} direkt hier` : ''}` : `${files}${scope}`;
       $('source-page').textContent = result.total ? `${count(this.offset + 1)}–${count(Math.min(this.offset + this.limit, result.total))} von ${count(result.total)}` : 'Keine Ergebnisse';
@@ -222,7 +234,38 @@ export class CatalogBrowser {
     }
   }
 
+  /** One card per board number, with a directly clickable chip per revision. */
+  groupCard(item) {
+    const card = node('div', 'source-card source-group');
+    const visual = node('div', 'source-card-visual');
+    visual.append(node('span', 'source-file-icon', icons.board), node('span', 'source-extension', `${item.revisions.length} REV`));
+    const copy = node('div', 'source-card-copy');
+    const identity = [...new Set([item.brand, item.model].filter(Boolean))].filter(text => text !== item.board_number).join(' · ');
+    copy.append(node('h2', '', item.board_number));
+    if (identity) copy.append(node('p', 'source-card-identity', identity));
+    const chips = node('div', 'revision-chips');
+    const names = item.revisions.map(revision => revision.name.slice(0, -revision.extension.length));
+    const texts = revisionLabels(names);
+    const add = (start, end) => item.revisions.slice(start, end).forEach((revision, offset) => {
+      const chip = node('button', 'revision-chip', texts[start + offset]);
+      chip.type = 'button';chip.title = revision.name;
+      chip.addEventListener('click', () => this.open(revision, chip));
+      chips.append(chip);
+    });
+    add(0, MAX_VISIBLE_REVISIONS);
+    if (item.revisions.length > MAX_VISIBLE_REVISIONS) {
+      const more = node('button', 'revision-chip more', `+${item.revisions.length - MAX_VISIBLE_REVISIONS}`);
+      more.type = 'button';
+      more.addEventListener('click', () => { more.remove();add(MAX_VISIBLE_REVISIONS, item.revisions.length); });
+      chips.append(more);
+    }
+    copy.append(chips);
+    card.append(visual, copy);
+    return card;
+  }
+
   card(item) {
+    if (item.revisions) return this.groupCard(item);
     const board = item.kind === 'board';
     const card = node(board ? 'button' : 'a', `source-card kind-${item.kind}`);
     card.title = item.path;
@@ -253,7 +296,8 @@ export class CatalogBrowser {
   async open(item, card) {
     if (this.opening) { this.notify('Eine Platine wird gerade geöffnet. Bitte kurz warten.');return; }
     this.opening = true;card.disabled = true;card.classList.add('opening');
-    const action = card.querySelector('.source-card-action');action.textContent = 'Lädt …';
+    const action = card.querySelector('.source-card-action');
+    if (action) action.textContent = 'Lädt …';
     this.notify(`${item.name} wird geöffnet …`, false, true);
     try {
       let id = item.id;
@@ -263,7 +307,7 @@ export class CatalogBrowser {
       }
       await this.openBoard(id);
     } catch (error) { this.notify(`Datei konnte nicht geöffnet werden: ${error.message}`, true); }
-    finally { this.opening = false;card.disabled = false;card.classList.remove('opening');action.textContent = 'Öffnen ↗'; }
+    finally { this.opening = false;card.disabled = false;card.classList.remove('opening');if (action) action.textContent = 'Öffnen ↗'; }
   }
 
   fail(error) {

@@ -95,3 +95,12 @@ button.folder-crumb:hover{color:var(--text);background:var(--raised)}
 .grid-pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:18px;color:var(--muted);font:11px var(--mono)}
 .folder-card-copy small{white-space:normal}
 @media(max-width:600px){.browser-search{flex:1 1 100%}.catalog-browser{padding:16px}.browser-heading{flex-direction:column;align-items:flex-start}.browser-filters{flex-wrap:wrap}.source-stats{flex-wrap:wrap}.results-heading{flex-direction:column}}
+
+/* Board-number groups: one card, a chip per revision. */
+.source-group{cursor:default}
+.source-group .source-file-icon{color:var(--green)}
+.revision-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}
+.revision-chip{padding:3px 7px;background:var(--bg);border:1px solid var(--line);border-radius:4px;color:var(--text);font:10.5px var(--mono);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.revision-chip:hover{border-color:var(--green);color:var(--green)}
+.revision-chip.more{color:var(--muted)}
+.revision-chip.opening{opacity:.55;cursor:progress}

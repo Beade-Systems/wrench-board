@@ -3,14 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wrench-board"
+name = "PCB Board"
 version = "0.1.0"
 description = "Agent-native board-level diagnostics workbench powered by Claude Opus 4.8."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
 authors = [
-    { name = "Alexis Chapellier" },
+    { name = "Beade Systems" },
 ]
 keywords = [
     "claude",

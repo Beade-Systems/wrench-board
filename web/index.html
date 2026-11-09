@@ -188,6 +188,7 @@
 <div id="landing-overlay" class="landing" hidden>
   <div class="landing-bg" aria-hidden="true"></div>
   <nav class="landing-tools" aria-label="Tools">
+    <a href="/library.html" class="landing-tool-link">PCB-Bibliothek</a>
     <!-- Mobile-only drawer trigger for the recent-repairs sidebar (hidden on
          desktop where the sidebar is a persistent left column, and hidden until
          there is at least one repair — landing.js syncs its `hidden` with the
@@ -1569,7 +1570,7 @@
      after it to install window.Boardview / window.initBoardview and drive
      Three.js. The legacy SVG/D3 brd_viewer.js was retired — WebGL is the only
      renderer now. -->
-<script src="js/pcb_viewer.js?v=edge29"></script>
+<!-- The bridge imports the modular viewer before initialization. -->
 <script type="module" src="js/pcb_viewer_bridge.js?v=edge29" defer></script>
 <script type="module" src="js/schematic_minimap.js" defer></script>
 <script type="module" src="/js/profile.js"></script>

@@ -1,3 +1,4 @@
+import { PCBViewerOptimized } from "./pcb_viewer.js";
 // Bridge between the SVG/D3 brd_viewer.js call surface
 // (window.initBoardview, window.Boardview) and the WebGL viewer in
 // pcb_viewer.js. Loaded after brd_viewer.js so its overrides take effect.
@@ -19,6 +20,7 @@ let _netSet = null;
 // (#pcb → #home → #pcb) doesn't refetch the payload + retrigger XZZ
 // decryption + rebuild every InstancedMesh.
 let _loadedSlug = null;
+let _loading = null;
 
 function resolveSlug() {
   return getDeviceSlug()
@@ -35,10 +37,10 @@ function rebuildIndexes(payload) {
   }
 }
 
-async function fetchPayload(slug) {
+async function fetchPayload(slug, signal) {
   const url = `/api/board/render?slug=${encodeURIComponent(slug)}`;
   console.log("[pcb_viewer_bridge] fetching", url);
-  const res = await apiFetch(url, { cache: "no-store" });
+  const res = await apiFetch(url, { cache: "no-store", signal });
   console.log("[pcb_viewer_bridge] render status", res.status);
   if (!res.ok) return null;
   const payload = await res.json();
@@ -53,9 +55,10 @@ async function fetchPayload(slug) {
   return payload;
 }
 
-async function ensureViewerAndLoad(slug) {
-  const payload = await fetchPayload(slug);
-  if (!payload) return false;
+async function ensureViewerAndLoad(slug, signal) {
+  const payload = await fetchPayload(slug, signal);
+  if (signal.aborted) return false;
+  if (!payload) throw new Error("Boardview could not be loaded.");
 
   if (typeof THREE === "undefined") {
     console.error("[pcb_viewer_bridge] THREE missing");
@@ -73,7 +76,7 @@ async function ensureViewerAndLoad(slug) {
   if (!viewer) {
     try {
       console.log("[pcb_viewer_bridge] instantiating viewer");
-      viewer = new window.PCBViewerOptimized("pcb-canvas");
+      viewer = new PCBViewerOptimized("pcb-canvas");
     } catch (err) {
       console.error("[pcb_viewer_bridge] viewer constructor failed", err);
       viewer = null;
@@ -121,7 +124,12 @@ window.initBoardview = async function bridgedInit(_containerEl) {
   // native PCB section ships its own canvas / info panel layout.
   const slug = resolveSlug();
   console.log("[pcb_viewer_bridge] bridgedInit slug=", slug);
+  if (_loading && _loading.slug !== slug) {
+    _loading.controller.abort();
+    _loading = null;
+  }
   if (!slug) return;
+  if (_loading?.slug === slug) return _loading.promise;
   // Already loaded — just resize the canvas to the now-visible
   // section and bail. The user toggling between #home and #pcb
   // shouldn't pay for a fresh decrypt + rebuild every time.
@@ -133,7 +141,22 @@ window.initBoardview = async function bridgedInit(_containerEl) {
   }
   // WebGL is the only renderer now (the SVG brd_viewer.js fallback was
   // retired). A failure here surfaces in ensureViewerAndLoad's own error UI.
-  await ensureViewerAndLoad(slug);
+  const pending = { slug, controller: new AbortController() };
+  _loading = pending;
+  pending.promise = ensureViewerAndLoad(slug, pending.controller.signal)
+    .catch(error => {
+      if (error.name === 'AbortError' || pending.controller.signal.aborted) return false;
+      console.error('[pcb_viewer_bridge] board load failed', error);
+      const empty = document.getElementById('no-file-message');
+      if (empty) {
+        empty.classList.remove('hidden');
+        empty.querySelector('.brd-empty-title').textContent = 'Boardview could not be loaded';
+        empty.querySelector('.brd-empty-sub').textContent = 'Check the selected file and try again.';
+      }
+      return false;
+    })
+    .finally(() => { if (_loading === pending) _loading = null; });
+  return pending.promise;
 };
 
 // ---------- window.Boardview override ----------
@@ -542,4 +565,15 @@ function wireToolbarOnce() {
 const _pending = (window.Boardview && window.Boardview.__pending) || [];
 _pending.forEach((ev) => {
   try { window.Boardview.apply(ev); } catch (_) {}
+});
+
+// Keep bfcache pages intact; release GPU resources on a real page departure.
+window.addEventListener('pagehide', event => {
+  if (event.persisted) return;
+  _loading?.controller.abort();
+  _loading = null;
+  viewer?.dispose();
+  viewer = null;
+  boardPayload = null;
+  _loadedSlug = null;
 });

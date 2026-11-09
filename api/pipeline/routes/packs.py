@@ -369,7 +369,7 @@ def _pack_is_complete(pack_dir: Path, owner_ref: str | None = None) -> bool:
 
 
 @router.get("/packs", response_model=list[PackSummary])
-async def list_packs(
+def list_packs(
     x_owner_ref: str | None = Header(default=None, alias="X-Owner-Ref"),
 ) -> list[PackSummary]:
     settings = _pkg.get_settings()
@@ -382,36 +382,10 @@ async def list_packs(
     )
 
 
-@router.get("/taxonomy", response_model=TaxonomyTree)
-async def get_taxonomy() -> TaxonomyTree:
-    """Scan every pack's registry.json and group by taxonomy.
-
-    A pack lands in `brands[brand][model]` when both `taxonomy.brand` and
-    `taxonomy.model` are present; otherwise it falls to `uncategorized`. The UI
-    uses this to populate the 'New repair' modal's accordion by manufacturer
-    and the home section headers.
-    """
-    settings = _pkg.get_settings()
-    root = Path(settings.memory_root)
-    tree = TaxonomyTree()
-    if not root.exists():
-        return tree
-
-    # T9a: one carnet read → map each device's aliases so the autocomplete can
-    # match by board#/model/EMC. Best-effort: a registry hiccup just leaves
-    # aliases empty (the label-based filter still works).
-    aliases_by_slug: dict[str, list[str]] = {}
-    try:
-        from api.pipeline.device_registry import get_device_registry_store
-
-        for ident in await get_device_registry_store(root).list():
-            vals: list[str] = []
-            for items in (ident.get("facets") or {}).values():
-                vals.extend(items)
-            aliases_by_slug[ident["canonicalKey"]] = vals
-    except Exception:  # noqa: BLE001 - autocomplete enrichment must never 500 the list
-        logger.warning("[Taxonomy] carnet alias enrichment failed", exc_info=True)
-
+def _collect_taxonomy(
+    root: Path, tree: TaxonomyTree, aliases_by_slug: dict[str, list[str]]
+) -> TaxonomyTree:
+    """Fill `tree` from every pack registry (blocking disk scan)."""
     for pack_dir in sorted(root.iterdir(), key=lambda p: p.name):
         if not pack_dir.is_dir():
             continue
@@ -449,6 +423,39 @@ async def get_taxonomy() -> TaxonomyTree:
             tree.uncategorized.append(entry)
 
     return tree
+
+
+@router.get("/taxonomy", response_model=TaxonomyTree)
+async def get_taxonomy() -> TaxonomyTree:
+    """Scan every pack's registry.json and group by taxonomy.
+
+    A pack lands in `brands[brand][model]` when both `taxonomy.brand` and
+    `taxonomy.model` are present; otherwise it falls to `uncategorized`. The UI
+    uses this to populate the 'New repair' modal's accordion by manufacturer
+    and the home section headers.
+    """
+    settings = _pkg.get_settings()
+    root = Path(settings.memory_root)
+    tree = TaxonomyTree()
+    if not root.exists():
+        return tree
+
+    # T9a: one carnet read → map each device's aliases so the autocomplete can
+    # match by board#/model/EMC. Best-effort: a registry hiccup just leaves
+    # aliases empty (the label-based filter still works).
+    aliases_by_slug: dict[str, list[str]] = {}
+    try:
+        from api.pipeline.device_registry import get_device_registry_store
+
+        for ident in await get_device_registry_store(root).list():
+            vals: list[str] = []
+            for items in (ident.get("facets") or {}).values():
+                vals.extend(items)
+            aliases_by_slug[ident["canonicalKey"]] = vals
+    except Exception:  # noqa: BLE001 - autocomplete enrichment must never 500 the list
+        logger.warning("[Taxonomy] carnet alias enrichment failed", exc_info=True)
+
+    return await asyncio.to_thread(_collect_taxonomy, root, tree, aliases_by_slug)
 
 
 @router.get("/packs/{device_slug}", response_model=PackSummary)
@@ -561,7 +568,7 @@ async def expand_device_pack(
 
 
 @router.get("/packs/{device_slug}/graph")
-async def get_pack_graph(device_slug: str) -> dict:
+def get_pack_graph(device_slug: str) -> dict:
     """Return the combined graph payload ({nodes, edges}) consumed by web/index.html."""
     settings = _pkg.get_settings()
     slug = _slugify(device_slug)

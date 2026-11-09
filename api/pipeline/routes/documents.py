@@ -223,7 +223,7 @@ async def post_pack_document(
 
 
 @router.get("/packs/{device_slug}/documents")
-async def list_pack_documents(device_slug: str) -> dict:
+def list_pack_documents(device_slug: str) -> dict:
     """List every upload persisted for this pack, grouped by kind."""
     slug = _validate_slug(device_slug)
     settings = _pkg.get_settings()

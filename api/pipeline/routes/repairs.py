@@ -316,7 +316,7 @@ def _persist_repair(
 
 
 @router.get("/repairs", response_model=list[RepairSummary])
-async def list_repairs() -> list[RepairSummary]:
+def list_repairs() -> list[RepairSummary]:
     """Return every repair ever created, across every device, newest first.
 
     Powers the home library: each row is one client intervention the
@@ -362,7 +362,7 @@ async def list_repairs() -> list[RepairSummary]:
 
 
 @router.get("/repairs/{repair_id}", response_model=RepairSummary)
-async def get_repair(repair_id: str) -> RepairSummary:
+def get_repair(repair_id: str) -> RepairSummary:
     """Return one repair's metadata — used to resume a session from its id."""
     settings = _pkg.get_settings()
     root = Path(settings.memory_root)

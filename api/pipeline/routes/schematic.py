@@ -339,7 +339,7 @@ async def get_pack_schematic_page_png(
 
 
 @router.get("/packs/{device_slug}/schematic")
-async def get_pack_schematic(
+def get_pack_schematic(
     device_slug: str,
     x_owner_ref: str | None = Header(default=None, alias="X-Owner-Ref"),
 ) -> dict:
@@ -516,7 +516,7 @@ async def post_classify_nets(device_slug: str) -> dict:
 
 
 @router.get("/packs/{device_slug}/schematic/boot")
-async def get_pack_schematic_boot(
+def get_pack_schematic_boot(
     device_slug: str,
     x_owner_ref: str | None = Header(default=None, alias="X-Owner-Ref"),
 ) -> dict:
@@ -553,7 +553,7 @@ async def get_pack_schematic_boot(
 
 
 @router.get("/packs/{device_slug}/schematic/passives")
-async def get_schematic_passives(
+def get_schematic_passives(
     device_slug: str,
     x_owner_ref: str | None = Header(default=None, alias="X-Owner-Ref"),
 ) -> list[dict]:
@@ -597,7 +597,7 @@ async def get_schematic_passives(
 
 
 @router.post("/packs/{device_slug}/schematic/simulate")
-async def post_simulate(
+def post_simulate(
     device_slug: str,
     request: SimulateRequest,
     x_owner_ref: str | None = Header(default=None, alias="X-Owner-Ref"),

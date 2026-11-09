@@ -204,13 +204,11 @@ def main() -> None:
 
         eg = json.loads(eg_path.read_text(encoding="utf-8"))
         pc_path = memory_dir / "passive_classification_llm.json"
-        nc_path = memory_dir / "nets_classified.json"
         pc = json.loads(pc_path.read_text(encoding="utf-8")) if pc_path.exists() else None
-        nc = json.loads(nc_path.read_text(encoding="utf-8")) if nc_path.exists() else None
 
         idx = build_parts_index(
             slug=slug, electrical_graph=eg,
-            passive_classification=pc, nets_classified=nc,
+            passive_classification=pc,
         )
         out = memory_dir / "parts_index.json"
         out.write_text(idx.model_dump_json(indent=2), encoding="utf-8")

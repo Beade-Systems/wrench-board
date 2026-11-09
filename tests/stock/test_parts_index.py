@@ -177,6 +177,32 @@ def _make_electrical_graph(components):
     }
 
 
+def test_cli_builds_parts_index_without_reading_net_classification(tmp_path, monkeypatch):
+    import json
+    import sys
+
+    import pytest
+
+    from api import config
+    from api.pipeline.schematic.cli import main
+
+    memory_dir = tmp_path / "test-device"
+    memory_dir.mkdir()
+    graph = _make_electrical_graph({"U7": {"type": "ic", "kind": "ic"}})
+    (memory_dir / "electrical_graph.json").write_text(json.dumps(graph))
+    # This unrelated artefact must not prevent a parts-index rebuild.
+    (memory_dir / "nets_classified.json").write_text("not valid json")
+    monkeypatch.setenv("MEMORY_ROOT", str(tmp_path))
+    monkeypatch.setattr(config, "_settings", None)
+    monkeypatch.setattr(sys, "argv", ["schematic-cli", "--build-parts-index", "test-device"])
+
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+    assert exit_info.value.code == 0
+    index = json.loads((memory_dir / "parts_index.json").read_text())
+    assert index["entries"]["U7"]["role_in_design"] == "ic"
+
+
 def test_build_parts_index_capacitor_decoupling():
     eg = _make_electrical_graph(
         {

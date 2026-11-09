@@ -5,7 +5,7 @@ import struct
 
 import pytest
 
-from api.board.parser._tvw_engine.board_mapper import to_board
+from api.board.parser._tvw_engine.board_mapper import is_plausible_arc, to_board
 from api.board.parser._tvw_engine.cipher import encode
 from api.board.parser._tvw_engine.magic import is_production_binary
 from api.board.parser._tvw_engine.walker import (
@@ -1382,3 +1382,19 @@ def test_gvn970_comment_a_equals_comment_b_invariant(gvn970_components):
         assert got == want, (
             f"{refdes}: comment={got!r}, expected {want!r}"
         )
+
+
+@pytest.mark.parametrize(
+    ("center", "radius", "expected"),
+    [
+        ((10.0, 10.0), 0.0, False),
+        ((10.0, 10.0), -5.0, False),
+        ((10.0, 10.0), 12.5, True),
+        ((10.0, 10.0), 100_000.0, True),
+        ((-4040.8, 10.14), 11_274_813.44, False),
+        ((503_316.48, 36_826.25), 40.0, False),
+        ((15.0, -9_090_798.57), 40.0, False),
+    ],
+)
+def test_arcs_with_impossible_geometry_are_rejected(center, radius, expected):
+    assert is_plausible_arc(*center, radius) is expected

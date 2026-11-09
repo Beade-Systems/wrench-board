@@ -13,6 +13,7 @@ import asyncio
 import time
 
 import httpx
+import pytest
 
 from api.board.parser.base import UnsupportedFormatError
 from api.main import app
@@ -30,8 +31,9 @@ class _SlowParser:
         raise UnsupportedFormatError("slow stub")
 
 
-async def test_board_parse_does_not_block_event_loop(monkeypatch):
-    import api.board.router as R
+@pytest.mark.parametrize("endpoint", ["/api/board/parse", "/api/library/boards"])
+async def test_board_parse_does_not_block_event_loop(monkeypatch, memory_root, endpoint):
+    import api.board.imports as R
 
     monkeypatch.setattr(R, "parser_for", lambda *a, **k: _SlowParser())
 
@@ -57,7 +59,7 @@ async def test_board_parse_does_not_block_event_loop(monkeypatch):
         hb = asyncio.create_task(heartbeat())
         await asyncio.sleep(0.02)  # amorce le heartbeat
         await c.post(
-            "/api/board/parse",
+            endpoint,
             files={"file": ("x.brd", b"some board bytes", "application/octet-stream")},
         )
         hb.cancel()

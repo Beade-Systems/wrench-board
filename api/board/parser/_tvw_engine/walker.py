@@ -1280,6 +1280,22 @@ def _read_texts(buf: bytes, off: int, region_end: int) -> tuple[list[TextRecord]
 # Layer name markers we look for. The format includes inner signal
 # layers (L1..L9, L10..L15) on multi-layer boards plus the canonical
 # TOP / BOTTOM sides.
+# "L13"-style markers also occur inside the component tables, where the bytes
+# after them read as a layer with a huge body kind or a handful of stray pins
+# and no apertures. Real layers use small kinds (0-14, 300 on some boards).
+_MAX_LAYER_BODY_KIND = 0xFFFF
+_MIN_APERTURELESS_LAYER_PINS = 16
+_NUMBERED_LAYER_NAME = re.compile(r"L\d+")
+
+
+def _is_spurious_layer(layer: Layer) -> bool:
+    if not _NUMBERED_LAYER_NAME.fullmatch(layer.name):
+        return False
+    return layer.body_kind > _MAX_LAYER_BODY_KIND or (
+        not layer.apertures and len(layer.pins) < _MIN_APERTURELESS_LAYER_PINS
+    )
+
+
 _LAYER_MARKER_NAMES = (
     b"TOP", b"BOTTOM", b"top", b"bottom",
     b"L1", b"L2", b"L3", b"L4", b"L5", b"L6", b"L7", b"L8", b"L9",
@@ -2043,6 +2059,7 @@ def parse(raw: bytes) -> TVWFile:
         next_marker = _next_layer_marker(raw, body_start)
         body_end = next_marker - 12 if next_marker is not None else len(raw)
 
+        end_of_real_layers = last_off
         layer = Layer(
             name=lh["name1"] or "UNK",
             source_path=lh["source_path"],
@@ -2137,7 +2154,11 @@ def parse(raw: bytes) -> TVWFile:
         else:
             last_off = after_b
 
-        file.layers.append(layer)
+        if _is_spurious_layer(layer):
+            # The net-name scan must still start right after the real layers.
+            last_off = end_of_real_layers
+        else:
+            file.layers.append(layer)
 
         if next_marker is None:
             break

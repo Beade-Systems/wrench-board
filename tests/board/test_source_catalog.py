@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from api.board.catalog_folders import display_names, natural_key
 from api.board.source_catalog import documents_for_stem
 from api.config import get_settings
 
@@ -198,6 +199,66 @@ def test_search_and_filter_use_canonical_board_number(client, linked):
     ).json()
     assert filtered["total"] == 2
     assert {item["kind"] for item in filtered["items"]} == {"board", "pdf"}
+
+
+def _folders(client, path="", kind="all"):
+    return client.get("/api/library/source/folders", params={"path": path, "kind": kind})
+
+
+def test_folders_mirror_the_directory_tree_with_recursive_counts(client, source):
+    root = _folders(client).json()
+    assert [item["name"] for item in root["folders"]] == ["Computers", "Drones", "Phones"]
+    phones = root["folders"][2]
+    assert (phones["boards"], phones["pdfs"], phones["subfolders"]) == (2, 2, 2)
+    apple = _folders(client, "Phones/Apple").json()
+    assert [item["path"] for item in apple["folders"]] == [
+        "Phones/Apple/iPhone 13",
+        "Phones/Apple/iPhone 13 Pro",
+    ]
+    assert [crumb["path"] for crumb in apple["breadcrumbs"]] == ["", "Phones", "Phones/Apple"]
+
+
+def test_folders_filter_by_kind_and_reject_unknown_paths(client, source):
+    assert [item["name"] for item in _folders(client, kind="archive").json()["folders"]] == [
+        "Computers"
+    ]
+    assert _folders(client, "Phones/Nope").status_code == 404
+
+
+def test_files_listing_is_scoped_to_a_folder(client, source):
+    files = "/api/library/source/files"
+    direct = client.get(files, params={"kind": "all", "folder": "Phones/Apple"}).json()
+    assert direct["total"] == 0
+    deep = client.get(
+        files, params={"kind": "all", "folder": "Phones/Apple", "recursive": True}
+    ).json()
+    assert deep["total"] == 2
+    # A sibling sharing the prefix stays out of the range.
+    assert all(item["path"].startswith("Phones/Apple/") for item in deep["items"])
+    everything = client.get(files, params={"kind": "all", "folder": "", "recursive": True}).json()
+    assert everything["total"] == client.get(files, params={"kind": "all"}).json()["total"]
+
+
+@pytest.mark.parametrize(
+    ("names", "expected"),
+    [
+        (["1 Laptop", "10 BIOS", "2.MB BIOS"], ["Laptop", "BIOS", "MB BIOS"]),
+        (["0 ACER Repair Case", "Aspire", "Circuit"], ["0 ACER Repair Case", "Aspire", "Circuit"]),
+        (["7000 series"], ["7000 series"]),
+        (["7000", "9000"], ["7000", "9000"]),
+    ],
+)
+def test_sort_numbers_are_hidden_only_for_numbered_siblings(names, expected):
+    labels = display_names(names)
+    assert [labels[name] for name in names] == expected
+
+
+def test_natural_key_orders_numbers_by_value():
+    assert sorted(["10 BIOS", "2 PC", "1 Laptop"], key=natural_key) == [
+        "1 Laptop",
+        "2 PC",
+        "10 BIOS",
+    ]
 
 
 def test_documents_for_imported_filename_use_the_board_number(client, linked):

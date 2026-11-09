@@ -35,6 +35,11 @@ def server(tmp_path_factory):
     source = directory / "catalog"
     source.mkdir()
     shutil.copyfile(FIXTURE, source / "catalog-board.brd")
+    nested = source / "Phones" / "1 Apple" / "A1234"
+    nested.mkdir(parents=True)
+    shutil.copyfile(SECOND_FIXTURE, nested / "nested-board.brd")
+    (source / "Phones" / "2 Samsung").mkdir()
+    shutil.copyfile(SECOND_FIXTURE, source / "Phones" / "2 Samsung" / "S1-board.brd")
     env = os.environ | {
         "PCB_LIBRARY_SOURCE_ROOT": str(source),
         "MEMORY_ROOT": str(memory),
@@ -192,7 +197,7 @@ def test_library_import_duplicate_edit_filter_and_delete(page, server):
     from playwright.sync_api import expect
 
     page.goto(server + "/library.html", wait_until="domcontentloaded")
-    expect(page.locator("#source-grid")).to_contain_text("catalog-board.brd")
+    expect(page.locator("#source-grid")).to_contain_text("catalog-board")
     # A source click imports only this board and opens the real canvas viewer.
     page.locator("#source-grid .source-card").first.click()
     expect(page.locator("#viewer-status")).to_have_text("Platine geladen")
@@ -386,3 +391,42 @@ def test_library_workspace_tools(page, server):
     page.locator(".pbt-close").nth(1).click()
     page.locator(".pbt-close").nth(0).click()
     expect(page.locator("#catalog-browser")).to_be_visible()
+
+
+def test_catalog_browses_the_folder_tree(page, server):
+    from playwright.sync_api import expect
+
+    page.goto(server + "/library.html", wait_until="domcontentloaded")
+    grid, cards, crumbs = (
+        page.locator("#source-grid"),
+        page.locator("#folder-grid .folder-card"),
+        page.locator("#folder-path .folder-crumb"),
+    )
+    expect(grid).to_contain_text("catalog-board")
+    expect(grid).not_to_contain_text("nested-board")
+    cards.filter(has_text="Phones").click()
+    # The sort numbers of a numbered folder are hidden.
+    expect(cards.first).to_contain_text("Apple")
+    expect(cards.first).not_to_contain_text("1 Apple")
+    expect(crumbs).to_have_count(2)
+    cards.filter(has_text="Apple").click()
+    cards.filter(has_text="A1234").click()
+    expect(grid).to_contain_text("nested-board")
+    expect(page.locator(".tree-row.current")).to_contain_text("A1234")
+    # The URL carries the folder through a reload and the back button.
+    page.reload(wait_until="domcontentloaded")
+    expect(grid).to_contain_text("nested-board")
+    expect(crumbs).to_have_count(4)
+    page.go_back()
+    expect(cards.filter(has_text="A1234")).to_be_visible()
+    crumbs.nth(1).click()
+    # Search covers the folder and everything below it, and only that.
+    page.locator("#source-search").fill("board")
+    expect(grid).to_contain_text("nested-board")
+    expect(grid).to_contain_text("S1-board")
+    expect(grid).not_to_contain_text("catalog-board")
+    expect(page.locator("#folder-grid")).to_be_hidden()
+    page.locator("#source-search").fill("")
+    # A folder without files of the chosen kind disappears from the tree.
+    page.locator("#source-kind").select_option("pdf")
+    expect(page.locator("#folder-tree .tree-label")).to_have_count(0)

@@ -30,7 +30,7 @@ import pytest
 
 from api.board.parser._tvw_engine.cipher import decode, encode
 from api.board.parser._tvw_engine.magic import is_production_binary
-from api.board.parser._tvw_engine.walker import _read_file_header
+from api.board.parser._tvw_engine.walker import _read_file_header, parse
 from api.board.parser.tvw import TVWParser
 
 # Magic signature shared by EVERY production-binary `.tvw`, vendor-agnostic.
@@ -123,7 +123,9 @@ def _pin(part_idx: int, x: int, y: int) -> bytes:
     return struct.pack("<IIiiBB", part_idx, 1, x, y, 0, 0) + bytes([0])
 
 
-def _layer_body_with_pins(pins: list[bytes]) -> bytes:
+def _layer_body_with_pins(
+    pins: list[bytes], name: bytes = b"TOP", body_kind: int = 0
+) -> bytes:
     """A minimal TOP layer: header (marker + path) + dcodes(0) + a/b gate
     + a pin section. Just enough for the walker to land pins.
     """
@@ -132,10 +134,10 @@ def _layer_body_with_pins(pins: list[bytes]) -> bytes:
     # body_kind, 2 discarded u32. Use a TOP marker so _next_layer_marker
     # snaps onto it; the header starts 12 bytes (3×u32) before name1.
     out += struct.pack("<III", 0, 0, 0)          # layer_type, sub1, sub2
-    out += _pascal(b"TOP")                        # name1 (layer marker)
-    out += _pascal(b"TOP")                        # name2 (redundant)
+    out += _pascal(name)                          # name1 (layer marker)
+    out += _pascal(name)                          # name2 (redundant)
     out += _pascal(b"top.gbr")                    # source path
-    out += struct.pack("<III", 0, 0, 0)           # body_kind=0 + 2 discarded
+    out += struct.pack("<III", body_kind, 0, 0)   # body_kind + 2 discarded
     # dcode table: count = 0
     out += (0).to_bytes(4, "little")
     # a/b gate ints — set a>0 so the walker reads pins even with 0 dcodes
@@ -248,3 +250,20 @@ def test_real_variant_files_parse_with_nonzero_structure():
         assert prefixes & set("CRLUDQJTPFXYKSVBM"), (
             f"no component-class refdes in {path}: {prefixes}"
         )
+
+
+@pytest.mark.parametrize(
+    ("body_kind", "pin_count", "layers"),
+    [
+        (0x00B0_0000, 16, ["TOP"]),
+        (1, 2, ["TOP"]),
+        (0x12C, 16, ["TOP", "L13"]),
+    ],
+)
+def test_numbered_layer_needs_plausible_content(body_kind, pin_count, layers):
+    """"L13" inside component data is not a layer; 300 with real pins is."""
+    raw = bytes(_variant_header())
+    raw += _layer_body_with_pins([_pin(0, 1000, 1000)])
+    pins = [_pin(0, 2000 + i, 2000) for i in range(pin_count)]
+    raw += _layer_body_with_pins(pins, name=b"L13", body_kind=body_kind)
+    assert [layer.name for layer in parse(raw).layers] == layers

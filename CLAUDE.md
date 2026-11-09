@@ -602,10 +602,8 @@ rather than add new emoji; chrome icons still get SVG.
 
 ### Copy
 
-UI strings are authored in **English** with `data-i18n` keys; a parallel
-translation layer (`web/js/i18n.js`) emits the French the user sees
-(« Bibliothèque », « Graphe de connaissances », « Démarrer diagnostic »…).
-Tag every new UI string, button label and helper text with a `data-i18n`
+UI strings are authored in **English** with `data-i18n` keys, resolved by the
+translation layer (`web/js/i18n.js`). Tag every new UI string, button label and helper text with a `data-i18n`
 key — never hard-code a single language. Code identifiers, console logs,
 and comments stay in English; so do all model-facing prompts.
 

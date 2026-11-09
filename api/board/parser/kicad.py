@@ -17,6 +17,7 @@ Keep KICAD_PARSE_TIMEOUT modest so a hung child is bounded.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -68,11 +69,21 @@ class KicadPcbParser(BoardParser):
             try:
                 payload = json.loads(sidecar.read_text())
                 if payload.get("source_sha256") == file_hash:
-                    return _json_to_board(payload["extract"], file_hash=file_hash, board_id=board_id)
+                    return _json_to_board(
+                        payload["extract"], file_hash=file_hash, board_id=board_id
+                    )
             except (OSError, ValueError, KeyError):
                 pass  # unreadable/corrupt sidecar → fall through to the extractor
 
-        python3 = shutil.which("python3") or "/usr/bin/python3"
+        python3 = (
+            os.environ.get("KICAD_PYTHON")
+            or (
+                "/usr/bin/python3"
+                if Path("/usr/bin/python3").is_file()
+                else shutil.which("python3")
+            )
+            or "python3"
+        )
         try:
             result = subprocess.run(
                 [python3, str(_EXTRACT_SCRIPT), str(path)],

@@ -18,7 +18,9 @@ from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 from api import __version__
 from api.agent.board_ref import set_board_ref
 from api.agent.macros import macro_path_for
+from api.board.library import router as library_router
 from api.board.router import router as board_router
+from api.board.source_catalog import router as source_catalog_router
 from api.config import get_settings
 from api.http_security import (
     ServiceTokenMiddleware,
@@ -34,6 +36,7 @@ from api.ws_security import enforce_ws_origin, enforce_ws_service_token
 logger = logging.getLogger("wrench_board.main")
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+_PREWARM_MAX_BOARDS = 16
 
 
 async def _prewarm_active_boardviews(memory_root: Path) -> None:
@@ -50,9 +53,7 @@ async def _prewarm_active_boardviews(memory_root: Path) -> None:
     """
     import asyncio  # local — keep startup imports cheap
 
-    from api.board.parser.base import parser_for
-    from api.board.render import to_render_payload
-    from api.board.router import _RENDER_CACHE_MAX_ENTRIES, _render_cache
+    from api.board.router import encode_render, render_gzip_enabled
     from api.pipeline.routes.packs import _find_boardview
 
     if not memory_root.exists():
@@ -60,11 +61,12 @@ async def _prewarm_active_boardviews(memory_root: Path) -> None:
 
     parsed = 0
     failed = 0
+    gzipped = render_gzip_enabled()
     for pack_dir in sorted(memory_root.iterdir()):
         if not pack_dir.is_dir() or pack_dir.name.startswith("_"):
             continue
-        if len(_render_cache) >= _RENDER_CACHE_MAX_ENTRIES:
-            logger.info("[prewarm] cache full, stopping after %d", parsed)
+        if parsed >= _PREWARM_MAX_BOARDS:
+            logger.info("[prewarm] limit reached, stopping after %d", parsed)
             break
         slug = pack_dir.name
         path = _find_boardview(slug, pack_dir)
@@ -74,13 +76,8 @@ async def _prewarm_active_boardviews(memory_root: Path) -> None:
             mtime = path.stat().st_mtime
         except OSError:
             continue
-        cache_key = (str(path), mtime)
-        if cache_key in _render_cache:
-            continue
         try:
-            board = await asyncio.to_thread(parser_for(path).parse_file, path)
-            payload = await asyncio.to_thread(to_render_payload, board)
-            _render_cache[cache_key] = payload
+            await asyncio.to_thread(encode_render, path, mtime, gzipped=gzipped)
             parsed += 1
             logger.info("[prewarm] %s cached (%s)", slug, path.name)
         except Exception:  # noqa: BLE001 — fire-and-forget; any failure logs + skips
@@ -135,8 +132,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kick off boardview pre-warm in background — don't await. The server
     # is answering requests immediately; per-thread parse populates the
     # /render cache so the first dashboard open for each device is instant.
-    asyncio.create_task(_prewarm_active_boardviews(Path(settings.memory_root)))
+    prewarm = asyncio.create_task(_prewarm_active_boardviews(Path(settings.memory_root)))
     yield
+    prewarm.cancel()
+    await asyncio.gather(prewarm, return_exceptions=True)
     logger.info("wrench-board shutting down")
 
 
@@ -192,6 +191,8 @@ _install_compression(app, service_token=get_settings().engine_service_token)
 
 app.include_router(pipeline_router)
 app.include_router(board_router)
+app.include_router(library_router)
+app.include_router(source_catalog_router)
 app.include_router(profile_router)
 app.include_router(stock_router)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -126,6 +127,11 @@ class Settings(BaseSettings):
             "Bearer service token for the cloud device-registry API. Must match "
             "the cloud's ENGINE_SERVICE_TOKEN. Empty → local JSON store."
         ),
+    )
+
+    pcb_library_source_root: str = Field(
+        default=str(Path(__file__).resolve().parents[2] / "xzz_downloads"),
+        description="Local read-only PCB catalog. Empty disables it.",
     )
 
     # --- Upload hardening -----------------------------------------------------

@@ -365,21 +365,43 @@ def _trace_closed_paths(
     def points_match(p1, p2):
         return abs(p1[0] - p2[0]) < tolerance and abs(p1[1] - p2[1]) < tolerance
 
+    # Endpoint grid: outlines can carry thousands of edges and this runs once
+    # per tolerance. Cells are 2x the tolerance, so any match is in the 3x3
+    # neighbourhood despite float rounding in the cell computation.
+    cell_size = tolerance * 2
+
+    def cell(p):
+        return math.floor(p[0] / cell_size), math.floor(p[1] / cell_size)
+
+    grid: dict[tuple[int, int], list[int]] = {}
+    for index, e in enumerate(edges):
+        for endpoint in (e["start"], e["end"]):
+            grid.setdefault(cell(endpoint), []).append(index)
+
     def find_next(current_end):
-        for e in edges:
-            if e["used"]:
-                continue
-            if points_match(e["start"], current_end):
-                return e, False
-            if points_match(e["end"], current_end):
-                return e, True
-        return None, False
+        # The lowest matching edge index wins, so chaining is order-stable.
+        cx, cy = cell(current_end)
+        best = None
+        for gx in (cx - 1, cx, cx + 1):
+            for gy in (cy - 1, cy, cy + 1):
+                for index in grid.get((gx, gy), ()):
+                    if best is not None and index >= best:
+                        continue
+                    e = edges[index]
+                    if not e["used"] and (
+                        points_match(e["start"], current_end)
+                        or points_match(e["end"], current_end)
+                    ):
+                        best = index
+        if best is None:
+            return None, False
+        e = edges[best]
+        return e, not points_match(e["start"], current_end)
 
     closed_paths: list[list[tuple[float, float]]] = []
-    while True:
-        start_edge = next((e for e in edges if not e["used"]), None)
-        if start_edge is None:
-            break
+    for start_edge in edges:
+        if start_edge["used"]:
+            continue
         start_edge["used"] = True
         start_point = start_edge["start"]
         # Walk the edge in its natural direction first.

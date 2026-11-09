@@ -44,15 +44,13 @@ def setup_logging():
     return logging.getLogger("xzz_parser")
 
 XZZ_KEY_ENV = "WRENCH_BOARD_XZZ_KEY"
+DEFAULT_XZZ_KEY = "DCFC12AC00000000"
 
 
 class XZZFile(BoardFormatBase):
-    # DES master key: loaded at runtime from WRENCH_BOARD_XZZ_KEY (8 bytes
-    # hex). Aligns with the OpenBoardView convention of leaving cipher keys
-    # as runtime configuration. Empty string disables DES decryption; XOR
-    # decryption (using a key derived from the file itself at offset 0x10)
-    # still works without it.
-    MASTER_KEY = os.environ.get(XZZ_KEY_ENV, "").strip()
+    # Standard XZZ key, matching the public reference derivation:
+    # https://github.com/sjohnson1021/XZZPCB-Layer-Viewer/blob/main/src/pcb/XZZPCBLoader.cpp
+    MASTER_KEY = os.environ.get(XZZ_KEY_ENV, "").strip() or DEFAULT_XZZ_KEY
     DIODE_PATTERN = bytes([
         0x76, 0x36, 0x76, 0x36, 0x35, 0x35, 0x35, 0x76,
         0x36, 0x76, 0x36, 0x3D, 0x3D, 0x3D, 0xD7, 0xE8,

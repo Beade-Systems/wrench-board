@@ -84,7 +84,7 @@ function showBrowser() {
   opening?.abort();
   $('catalog-browser').hidden = false;$('workspace').hidden = true;$('browse-catalog').hidden = true;
   catalog.updateImports();
-  history.replaceState(null, '', '#catalog');
+  history.replaceState(null, '', catalog.hash());
 }
 
 $('browse-catalog').addEventListener('click', showBrowser);
@@ -525,7 +525,7 @@ $('drop-zone').addEventListener('dragleave', () => { dragDepth = Math.max(0, dra
 window.addEventListener('hashchange', () => {
   const id = location.hash.match(/^#board\/([a-f0-9]{64})$/)?.[1];
   if (id && (id !== state.active?.id || $('workspace').hidden)) openBoard(id);
-  else if (!id) showBrowser();
+  else if (!id) { catalog.syncFromHash();showBrowser(); }
 });
 
 (async function init() {

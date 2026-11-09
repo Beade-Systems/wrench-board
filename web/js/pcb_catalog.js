@@ -1,7 +1,15 @@
-// Paginated source-file grid. Only the chosen board is parsed/imported.
+// Folder browser and paginated file grid. Only the chosen board is parsed/imported.
+import { FolderTree, folderSummary } from './pcb_catalog_folders.js';
+
 const $ = id => document.getElementById(id);
 const count = value => new Intl.NumberFormat('de-DE').format(value);
 const labels = { Computers: 'Computer', Phones: 'Smartphones', 'Game Consoles': 'Konsolen', Drones: 'Drohnen' };
+const folderHash = path => (path ? `#folder/${path.split('/').map(encodeURIComponent).join('/')}` : '#catalog');
+function folderFromHash() {
+  const match = location.hash.match(/^#folder\/(.+)$/);
+  if (!match) return '';
+  try { return decodeURIComponent(match[1]); } catch { return ''; }
+}
 const kinds = { board: 'Boardview', pdf: 'PDF-Dokument', archive: 'Archiv', other: 'Datei' };
 const icons = { board: '▦', pdf: '▤', archive: '▣', other: '◇' };
 
@@ -20,21 +28,25 @@ function fileSize(bytes) {
 export class CatalogBrowser {
   constructor({ request, notify, openBoard, getBoards }) {
     Object.assign(this, { request, notify, openBoard, getBoards });
-    this.mode = 'source';this.offset = 0;this.limit = 60;this.category = '';this.total = 0;
+    this.mode = 'source';this.offset = 0;this.limit = 60;this.total = 0;
+    this.folder = folderFromHash();this.listings = new Map();
+    this.tree = new FolderTree($('folder-tree'), { list: path => this.listing(path), onSelect: path => this.goTo(path),
+      kind: () => $('source-kind').value, displayName: label => labels[label] || label });
     $('source-search').addEventListener('input', () => {
       clearTimeout(this.searchTimer);
       // Cancel an old response immediately, before the debounce expires.
       this.controller?.abort();
       this.searchTimer = setTimeout(() => { this.offset = 0;this.load(); }, 220);
     });
-    for (const id of ['source-kind', 'source-sort']) $(id).addEventListener('change', () => { this.offset = 0;this.load(); });
+    $('source-kind').addEventListener('change', () => { this.offset = 0;this.tree.reset();this.load(); });
+    $('source-sort').addEventListener('change', () => { this.offset = 0;this.load(); });
     $('source-prev').addEventListener('click', () => this.page(-1));
     $('source-next').addEventListener('click', () => this.page(1));
     $('source-tab').addEventListener('click', () => this.setMode('source'));
     $('imports-tab').addEventListener('click', () => this.setMode('imports'));
     $('source-reset').addEventListener('click', () => {
-      $('source-search').value = '';$('source-kind').value = 'board';this.category = '';this.offset = 0;
-      this.renderCategories();this.load();
+      $('source-search').value = '';$('source-kind').value = 'board';this.offset = 0;
+      this.tree.reset();this.load();
     });
     $('source-refresh').addEventListener('click', () => this.refreshIndex());
   }
@@ -64,19 +76,64 @@ export class CatalogBrowser {
         $('source-stats').append(item);
       }
     }
-    this.renderCategories();this.updateImports();
+    this.updateImports();
   }
 
-  renderCategories() {
-    const container = $('source-categories');container.replaceChildren();
-    container.hidden = this.mode !== 'source';
-    for (const category of [{ name: '', count: this.info?.total || 0 }, ...(this.info?.categories || [])]) {
-      const button = node('button', `category-filter${category.name === this.category ? ' active' : ''}`);
-      button.type = 'button';button.setAttribute('aria-pressed', String(category.name === this.category));
-      button.append(node('span', '', labels[category.name] || category.name || 'Alle Kategorien'), node('small', '', count(category.count)));
-      button.addEventListener('click', () => { this.category = category.name;this.offset = 0;this.renderCategories();this.load(); });
-      container.append(button);
+  hash() { return folderHash(this.folder); }
+
+  /** Navigates through the URL, so the browser's back button walks the folders. */
+  goTo(path) {
+    const target = folderHash(path);
+    if (location.hash === target) this.show(path); else location.hash = target;
+  }
+
+  syncFromHash() {
+    const path = folderFromHash();
+    if (path !== this.folder && !location.hash.startsWith('#board/')) this.show(path);
+  }
+
+  show(path) {
+    this.folder = path;this.offset = 0;
+    $('source-search').value = '';
+    this.load();
+  }
+
+  listing(path) {
+    const kind = $('source-kind').value;
+    const key = `${kind}\0${path}`;
+    let result = this.listings.get(key);
+    if (!result) {
+      const params = new URLSearchParams({ path, kind });
+      result = this.request(`/source/folders?${params}`);
+      result.catch(() => this.listings.delete(key));
+      this.listings.set(key, result);
     }
+    return result;
+  }
+
+  renderFolders(listing, searching) {
+    const path = $('folder-path');
+    path.replaceChildren(...listing.breadcrumbs.flatMap((crumb, index, all) => {
+      const last = index === all.length - 1;
+      const item = node(last ? 'span' : 'button', last ? 'folder-crumb current' : 'folder-crumb', labels[crumb.label] || crumb.label);
+      if (last) item.setAttribute('aria-current', 'page');
+      else { item.type = 'button';item.addEventListener('click', () => this.goTo(crumb.path)); }
+      return index ? [node('span', 'folder-separator', '/'), item] : [item];
+    }));
+    const grid = $('folder-grid');
+    grid.hidden = searching || !listing.folders.length;
+    grid.replaceChildren(...(searching ? [] : listing.folders.map(folder => this.folderCard(folder))));
+    $('source-search').placeholder = `In ${labels[listing.label] || listing.label} suchen …`;
+  }
+
+  folderCard(folder) {
+    const card = node('button', 'folder-card');
+    card.type = 'button';card.title = folder.name;
+    const copy = node('div', 'folder-card-copy');
+    copy.append(node('strong', '', labels[folder.label] || folder.label), node('small', '', folderSummary(folder, count)));
+    card.append(node('span', 'folder-card-icon', '▸'), copy);
+    card.addEventListener('click', () => this.goTo(folder.path));
+    return card;
   }
 
   updateImports() {
@@ -90,15 +147,18 @@ export class CatalogBrowser {
     $('imports-tab').classList.toggle('active', mode === 'imports');$('imports-tab').setAttribute('aria-pressed', String(mode === 'imports'));
     $('source-kind').hidden = mode !== 'source';
     $('source-refresh').hidden = mode !== 'source' || !this.info?.available;
+    for (const id of ['folder-tree', 'folder-path', 'folder-grid']) $(id).hidden = mode !== 'source';
     $('source-hint').textContent = mode === 'source' ? 'Platinen öffnen · PDFs ansehen · Archive herunterladen' : 'Importierte Platinen mit einem Klick öffnen.';
-    this.renderCategories();this.load();
+    if (mode !== 'source') $('source-search').placeholder = 'In meinen Importen suchen …';
+    this.load();
   }
 
   async refreshIndex() {
     const button = $('source-refresh');button.disabled = true;button.textContent = 'Ordner wird eingelesen …';
     try {
       this.info = await this.request('/source/refresh', { method: 'POST' });
-      this.offset = 0;this.renderInfo();await this.load();this.notify('Dateikatalog aktualisiert.');
+      this.offset = 0;this.listings.clear();this.tree.reset();
+      this.renderInfo();await this.load();this.notify('Dateikatalog aktualisiert.');
     } catch (error) { this.notify(error.message, true); }
     finally { button.disabled = false;button.textContent = '↻ Ordner neu einlesen'; }
   }
@@ -114,7 +174,8 @@ export class CatalogBrowser {
     $('source-grid').setAttribute('aria-busy', 'true');$('source-results').textContent = 'Dateien werden gesucht …';
     $('source-prev').disabled = true;$('source-next').disabled = true;
     try {
-      let result;
+      let result, listing = null;
+      const query = $('source-search').value.trim();
       if (this.mode === 'imports') {
         const words = $('source-search').value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
         const boards = this.getBoards().filter(board => words.every(word => `${board.title} ${board.filename} ${board.notes}`.toLocaleLowerCase().includes(word)));
@@ -127,21 +188,35 @@ export class CatalogBrowser {
         })) };
       } else {
         const params = new URLSearchParams({ q: $('source-search').value, kind: $('source-kind').value,
-          category: this.category, sort: $('source-sort').value, offset: String(this.offset), limit: String(this.limit) });
-        result = await this.request(`/source/files?${params}`, { signal });
+          folder: this.folder, recursive: String(Boolean(query)), sort: $('source-sort').value,
+          offset: String(this.offset), limit: String(this.limit) });
+        [result, listing] = await Promise.all([this.request(`/source/files?${params}`, { signal }), this.listing(this.folder)]);
       }
       if (signal.aborted) return;
       this.total = result.total;
+      if (listing) { this.renderFolders(listing, Boolean(query));this.tree.reveal(this.folder); }
       $('source-grid').replaceChildren(...result.items.map(item => this.card(item)));
-      $('source-empty').hidden = Boolean(result.items.length);
+      const subfolders = listing && !query ? listing.folders.length : 0;
+      $('source-empty').hidden = Boolean(result.items.length || subfolders);
       $('source-empty-text').textContent = this.mode === 'imports' && !this.getBoards().length
         ? 'Öffne eine Platine aus xzz_downloads oder importiere eine eigene Datei.'
         : 'Versuche einen anderen Modellnamen oder ändere die Filter.';
-      $('source-results').textContent = `${count(result.total)} ${result.total === 1 ? 'Datei' : 'Dateien'}${$('source-search').value.trim() ? ` für „${$('source-search').value.trim()}“` : ''}`;
+      const scope = listing && this.folder ? ` in ${labels[listing.label] || listing.label}` : '';
+      const files = `${count(result.total)} ${result.total === 1 ? 'Datei' : 'Dateien'}`;
+      $('source-results').textContent = query ? `${files} für „${query}“${scope}`
+        : subfolders ? `${count(subfolders)} Ordner${result.total ? ` · ${files} direkt hier` : ''}` : `${files}${scope}`;
       $('source-page').textContent = result.total ? `${count(this.offset + 1)}–${count(Math.min(this.offset + this.limit, result.total))} von ${count(result.total)}` : 'Keine Ergebnisse';
       $('source-prev').disabled = this.offset === 0;$('source-next').disabled = this.offset + this.limit >= result.total;
+      $('source-pagination').hidden = result.total <= this.limit;
     } catch (error) {
-      if (error.name !== 'AbortError') this.fail(error);
+      if (error.name === 'AbortError') return;
+      if (this.mode === 'source' && this.folder) {
+        // A stale link to a folder that is gone falls back to the top level.
+        this.notify(`Ordner konnte nicht geöffnet werden: ${error.message}`, true);
+        this.goTo('');
+        return;
+      }
+      this.fail(error);
     } finally {
       if (!signal.aborted) $('source-grid').setAttribute('aria-busy', 'false');
     }
@@ -162,9 +237,11 @@ export class CatalogBrowser {
     visual.append(node('span', 'source-file-icon', icons[item.kind]), node('span', 'source-extension', item.extension.replace('.', '').toUpperCase()));
     const copy = node('div', 'source-card-copy');
     const title = item.imported ? item.name : item.name.slice(0, -item.extension.length);
-    copy.append(node('span', 'source-card-category', labels[item.category] || item.category),
-      node('h2', '', title), node('p', 'source-card-path', item.path.split('/').slice(0, -1).join(' / ') || item.path));
-    const identity = [item.brand, item.model, item.board_number].filter(Boolean).join(' · ');
+    copy.append(node('h2', '', title));
+    const within = this.folder && item.path.startsWith(`${this.folder}/`) ? item.path.slice(this.folder.length + 1) : item.path;
+    const relativeFolder = within.split('/').slice(0, -1).join(' / ');
+    if (relativeFolder) copy.append(node('p', 'source-card-path', relativeFolder));
+    const identity = [...new Set([item.brand, item.model, item.board_number].filter(Boolean))].join(' · ');
     if (identity) copy.append(node('p', 'source-card-identity', identity));
     const footer = node('div', 'source-card-footer');
     footer.append(node('span', '', `${kinds[item.kind]} · ${fileSize(item.size_bytes)}`),

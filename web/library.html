@@ -24,11 +24,17 @@
     <div class="source-stats" id="source-stats" aria-label="Dateien in der Sammlung"></div>
     <div class="browser-sources" aria-label="Sammlung"><button id="source-tab" class="active" aria-pressed="true">xzz_downloads</button><button id="imports-tab" aria-pressed="false">Meine Importe <span id="imports-count">0</span></button></div>
     <div class="browser-filters"><label class="search browser-search"><span aria-hidden="true">⌕</span><input type="search" id="source-search" placeholder="Nach Hersteller, Modell oder Dateiname suchen …" aria-label="Dateiraster durchsuchen"></label><select id="source-kind" aria-label="Dateityp"><option value="board">Boardviews</option><option value="all">Alle Dateien</option><option value="pdf">PDF-Dokumente</option><option value="archive">Archive</option><option value="other">Weitere Dateien</option></select><select id="source-sort" aria-label="Raster sortieren"><option value="name">Name A–Z</option><option value="recent">Zuletzt geändert</option><option value="size">Größe absteigend</option></select></div>
-    <div class="category-filters" id="source-categories" aria-label="Kategorie"></div>
+    <div class="browser-layout">
+    <aside class="folder-tree" id="folder-tree" aria-label="Ordnerbaum"></aside>
+    <div class="browser-content">
+    <nav class="folder-path" id="folder-path" aria-label="Ordnerpfad"></nav>
+    <div class="folder-grid" id="folder-grid"></div>
     <div class="results-heading"><p id="source-results" role="status">Katalog wird geladen …</p><span id="source-hint">Platine anklicken, um sie im Viewer zu öffnen.</span></div>
     <div class="file-grid" id="source-grid" aria-busy="true"></div>
     <div class="grid-empty" id="source-empty" hidden><span aria-hidden="true">⌕</span><h2>Keine passenden Dateien</h2><p id="source-empty-text">Versuche einen anderen Modellnamen oder ändere die Filter.</p><button class="secondary" id="source-reset">Filter zurücksetzen</button></div>
-    <nav class="grid-pagination" aria-label="Ergebnisseiten"><button class="secondary" id="source-prev" disabled>← Zurück</button><span id="source-page"></span><button class="secondary" id="source-next" disabled>Weiter →</button></nav>
+    <nav class="grid-pagination" id="source-pagination" aria-label="Ergebnisseiten"><button class="secondary" id="source-prev" disabled>← Zurück</button><span id="source-page"></span><button class="secondary" id="source-next" disabled>Weiter →</button></nav>
+    </div>
+    </div>
   </main>
   <main class="workspace" id="workspace" hidden>
     <aside class="catalog" aria-label="PCB-Bibliothek">

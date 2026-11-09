@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 
 ## Project overview
 
@@ -13,15 +13,8 @@ and a stateful **diagnostic conversation** runs the live repair session.
 
 ## Hard rules — NEVER violate
 
-1. **Proprietary source-available license** for all code in this repo — see
-   the `LICENSE` file at the root for the canonical terms. The repo is
-   public for evaluation, education, and personal non-commercial use only;
-   redistribution, hosted deployment, and any commercial use require prior
-   written permission. Do **not** add per-file copyright or SPDX headers
-   to new source files; the root `LICENSE` is the single source of truth.
-2. **Permissive dependencies only** (MIT, Apache 2.0, BSD). Never pull in
-   GPL, AGPL, or LGPL packages — the proprietary license on our own code
-   does not relax this; copyleft deps would still contaminate the bundle.
+1. **Proprietary 
+    
 3. **No hallucinated component IDs.** Defense in depth, two layers.
    (1) Tool discipline: every refdes the agent surfaces comes from a tool
    lookup (`mb_get_component`, or a `bv_*` tool that cross-checks the parsed
@@ -731,7 +724,7 @@ endpoint/fetch/socket against them **before** writing it.
 
 Loaded from `.env` via `api/config.py`:
 
-- `ANTHROPIC_MODEL_MAIN` → `claude-opus-4-8` (agent reasoning at `deep`
+- `ANTHROPIC_MODEL_MAIN` → `claude-opus-5-5` (agent reasoning at `deep`
   tier, heavy pipeline sub-agents)
 - `ANTHROPIC_MODEL_FAST` → `claude-haiku-4-5` (agent reasoning at `fast`
   tier, validation, formatting, cheap classification)

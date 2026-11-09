@@ -13,11 +13,8 @@ let _partialLoaded = false;
 
 const STATUS_KEYS = ["mastered", "practiced", "learning", "unlearned"];
 const VERBOSITIES = ["auto", "concise", "normal", "teaching"];
-const LANGUAGES = ["en", "fr", "zh", "hi"];
-// Native display label per locale (the stored value stays the ISO code).
-const LANGUAGE_LABELS = { en: "English", fr: "Français", zh: "中文", hi: "हिन्दी" };
 // BCP-47 tag per locale for Intl date/number formatting.
-const DATE_LOCALES = { en: "en-US", fr: "fr-FR", zh: "zh-CN", hi: "hi-IN" };
+const DATE_LOCALES = { en: "en-US" };
 
 async function ensurePartial() {
   if (_partialLoaded) return;
@@ -227,7 +224,6 @@ function renderPrefs() {
   };
 
   host.appendChild(makeGroup(window.t("profile.prefs.verbosity"), "verbosity", VERBOSITIES));
-  host.appendChild(makeGroup(window.t("profile.prefs.language"), "language", LANGUAGES, LANGUAGE_LABELS));
 }
 
 async function changePref(key, value) {
@@ -238,9 +234,6 @@ async function changePref(key, value) {
     body: JSON.stringify(next),
   });
   _state = fresh;
-  if (key === "language" && window.i18n && value !== window.i18n.locale) {
-    await window.i18n.setLocale(value);
-  }
   renderPrefs();
   renderHead();
   renderRibbon();

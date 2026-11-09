@@ -73,10 +73,7 @@ function setLandingMascot(state) {
 // since commit 548ed20 dropped the topbar switch). Re-derived lazily so we
 // pick up locale changes mid-session without a page reload.
 function _landingDateFmt() {
-  const locale = (i18n && i18n.locale) || 'en';
-  // Map our short locale codes to BCP-47 region tags Intl expects.
-  const bcp47 = locale === 'fr' ? 'fr-FR' : 'en-US';
-  return new Intl.DateTimeFormat(bcp47, {
+  return new Intl.DateTimeFormat('en-US', {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 }

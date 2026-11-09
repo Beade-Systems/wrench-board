@@ -216,12 +216,7 @@ export async function maybeShowFirstDiagCoaching(rid, { onDone = null, slug = nu
     // The conversation switcher is driven offline (no backend) straight on the
     // real chat-panel DOM, so the tech sees the actual gesture, not a caption.
     const { handleDiagnosticFrame, replaySeedConversations, replayOpenConvPopover, replayCloseConvPopover } = await import("../../../llm.js");
-    const loc = (window.i18n && window.i18n.locale) || "fr";
-    const grab = async (name) => {
-      let f = await loadRecvFrames(`/demos/${name}.${loc}.json`);
-      if (!f.length && loc !== "fr") f = await loadRecvFrames(`/demos/${name}.fr.json`);
-      return f;
-    };
+    const grab = (name) => loadRecvFrames(`/demos/${name}.en.json`);
     const conv1 = await grab("hero-conv1");
     const conv2 = await grab("hero-conv2");
     if (conv1.length && conv2.length) {

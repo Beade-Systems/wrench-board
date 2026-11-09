@@ -695,7 +695,7 @@ function formatVersionDate(ts) {
   const [, y, mo, d, h, mi] = m;
   const dt = new Date(`${y}-${mo}-${d}T${h}:${mi}:00Z`);
   if (isNaN(dt)) return ts;
-  const localeTag = (window.i18n && window.i18n.locale === "fr") ? "fr-FR" : "en-US";
+  const localeTag = "en-US";
   return dt.toLocaleString(localeTag, {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   }).replace(",", " ·");

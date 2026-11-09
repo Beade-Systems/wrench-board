@@ -23,6 +23,7 @@
 //
 // Activated by ⌘/Ctrl+J and by clicking the topbar "Agent" button.
 
+import { apiFetch } from "./shared/api.js";
 import {
   selectedCameraDeviceId,
   selectedCameraLabel,
@@ -712,7 +713,7 @@ async function loadConversations() {
   const rid = currentRepairId();
   if (!rid) { conversationsCache = []; renderConvItems(); return; }
   try {
-    const res = await fetch(`/pipeline/repairs/${encodeURIComponent(rid)}/conversations`);
+    const res = await apiFetch(`/pipeline/repairs/${encodeURIComponent(rid)}/conversations`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     conversationsCache = Array.isArray(data.conversations) ? data.conversations : [];
@@ -727,7 +728,7 @@ async function deleteConvFromPanel(convId) {
   if (!rid || !convId) return;
   let res;
   try {
-    res = await fetch(
+    res = await apiFetch(
       `/pipeline/repairs/${encodeURIComponent(rid)}/conversations/${encodeURIComponent(convId)}`,
       { method: "DELETE" },
     );
@@ -906,7 +907,7 @@ async function mountPanelFragment() {
   if (!root) return false;
   if (root.childElementCount > 0) return true; // already mounted (hot-reload guard)
   try {
-    const res = await fetch("llm_panel.html", { cache: "no-cache" });
+    const res = await apiFetch("llm_panel.html", { cache: "no-cache" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     root.innerHTML = await res.text();
     // Translate the freshly-injected markup. Wait for dictionaries first

@@ -8,6 +8,7 @@
 // then call viewer.loadBoard() on every subsequent navigation / pin
 // switch.
 
+import { apiFetch } from "./shared/api.js";
 import { getDeviceSlug } from "./shared/context.js";
 
 let viewer = null;
@@ -37,7 +38,7 @@ function rebuildIndexes(payload) {
 async function fetchPayload(slug) {
   const url = `/api/board/render?slug=${encodeURIComponent(slug)}`;
   console.log("[pcb_viewer_bridge] fetching", url);
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await apiFetch(url, { cache: "no-store" });
   console.log("[pcb_viewer_bridge] render status", res.status);
   if (!res.ok) return null;
   const payload = await res.json();

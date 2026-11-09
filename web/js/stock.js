@@ -3,7 +3,7 @@
 
 import { t } from "./i18n.js";
 import { escapeHtml } from "./shared/dom.js";
-import { apiGet, notifyUnauthorized } from "./shared/api.js";
+import { apiFetch, apiGet } from "./shared/api.js";
 import { openInfoModal } from "./info_modal.js";
 
 const STOCK_INFO_FLAG = "wb_stock_info_seen";
@@ -58,11 +58,8 @@ const _harvestState = {
 };
 
 async function fetchJson(path, opts) {
-  const r = await fetch(API + path, opts);
+  const r = await apiFetch(API + path, opts);
   if (!r.ok) {
-    // Mirror shared/api.js: a lapsed session (401) gets surfaced globally so
-    // the host can re-auth, instead of dying silently into an empty view.
-    if (r.status === 401) notifyUnauthorized();
     throw new Error(`${r.status} ${r.statusText}`);
   }
   return r.json();

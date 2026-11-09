@@ -2,6 +2,7 @@
 // shared registry. Pulls the REAL mascot SVG template from index.html so
 // there is no markup duplication, then reuses mountMascot/setMascotState.
 
+import { apiFetch } from "./shared/api.js";
 import { MASCOT_STATES } from "./mascot_states.js";
 import { mountMascot } from "./mascot.js";
 
@@ -20,7 +21,7 @@ const REPLAY_SVG =
 async function ensureTemplate() {
   if (document.getElementById("tpl-mascot")) return true;
   try {
-    const html = await fetch("./index.html").then((r) => r.text());
+    const html = await apiFetch("./index.html").then((r) => r.text());
     const doc = new DOMParser().parseFromString(html, "text/html");
     const tpl = doc.getElementById("tpl-mascot");
     if (!tpl) throw new Error("tpl-mascot not found in index.html");

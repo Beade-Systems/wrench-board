@@ -14,6 +14,7 @@
 //   i18n.ready                 → Promise resolved once first dictionary loaded
 //   i18n.onReady(fn)           → run fn once dictionaries are loaded
 //   i18n.onChange(fn)          → notify on locale switch (re-render hook)
+import { apiFetch } from "./shared/api.js";
 
 const SUPPORTED = ['en', 'fr', 'zh', 'hi'];
 const DEFAULT_LOCALE = 'en';
@@ -74,7 +75,7 @@ function pickInitialLocale() {
 
 async function loadModule(name, lang) {
   try {
-    const res = await fetch(`/i18n/_modules/${name}.${lang}.json`, { cache: 'no-cache' });
+    const res = await apiFetch(`/i18n/_modules/${name}.${lang}.json`, { cache: 'no-cache' });
     if (!res.ok) return {};
     return await res.json();
   } catch {

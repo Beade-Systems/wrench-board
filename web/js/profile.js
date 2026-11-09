@@ -5,6 +5,7 @@
 // Tool toggles → PUT /profile/tools ; preference changes → PUT /profile/preferences
 // ; skill click opens the evidence drawer. Identity modal handler lands in Task 12.
 
+import { apiFetch } from "./shared/api.js";
 import { escapeHtml as escHtml } from "./shared/dom.js";
 
 let _state = null;    // {profile, derived, catalog}
@@ -22,7 +23,7 @@ async function ensurePartial() {
   if (_partialLoaded) return;
   const mount = document.getElementById("profileSection");
   const url = mount.dataset.partial || "/profil.html";
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error(`partial ${url} → ${res.status}`);
   mount.innerHTML = await res.text();
   if (window.i18n?.ready) await window.i18n.ready;
@@ -31,7 +32,7 @@ async function ensurePartial() {
 }
 
 async function fetchJSON(url, init) {
-  const res = await fetch(url, init);
+  const res = await apiFetch(url, init);
   if (!res.ok) throw new Error(`${init?.method || "GET"} ${url} → ${res.status}`);
   return res.json();
 }

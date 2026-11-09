@@ -19,6 +19,7 @@ const SECTION_META = {
 // prettifySlug now lives in shared/dom.js (single source of truth). Imported for
 // internal use (updateChrome) AND re-exported to preserve the public API
 // consumed by main.js and landing.js.
+import { apiFetch } from "./shared/api.js";
 import { prettifySlug } from "./shared/dom.js";
 export { prettifySlug };
 import { setContext, getDeviceSlug, getRepairId } from "./shared/context.js";
@@ -76,7 +77,7 @@ export function seedSlugForRepair(id, slug) {
 async function loadPackSummary(slug) {
   if (!slug) return null;
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(slug)}`);
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}`);
     if (!res.ok) return null;
     return await res.json();
   } catch (err) {
@@ -98,7 +99,7 @@ async function ensureRepairMeta(repairId) {
   if (_repairCacheInFlight.has(repairId)) return _repairCacheInFlight.get(repairId);
   const p = (async () => {
     try {
-      const res = await fetch(`/pipeline/repairs/${encodeURIComponent(repairId)}`);
+      const res = await apiFetch(`/pipeline/repairs/${encodeURIComponent(repairId)}`);
       if (!res.ok) return null;
       const data = await res.json();
       _repairCache.set(repairId, data);

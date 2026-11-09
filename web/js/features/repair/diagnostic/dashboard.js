@@ -12,7 +12,7 @@ import { getDiagnosticWS } from '../../../services/diagnosticSocket.js';
 import { store } from '../../../store.js';
 import { getDeviceSlug, getRepairId } from '../../../shared/context.js';
 import { escapeHtml, relativeTime as relativeTimeFr } from '../../../shared/dom.js';
-import { apiGet } from '../../../shared/api.js';
+import { apiFetch, apiGet } from '../../../shared/api.js';
 import { openInfoModal } from '../../../info_modal.js';
 import { maybeShowFirstDiagCoaching } from './coaching.js';
 import { hideUploads } from '../../../cloud_hints.js';
@@ -171,7 +171,7 @@ export function hideRepairDashboard() {
 
 async function fetchJSON(url, fallback) {
   try {
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) return fallback;
     return await res.json();
   } catch (err) {
@@ -335,7 +335,7 @@ function renderDashboardData(slug, rid, pack, sourcesData) {
   const diagWrapEl = document.getElementById("rdCardBoardviewDiagWrap");
   if (diagWrapEl) diagWrapEl.hidden = true;
   if (pack?.has_boardview && diagWrapEl) {
-    fetch(`/api/board/render?slug=${encodeURIComponent(slug)}`)
+    apiFetch(`/api/board/render?slug=${encodeURIComponent(slug)}`)
       .then(r => r.ok ? r.json() : null)
       .then(payload => {
         const refs = payload?.net_diagnostics?.length || 0;
@@ -846,7 +846,7 @@ async function switchSource(slug, rid, kind, version) {
   }
 
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/pipeline/packs/${encodeURIComponent(slug)}/sources/${kind}`,
       {
         method: "PUT",
@@ -919,7 +919,7 @@ async function deleteVersion(slug, rid, kind, version) {
   }
 
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/pipeline/packs/${encodeURIComponent(slug)}`
       + `/sources/${kind}/versions/${encodeURIComponent(version.filename)}`,
       { method: "DELETE" },
@@ -1093,7 +1093,7 @@ async function handleUpload(slug, rid, file, kind) {
   fd.append("file", file);
 
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(slug)}/documents`, {
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/documents`, {
       method: "POST",
       body: fd,
     });
@@ -1285,7 +1285,7 @@ async function renderBoardDeltaCard(slug, boardNumber) {
 async function deleteConversation(rid, convId) {
   let res;
   try {
-    res = await fetch(
+    res = await apiFetch(
       `/pipeline/repairs/${encodeURIComponent(rid)}/conversations/${encodeURIComponent(convId)}`,
       { method: "DELETE" },
     );

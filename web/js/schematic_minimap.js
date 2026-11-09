@@ -16,6 +16,7 @@
 // Data source: `/pipeline/packs/{slug}/schematic` — the compiled
 // ElectricalGraph, cached in-module after the first fetch.
 
+import { apiFetch } from "./shared/api.js";
 import { ICON_WARNING } from './icons.js';
 import { getDeviceSlug, getRepairId } from './shared/context.js';
 import { repairHash } from './router.js';
@@ -87,7 +88,7 @@ async function loadSchematic(slug) {
   if (!slug) return null;
   if (schematicCache && schematicCache.slug === slug) return schematicCache.data;
   if (fetchInFlight && fetchInFlight.slug === slug) return fetchInFlight.promise;
-  const promise = fetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic`)
+  const promise = apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic`)
     .then(res => (res.ok ? res.json() : null))
     .then(data => {
       if (data) schematicCache = { slug, data };

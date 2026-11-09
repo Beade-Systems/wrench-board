@@ -1,3 +1,4 @@
+import { apiFetch } from "./shared/api.js";
 import {
   ICON_CHECK,
   ICON_CIRCLE,
@@ -125,7 +126,7 @@ export const SimulationController = {
   async refresh(slug) {
     if (!slug) return;
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/pipeline/packs/${encodeURIComponent(slug)}/schematic/simulate`,
         {
           method: "POST",
@@ -330,7 +331,7 @@ export const SimulationController = {
     const repairId = ctxRepairId();
     if (!slug || !repairId) return;
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/pipeline/packs/${encodeURIComponent(slug)}/repairs/${encodeURIComponent(repairId)}/measurements`,
       );
       if (!res.ok) return;
@@ -375,7 +376,7 @@ export const SimulationController = {
     const repairId = ctxRepairId();
     if (!slug || !repairId) return [];
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/pipeline/packs/${encodeURIComponent(slug)}/repairs/${encodeURIComponent(repairId)}/measurements?target=${encodeURIComponent(target)}`,
       );
       if (!res.ok) return [];
@@ -439,7 +440,7 @@ export const SimulationController = {
       max_results: 5,
     };
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `/pipeline/packs/${encodeURIComponent(slug)}/schematic/hypothesize`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       );
@@ -522,7 +523,7 @@ function el(id) { return document.getElementById(id); }
 
 async function fetchSchematic(slug) {
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic`);
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic`);
     if (res.status === 404) return { missing: true };
     if (!res.ok) return { error: `HTTP ${res.status}` };
     return { graph: await res.json() };
@@ -2309,12 +2310,12 @@ function renderBootTimeline(model) {
     btn.disabled = true;
     btn.textContent = `↻ ${t("schematic.boot.reanalyzing")}`;
     try {
-      const res = await fetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/schematic/analyze-boot`, { method: "POST" });
+      const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/schematic/analyze-boot`, { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       // Poll every 3s until the file appears (max 60s).
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 3000));
-        const check = await fetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/schematic`);
+        const check = await apiFetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/schematic`);
         const body = await check.json();
         if (body.boot_sequence_source === "analyzer") {
           STATE.graph = body;
@@ -2938,7 +2939,7 @@ function updateInspector(node) {
       const repairId = ctxRepairId();
       if (slug && repairId) {
         try {
-          await fetch(
+          await apiFetch(
             `/pipeline/packs/${encodeURIComponent(slug)}/repairs/${encodeURIComponent(repairId)}/measurements`,
             {
               method: "POST",
@@ -3704,7 +3705,7 @@ async function primePdfViewer(slug) {
   }
   let data;
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic/pages`);
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic/pages`);
     if (!res.ok) {
       scroll.innerHTML = "";
       empty.classList.remove("hidden");

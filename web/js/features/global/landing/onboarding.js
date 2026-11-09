@@ -17,7 +17,7 @@
 import { mountMascot } from "../../../mascot.js";
 import { showBubble, hideBubble } from "../../../mascot_bubble.js";
 import { t } from "../../../i18n.js";
-import { apiGet } from "../../../shared/api.js";
+import { apiFetch, apiGet } from "../../../shared/api.js";
 import { hasSeenOnboarding, markOnboardingSeen } from "../../../onboarding_state.js";
 import { forceNextDiagCoaching } from "../../repair/diagnostic/coaching.js";
 import { openProfileWizard } from "./profile_modal.js";
@@ -65,7 +65,7 @@ export async function maybeStartOnboarding(ctl) {
   // tour was skipped), so we can't early-return on `onboarding_seen` here.
   let repairsCount = 0;
   try {
-    const res = await fetch("/pipeline/repairs");
+    const res = await apiFetch("/pipeline/repairs");
     if (res.ok) {
       const j = await res.json();
       repairsCount = Array.isArray(j) ? j.length : 0;

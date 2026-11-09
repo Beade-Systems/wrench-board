@@ -6,6 +6,7 @@
 // pipeline_started}). When pipeline_started=false the pack is already
 // complete on disk, so we skip the drawer and redirect immediately.
 
+import { apiFetch } from "./shared/api.js";
 import { escapeHtml as escHtml } from "./shared/dom.js";
 import { connectProgress, fetchPendingKind } from "./services/pipelineSocket.js";
 import { repairHash, seedSlugForRepair } from "./router.js";
@@ -411,7 +412,7 @@ function renderKindConfirm(ev) {
 async function confirmKind(deviceKind) {
   let ok = false;
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/confirm-kind`, {
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/confirm-kind`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device_kind: deviceKind }),
     });

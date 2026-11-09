@@ -9,6 +9,7 @@
 // capped cadence. Capture tool: scripts/capture_demo_session.py; fixtures in
 // web/demos/.
 
+import { apiFetch } from "../../../shared/api.js";
 import { handleDiagnosticFrame, openPanelForReplay, setDemoOffline } from "../../../llm.js";
 
 // Lifecycle / modal frames whose LIVE side-effects would break a passive replay:
@@ -55,7 +56,7 @@ export function cancelDemoReplay() { _cancel = true; }
 // ({ ms, dir, frame }). Indices into this array are what coaching.js slices by.
 export async function loadRecvFrames(url) {
   try {
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return (data.frames || []).filter((f) => f.dir === "recv");

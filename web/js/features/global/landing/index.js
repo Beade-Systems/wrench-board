@@ -11,6 +11,7 @@
 // rounds); we render those into each timeline row's live line + a collapsible
 // "détail" log so the technician watches the agent work in real time.
 
+import { apiFetch } from "../../../shared/api.js";
 import { mountMascot, setMascotState } from '../../../mascot.js';
 import { prettifySlug, repairHash, seedSlugForRepair } from '../../../router.js';
 import i18n from '../../../i18n.js';
@@ -105,7 +106,7 @@ async function loadAndRenderSidebar() {
 
   let repairs = [];
   try {
-    const res = await fetch("/pipeline/repairs");
+    const res = await apiFetch("/pipeline/repairs");
     if (res.ok) repairs = await res.json();
   } catch (err) {
     console.warn("[landing] loadRepairs failed", err);
@@ -242,7 +243,7 @@ async function onDeleteRepairClick(repairId, itemEl, btnEl) {
 
   btnEl.disabled = true;
   try {
-    const res = await fetch(`/pipeline/repairs/${encodeURIComponent(repairId)}`, {
+    const res = await apiFetch(`/pipeline/repairs/${encodeURIComponent(repairId)}`, {
       method: "DELETE",
     });
     if (!res.ok) throw await httpError(res);
@@ -462,7 +463,7 @@ async function _launchDiagnostic() {
     // Signal the out-of-band schematic so the pipeline waits for its electrical
     // graph before device-kind classification (the upload fires below, post-create).
     if (_schematicFile) body.append("schematic_pending", "true");
-    const res = await fetch("/pipeline/repairs", {
+    const res = await apiFetch("/pipeline/repairs", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
@@ -555,7 +556,7 @@ async function _launchDiagnostic() {
 async function armNotify(repairId) {
   const tt = window.t || ((k) => k);
   try {
-    const res = await fetch(`/pipeline/repairs/${encodeURIComponent(repairId)}/notify`, { method: "POST" });
+    const res = await apiFetch(`/pipeline/repairs/${encodeURIComponent(repairId)}/notify`, { method: "POST" });
     if (res.ok) setStatus(tt("landing.status.notify_armed"), STATUS_NEUTRAL);
   } catch (err) {
     console.warn("[landing] notify opt-in failed", err);
@@ -896,7 +897,7 @@ async function confirmLandingKind(deviceKind) {
   const t = window.t || ((k) => k);
   let ok = false;
   try {
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(_activeSlug)}/confirm-kind`, {
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(_activeSlug)}/confirm-kind`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ device_kind: deviceKind }),
     });
@@ -1299,7 +1300,7 @@ async function uploadSchematicForSlug(slug, file) {
     const fd = new FormData();
     fd.append("kind", "schematic_pdf");
     fd.append("file", file);
-    const res = await fetch(`/pipeline/packs/${encodeURIComponent(slug)}/documents`, {
+    const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/documents`, {
       method: "POST",
       body: fd,
     });

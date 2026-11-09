@@ -10,8 +10,10 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 
 from api import __version__
 from api.agent.board_ref import set_board_ref
@@ -177,6 +179,27 @@ app.add_middleware(
     expected_token=get_settings().engine_service_token,
 )
 
+
+
+def _install_compression(target: FastAPI, *, service_token: str) -> None:
+    """Gzip HTTP responses when the engine is reached directly.
+
+    Skipped behind the hosted front-door (service token set): it rewrites HTML
+    by string replacement, so it must receive plain bodies. PDFs are excluded
+    because the document viewer can issue byte-range requests against them.
+    """
+    if service_token:
+        return
+    target.add_middleware(
+        GZipMiddleware,
+        minimum_size=1024,
+        compresslevel=5,
+        exclude_content_types=(*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/pdf"),
+    )
+
+
+_install_compression(app, service_token=get_settings().engine_service_token)
+
 app.include_router(pipeline_router)
 app.include_router(board_router)
 app.include_router(profile_router)
@@ -300,24 +323,17 @@ async def diagnostic_session(websocket: WebSocket, device_slug: str) -> None:
 
 
 class _NoCacheStaticFiles(StaticFiles):
-    """StaticFiles subclass that disables browser caching for every served file.
+    """StaticFiles subclass that makes browsers revalidate every served file.
 
-    Why: the diagnostic chat panel is loaded as a tree of ES modules
-    (`js/main.js` → `js/llm.js` → `js/protocol.js` → …). Browsers cache
-    each module URL aggressively and ES module imports are NOT invalidated
-    by bumping the parent script's `?v=` query string — the relative
-    `import './foo.js'` resolves to the bare URL. In dev that means edits
-    to a sibling module silently no-op until the tech remembers to
-    Ctrl+Shift+R, and stale cached versions keep dropping unhandled WS
-    events through old code paths (the recurring `?{...}` raw-JSON dumps
-    in chat the user kept seeing). No-store is heavy-handed for a prod
-    CDN but exactly right for a local FastAPI dev server: every reload
-    pulls fresh code with no stale-module footguns.
+    Why: the UI is a tree of ES modules, and relative imports are not
+    invalidated by bumping the parent script's `?v=` query string. `no-cache`
+    keeps edits visible on the next reload, while the ETag lets unchanged files
+    answer 304 instead of being downloaded again.
     """
 
     async def get_response(self, path, scope):  # type: ignore[override]
         response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Cache-Control"] = "no-cache"
         return response
 
 

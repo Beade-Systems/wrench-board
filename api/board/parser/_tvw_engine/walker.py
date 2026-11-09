@@ -83,16 +83,17 @@ class LineRecord:
 
 @dataclass(slots=True)
 class ArcRecord:
-    """Drawing primitive — arc with centre, radius, start/end coords.
+    """Drawing primitive — arc with centre, radius, start angle and sweep.
 
-    Per the format we tested, an arc record is 28 bytes:
-        i32 + u32 (header) + 5 × u32 (centre, radius, endpoints).
+    An arc record is 28 bytes: u32 net, u32 aperture, i32 centre X/Y,
+    i32 radius, f32 start angle and f32 sweep. The angles are degrees,
+    counter-clockwise from +X; a negative sweep runs clockwise.
     """
     cx: int          # centi-mils — centre X
     cy: int          # centre Y
     radius: int      # centi-mils
-    sx: int          # start X
-    sy: int          # start Y
+    start_deg: float
+    sweep_deg: float
 
 
 @dataclass(slots=True)
@@ -912,13 +913,13 @@ def _read_arcs(buf: bytes, off: int, region_end: int) -> tuple[list[ArcRecord], 
     """layer_arcs_read: i32 count + u32 + count × 28-byte record.
 
     Per-record layout (7 × u32 = 28 bytes):
-        u32 header_a  (purpose unclear)
-        i32 header_b  (purpose unclear; signed)
-        u32 header_c
-        u32 centre_x  (centi-mils)
-        u32 centre_y
-        u32 radius
-        u32 start_x   (start point X — interpretation pending)
+        u32 net
+        u32 aperture
+        i32 centre_x  (centi-mils)
+        i32 centre_y
+        i32 radius
+        f32 start     (degrees)
+        f32 sweep     (degrees, signed)
     """
     if off + 4 > region_end:
         return [], off
@@ -935,17 +936,16 @@ def _read_arcs(buf: bytes, off: int, region_end: int) -> tuple[list[ArcRecord], 
         if off + 28 > region_end:
             break
         try:
-            _h_a, off2 = _u32(buf, off)
-            _h_b, off2 = _i32(buf, off2)
-            _h_c, off2 = _u32(buf, off2)
+            _net, off2 = _u32(buf, off)
+            _aperture, off2 = _u32(buf, off2)
             cx, off2 = _i32(buf, off2)
             cy, off2 = _i32(buf, off2)
             radius, off2 = _i32(buf, off2)
-            sx, off2 = _i32(buf, off2)
+            start_deg, sweep_deg = struct.unpack_from("<ff", buf, off2)
         except struct.error:
             break
-        arcs.append(ArcRecord(cx=cx, cy=cy, radius=radius, sx=sx, sy=0))
-        off = off2
+        arcs.append(ArcRecord(cx, cy, radius, start_deg, sweep_deg))
+        off = off2 + 8
     return arcs, off
 
 

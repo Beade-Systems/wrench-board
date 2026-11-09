@@ -51,7 +51,7 @@ from collections import defaultdict
 from api.board.model import Arc, Board, Layer, Net, Part, Pin, Point, Segment, TestPad, Trace
 from api.board.parser._ascii_boardview import GROUND_RE, POWER_RE
 
-from .walker import TVWFile
+from .walker import ArcRecord, TVWFile
 
 # TVW coordinates are signed centi-mils. `Board` uses mils.
 _COORD_DIVISOR = 100
@@ -73,18 +73,36 @@ _PAD_RENDER_SHRINK = 0.65
 # that.
 _TEST_PAD_MAX_RADIUS_MILS = 4.0
 
-# Some files carry arc records whose radius or centre decodes to hundreds of
-# metres (the raw value is often a float bit pattern: 0x43340000 = 180.0).
-# No board reaches this far, and one such arc wrecks fit-to-board.
+# The walker sometimes treats a component table as a layer, so its "arcs" are
+# unrelated bytes. No board reaches this far, and one such arc wrecks
+# fit-to-board.
 _MAX_ARC_EXTENT_MILS = 100_000.0
+_MAX_ARC_ANGLE_DEG = 360.01
 
 
-def is_plausible_arc(cx_mils: float, cy_mils: float, radius_mils: float) -> bool:
+def is_plausible_arc(arc: ArcRecord) -> bool:
     return (
-        0 < radius_mils <= _MAX_ARC_EXTENT_MILS
-        and abs(cx_mils) <= _MAX_ARC_EXTENT_MILS
-        and abs(cy_mils) <= _MAX_ARC_EXTENT_MILS
+        0 < arc.radius / _COORD_DIVISOR <= _MAX_ARC_EXTENT_MILS
+        and abs(arc.cx / _COORD_DIVISOR) <= _MAX_ARC_EXTENT_MILS
+        and abs(arc.cy / _COORD_DIVISOR) <= _MAX_ARC_EXTENT_MILS
+        and abs(arc.start_deg) <= _MAX_ARC_ANGLE_DEG  # also rejects NaN
+        and abs(arc.sweep_deg) <= _MAX_ARC_ANGLE_DEG
     )
+
+
+def plausible_arcs(records: list[ArcRecord]) -> list[ArcRecord]:
+    """Valid arcs of one layer; a table that is mostly invalid is not an arc table."""
+    valid = [arc for arc in records if is_plausible_arc(arc)]
+    return valid if len(valid) * 2 >= len(records) else []
+
+
+def arc_angles(arc: ArcRecord) -> tuple[float, float]:
+    """Counter-clockwise (start, end) in degrees, as `Arc` stores them."""
+    start, sweep = arc.start_deg, arc.sweep_deg
+    if sweep < 0:
+        start, sweep = start + sweep, -sweep
+    start %= 360.0
+    return start, start + sweep
 
 
 # Default fallback aperture size when a pin's pin_local_index doesn't
@@ -799,17 +817,14 @@ def to_board(file: TVWFile, *, board_id: str, file_hash: str) -> Board:
                     width=0.0,
                 )
             )
-        for arc in layer.arcs:
-            if not is_plausible_arc(
-                arc.cx / _COORD_DIVISOR, arc.cy / _COORD_DIVISOR, arc.radius / _COORD_DIVISOR
-            ):
-                continue
+        for arc in plausible_arcs(layer.arcs):
+            angle_start, angle_end = arc_angles(arc)
             arcs.append(
                 Arc(
                     center=Point(x=arc.cx / _COORD_DIVISOR, y=arc.cy / _COORD_DIVISOR),
                     radius=arc.radius / _COORD_DIVISOR,
-                    angle_start=0.0,
-                    angle_end=360.0,
+                    angle_start=angle_start,
+                    angle_end=angle_end,
                     layer=layer_idx,
                 )
             )

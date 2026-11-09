@@ -155,7 +155,6 @@ web/                 Static frontend served by FastAPI
   js/features/       global/landing (home/landing), repair/ (workspace, diagnostic)
   styles/            tokens, layout, graph, home, memory_bank, pipeline_progress,
                      llm, brd, modal, stub (semantic OKLCH palette in tokens.css)
-  boards/            Demo BRD/KiCad artefacts
 tests/               pytest suite mirroring api/ layout (agent/, board/, pipeline/,
                      pipeline/schematic/, session/, tools/)
 memory/              Generated knowledge packs + repair sessions. One directory
@@ -496,10 +495,10 @@ Entrypoint: `web/index.html` loads `web/js/main.js` which wires:
 | `js/pipeline_progress.js` | WS consumer of `/pipeline/progress/{slug}` — drawer UI      |
 | `js/llm.js`            | Diagnostic chat panel; opens WS `/ws/diagnostic/{slug}?…`, auto-opens on `?repair=` URL |
 | `js/pcb_viewer.js` + `js/pcb_viewer_bridge.js` | Three.js WebGL boardview (sole renderer); the bridge exposes `window.Boardview` / `window.initBoardview` and consumes WS boardview events |
-| `js/features/repair/`  | The repair workbench: workspace + diagnostic (dashboard, chatLog, costDisplay, coaching, filesVision, demoReplay) |
+| `js/features/repair/`  | The repair workbench: workspace + diagnostic (dashboard, chatLog, costDisplay, coaching, filesVision) |
 | `js/schematic.js`      | Schematic viewer vue (+ `schematic_minimap.js`) |
 | `js/stock.js`          | Stock / donor inventory section |
-| `js/mascot.js`         | Mascot UX subsystem (bubble / gallery / states) |
+| `js/mascot.js`         | Mascot UX subsystem (bubble / states) |
 | `js/i18n.js`           | Translation layer (loaded directly in `index.html`) |
 
 Shared layer (no view of their own): `shared/dom.js` (escapeHtml /

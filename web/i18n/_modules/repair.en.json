@@ -1,5 +1,4 @@
 {
-  "demo_symptom": "Won't power on: no power at all",
   "device_kind": {
     "label": "Board type (optional)",
     "none": "(not declared)",

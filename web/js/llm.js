@@ -877,27 +877,6 @@ function toggleConvPopover() {
 }
 
 // ── Demo replay: the conversation switcher, offline ───────────────────────
-// The onboarding shows the REAL conversation UI being used — the chip, the
-// popover, the "+ New conversation" button — so the tech sees the actual
-// gesture, not a description of it. But offline there is no backend to list or
-// create conversations (and `openConvPopover` would fire a 404-flooding fetch),
-// so these helpers drive the very same DOM the live code does, from a
-// caller-supplied COSMETIC list. Deterministic, free, no network.
-export function replaySeedConversations(list) {
-  conversationsCache = Array.isArray(list) ? list.slice() : [];
-  // currentConvId drives the active-row marker + the "CONV n/total" chip label.
-  const active = conversationsCache.find((c) => c.active);
-  currentConvId = (active || conversationsCache[0] || {}).id || null;
-  renderConvItems();
-}
-export function replayOpenConvPopover() {
-  const chip = el("llmConvChip"), pop = el("llmConvPopover");
-  if (!chip || !pop) return;
-  renderConvItems();          // render the seeded cache — NO network fetch
-  pop.hidden = false;
-  chip.setAttribute("aria-expanded", "true");
-}
-export function replayCloseConvPopover() { closeConvPopover(); }
 
 // Fetch the chat panel fragment from web/llm_panel.html and inject it
 // into #llmRoot. Isolating the markup in its own file keeps parallel

@@ -19,12 +19,10 @@ import { showBubble, hideBubble } from "../../../mascot_bubble.js";
 import { t } from "../../../i18n.js";
 import { apiFetch, apiGet } from "../../../shared/api.js";
 import { hasSeenOnboarding, markOnboardingSeen } from "../../../onboarding_state.js";
-import { forceNextDiagCoaching } from "../../repair/diagnostic/coaching.js";
 import { openProfileWizard } from "./profile_modal.js";
 import { hideUploads } from "../../../cloud_hints.js";
 
 const FLAG = "wb_onboarding_seen";
-const EXAMPLE_REPAIR_ID = "example-mnt-reform";
 
 let _ctl = {};      // { setMascotState }
 let _env = null;    // cached profile envelope
@@ -164,65 +162,9 @@ function _stepConcept() {
   host.querySelector("#obConceptSkip").addEventListener("click", finish);
   host.querySelector("#obConceptNext").addEventListener("click", () => {
     _clearHost();
-    _stepExampleIntro();
+    _reveal('[data-ob-reveal].landing-title, [data-ob-reveal].landing-sub');
+    _stepDevice();
   });
-}
-
-// ── Step 3.5: offer a real example before the user's own first diag ────────
-// Opens the shipped MNT Reform device; the workspace coaching tour plays there
-// (full tabs), then hands back here via onDone → the "now your turn" pointers.
-function _stepExampleIntro() {
-  hideBubble();
-  _mascotState("idle");
-  const host = _ensureHost();
-  host.innerHTML = `
-    <div class="ob-backdrop" id="obBackdrop">
-      <div class="ob-modal ob-modal--concept" role="dialog" aria-modal="true">
-        <div class="ob-modal-mascot" id="obExampleMascot" aria-hidden="true"></div>
-        <p class="ob-body">${t("onboarding.example.bubble")}</p>
-        <div class="ob-actions">
-          <button type="button" class="ob-btn ob-btn-ghost" id="obExampleSkip">${t("onboarding.skip")}</button>
-          <button type="button" class="ob-btn ob-btn-primary" id="obExampleCta">${t("onboarding.example.cta")}</button>
-        </div>
-      </div>
-    </div>`;
-  mountMascot(host.querySelector("#obExampleMascot"), { size: "sm", state: "idle" });
-  host.querySelector("#obExampleSkip").addEventListener("click", () => { _clearHost(); _afterExample(); });
-  host.querySelector("#obExampleCta").addEventListener("click", () => { _clearHost(); _openExample(); });
-}
-
-function _openExample() {
-  // Ensure the workspace tour will play even for a tech who already saw it:
-  // arm a one-shot bypass of the persisted `first_diag_seen` flag (server truth
-  // now, so we can't just clear a localStorage key to force the replay).
-  forceNextDiagCoaching();
-  // When the workspace tour finishes (dashboard.js forwards this as onDone),
-  // return to the landing and resume the user's own first-diag pointers.
-  window.__wbExampleTourOnDone = () => { window.__wbExampleTourOnDone = null; _returnFromExample(); };
-  // Navigate into the example workspace; dashboard.js fires the tour on render.
-  window.location.hash = `#repair/${EXAMPLE_REPAIR_ID}/diagnostic`;
-}
-
-function _returnFromExample() {
-  // Back to the landing cockpit, then resume with the user's own first diag.
-  // The hashchange → showLanding render is async, so poll for the device input
-  // (the anchor the resumed pointers need) rather than guessing a fixed delay.
-  window.location.hash = "#landing";
-  let tries = 30; // ~3 s ceiling at 100 ms
-  const resume = () => {
-    if (document.getElementById("landingDevice") || tries-- <= 0) {
-      _overlay()?.classList.add("ob-running");
-      _afterExample();
-      return;
-    }
-    setTimeout(resume, 100);
-  };
-  setTimeout(resume, 80);
-}
-
-function _afterExample() {
-  _reveal('[data-ob-reveal].landing-title, [data-ob-reveal].landing-sub');
-  _stepDevice();
 }
 
 // ── Step 4: first diagnostic (device → symptom → launch) ──────────────────

@@ -135,11 +135,7 @@ export async function renderRepairDashboard(session) {
   const infoBtn = document.getElementById("rdInfoHint");
   if (infoBtn) infoBtn.onclick = () => openInfoModal("repair");
   // One-shot guided tour of the workspace the first time a dashboard opens.
-  // Consume the example-handoff hook one-shot (cleared on read so a later,
-  // unrelated first-diag render never picks up a stale return-to-landing).
-  const exampleOnDone = window.__wbExampleTourOnDone || null;
-  window.__wbExampleTourOnDone = null;
-  maybeShowFirstDiagCoaching(rid, { onDone: exampleOnDone, slug });
+  maybeShowFirstDiagCoaching(rid);
 }
 
 // Mid-dashboard re-render after an upload completes — same payload as the
@@ -187,17 +183,11 @@ function renderDashboardHeader(repair, taxEntry, slug, rid) {
   const badgesEl = document.getElementById("rdBadges");
   if (!slugEl || !deviceEl || !symptomEl || !badgesEl) return;
 
-  // The example/demo repair carries a hard-coded FR symptom in its record, which
-  // can't follow the UI locale — show a localized one instead, and flag demo mode
-  // on <body> so the centered topbar DEMO badge shows across every view.
-  const isDemo = !!rid && rid.startsWith("example-");
-  document.body.classList.toggle("wb-demo-mode", isDemo);
-
   slugEl.textContent = slug;
   deviceEl.textContent = taxEntry
     ? deviceName(taxEntry, { includeBrand: true })
     : (repair?.device_label || humanizeSlug(slug));
-  symptomEl.textContent = isDemo ? t("repair.demo_symptom") : (repair?.symptom || "…");
+  symptomEl.textContent = repair?.symptom || "…";
 
   const created = repair?.created_at ? relativeTimeFr(repair.created_at) : "…";
   const status = repair?.status || "open";

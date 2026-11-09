@@ -1,12 +1,10 @@
 // Single source of truth for the mascot's animation states.
 //
-// `mascot.js` reads this to validate states; the gallery
-// (`web/mascot_gallery.html`) reads the SAME list to render one preview card
-// per animation. Add a state here + its keyframes in `web/styles/mascot.css`
-// and it appears automatically everywhere — no duplication.
+// `mascot.js` reads this to validate states. Add a state here + its keyframes
+// in `web/styles/mascot.css`.
 //
 //   id    : the suffix used in the `is-<id>` CSS class (and setMascotState arg)
-//   label : human name shown on the gallery card
+//   label : human name
 //   kind  : "loop"     — runs forever (idle, thinking, scanning…)
 //           "oneshot"  — plays once and rests (success, error, celebrating…);
 //                        the gallery gets a Replay button for these

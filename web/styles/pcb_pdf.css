@@ -1,0 +1,232 @@
+/* Embedded PDF schematic panel. Everything is scoped under .pdfp-host so the
+   stylesheet can load next to pcb_library.css and in the popout on its own. */
+
+.pdfp-host {
+  --pdfp-bg: #0d1216;
+  --pdfp-bar: #141b20;
+  --pdfp-raised: #1b242b;
+  --pdfp-line: #26323a;
+  --pdfp-line-hover: #617981;
+  --pdfp-text: #e5edef;
+  --pdfp-muted: #8a9ba5;
+  --pdfp-accent: #a8e6bd;
+  --pdfp-error: #f2a7a0;
+  --pdfp-hit: rgba(255, 214, 64, .42);
+  --pdfp-hit-edge: rgba(190, 140, 0, .9);
+  --pdfp-hit-current: rgba(255, 128, 32, .55);
+  --pdfp-hit-current-edge: #ff7a1a;
+  --pdfp-hover: rgba(90, 170, 255, .28);
+  --pdfp-page-night: #15191d;
+  --pdfp-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--pdfp-text);
+  font: 12px/1.35 'DM Sans', 'Inter', system-ui, sans-serif;
+}
+
+.pdfp-host [hidden] { display: none !important; }
+.pdfp-host *, .pdfp-host *::before, .pdfp-host *::after { box-sizing: border-box; }
+
+.pdfp {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pdfp-bg);
+  outline: none;
+}
+
+.pdfp-mono { font-family: var(--pdfp-mono); font-size: 11px; color: var(--pdfp-muted); }
+
+/* toolbar */
+.pdfp-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 36px;
+  padding: 4px 8px;
+  background: var(--pdfp-bar);
+  border-bottom: 1px solid var(--pdfp-line);
+}
+
+.pdfp-title {
+  flex: 1 1 120px;
+  min-width: 60px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pdfp-group { display: flex; align-items: center; gap: 3px; }
+
+.pdfp-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--pdfp-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
+.pdfp-btn:hover { color: var(--pdfp-text); background: var(--pdfp-raised); border-color: var(--pdfp-line); }
+.pdfp-btn.active { color: var(--pdfp-accent); border-color: var(--pdfp-line); background: var(--pdfp-raised); }
+.pdfp-btn:focus-visible, .pdfp-popped-btn:focus-visible { outline: 1px solid var(--pdfp-accent); outline-offset: 1px; }
+
+.pdfp-page-input, .pdfp-search-input {
+  height: 24px;
+  color: var(--pdfp-text);
+  background: var(--pdfp-bg);
+  border: 1px solid var(--pdfp-line);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color .15s;
+}
+.pdfp-page-input:focus, .pdfp-search-input:focus { border-color: var(--pdfp-accent); }
+.pdfp-page-input { width: 44px; padding: 0 4px; font: 11px var(--pdfp-mono); text-align: right; }
+.pdfp-search-input { width: 160px; padding: 0 6px; font: 11px var(--pdfp-mono); }
+.pdfp-search-input::placeholder { color: var(--pdfp-muted); font-family: 'DM Sans', 'Inter', system-ui, sans-serif; }
+.pdfp-zoom { min-width: 44px; text-align: center; }
+.pdfp-count { min-width: 64px; padding: 0 4px; text-align: right; white-space: nowrap; }
+
+/* page area */
+.pdfp-stage { position: relative; flex: 1 1 0; min-height: 0; }
+.pdfp-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-x: auto;
+  overflow-y: scroll;
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pdfp-line) transparent;
+}
+.pdfp-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.pdfp-scroll::-webkit-scrollbar-thumb { background: var(--pdfp-line); border-radius: 4px; }
+.pdfp-scroll.on-token { cursor: pointer; }
+.pdfp-scroll.dragging { cursor: grabbing; }
+
+.pdfp-pages { position: relative; }
+
+.pdfp-page {
+  position: absolute;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .55);
+}
+.pdfp-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.pdfp.night .pdfp-page { background: var(--pdfp-page-night); }
+/* Only the canvas inverts, so highlight colors keep their meaning at night. */
+.pdfp.night .pdfp-page canvas { filter: invert(1) hue-rotate(180deg); }
+
+.pdfp-hl { position: absolute; inset: 0; pointer-events: none; }
+.pdfp-hit {
+  position: absolute;
+  background: var(--pdfp-hit);
+  outline: 1px solid var(--pdfp-hit-edge);
+  border-radius: 1px;
+}
+.pdfp-hit.current {
+  background: var(--pdfp-hit-current);
+  outline: 2px solid var(--pdfp-hit-current-edge);
+  box-shadow: 0 0 0 3px rgba(255, 122, 26, .28);
+}
+.pdfp-hover {
+  position: absolute;
+  background: var(--pdfp-hover);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+/* load state / errors */
+.pdfp-msg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--pdfp-muted);
+  text-align: center;
+  background: var(--pdfp-bg);
+  pointer-events: none;
+}
+.pdfp-msg.error { color: var(--pdfp-error); }
+
+/* context menu: glass, matching the other floating overlays */
+.pdfp-menu {
+  position: absolute;
+  z-index: 5;
+  min-width: 172px;
+  padding: 4px;
+  background: rgba(27, 36, 43, .94);
+  border: 1px solid var(--pdfp-line);
+  border-radius: 5px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+  backdrop-filter: blur(10px);
+}
+.pdfp-menu-head {
+  padding: 3px 7px 5px;
+  color: var(--pdfp-accent);
+  border-bottom: 1px solid var(--pdfp-line);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdfp-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 7px;
+  color: var(--pdfp-text);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pdfp-menu-item:hover:not(:disabled), .pdfp-menu-item:focus-visible { background: var(--pdfp-line); outline: none; }
+.pdfp-menu-item:disabled { color: var(--pdfp-muted); cursor: default; }
+
+/* docked placeholder while the document lives in its own window */
+.pdfp-popped {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--pdfp-muted);
+  background: var(--pdfp-bg);
+}
+.pdfp-popped p { margin: 0; }
+.pdfp-popped-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  color: var(--pdfp-text);
+  font: inherit;
+  background: var(--pdfp-raised);
+  border: 1px solid var(--pdfp-line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.pdfp-popped-btn:hover { border-color: var(--pdfp-line-hover); }
+
+.pdfp-popout-body { margin: 0; height: 100vh; overflow: hidden; background: #0d1216; }

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Deine PCB-Bibliothek in Wrench Board: Platinen importieren, Bauteile finden und Netze betrachten.">
+  <title>PCB-Bibliothek · Wrench Board</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles/pcb_library.css">
+  <link rel="stylesheet" href="/styles/pcb_tabs.css">
+  <link rel="stylesheet" href="/styles/pcb_worklist.css">
+  <link rel="stylesheet" href="/styles/pcb_pdf.css">
+  <script type="module" src="/js/pcb_library.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">▦</span><span>Wrench<span class="muted">Board</span></span></a>
+    <span class="header-divider"></span><span class="page-label">PCB-Bibliothek</span>
+    <div class="header-actions"><button class="secondary" id="browse-catalog" hidden>← Zum Raster</button><span class="storage-label"><i></i> Lokale Sammlung</span><button class="primary" id="import-button"><span aria-hidden="true">＋</span> PCB importieren</button></div>
+    <input id="file-input" type="file" multiple hidden>
+  </header>
+  <main class="catalog-browser" id="catalog-browser">
+    <div class="browser-heading"><div><div class="eyebrow">WRENCH BOARD / DATEIBIBLIOTHEK</div><h1>Deine Platinen. Ein Überblick.</h1><p id="source-description">Die Sammlung aus xzz_downloads wird eingelesen …</p></div><button class="secondary" id="source-refresh">↻ Ordner neu einlesen</button></div>
+    <div class="source-stats" id="source-stats" aria-label="Dateien in der Sammlung"></div>
+    <div class="browser-sources" aria-label="Sammlung"><button id="source-tab" class="active" aria-pressed="true">xzz_downloads</button><button id="imports-tab" aria-pressed="false">Meine Importe <span id="imports-count">0</span></button></div>
+    <div class="browser-filters"><label class="search browser-search"><span aria-hidden="true">⌕</span><input type="search" id="source-search" placeholder="Nach Hersteller, Modell oder Dateiname suchen …" aria-label="Dateiraster durchsuchen"></label><select id="source-kind" aria-label="Dateityp"><option value="board">Boardviews</option><option value="all">Alle Dateien</option><option value="pdf">PDF-Dokumente</option><option value="archive">Archive</option><option value="other">Weitere Dateien</option></select><select id="source-sort" aria-label="Raster sortieren"><option value="name">Name A–Z</option><option value="recent">Zuletzt geändert</option><option value="size">Größe absteigend</option></select></div>
+    <div class="category-filters" id="source-categories" aria-label="Kategorie"></div>
+    <div class="results-heading"><p id="source-results" role="status">Katalog wird geladen …</p><span id="source-hint">Platine anklicken, um sie im Viewer zu öffnen.</span></div>
+    <div class="file-grid" id="source-grid" aria-busy="true"></div>
+    <div class="grid-empty" id="source-empty" hidden><span aria-hidden="true">⌕</span><h2>Keine passenden Dateien</h2><p id="source-empty-text">Versuche einen anderen Modellnamen oder ändere die Filter.</p><button class="secondary" id="source-reset">Filter zurücksetzen</button></div>
+    <nav class="grid-pagination" aria-label="Ergebnisseiten"><button class="secondary" id="source-prev" disabled>← Zurück</button><span id="source-page"></span><button class="secondary" id="source-next" disabled>Weiter →</button></nav>
+  </main>
+  <main class="workspace" id="workspace" hidden>
+    <aside class="catalog" aria-label="PCB-Bibliothek">
+      <div class="catalog-heading"><h1>Meine Platinen <span id="board-count">0</span></h1><button class="icon-button" id="refresh" aria-label="Bibliothek aktualisieren" title="Aktualisieren">↻</button></div>
+      <label class="search"><span aria-hidden="true">⌕</span><input type="search" id="library-search" placeholder="Bibliothek durchsuchen …" aria-label="Bibliothek durchsuchen"></label>
+      <div class="catalog-filters"><button class="filter active" id="all-filter" aria-pressed="true">Alle Platinen</button><button class="filter" id="favorites-filter" aria-pressed="false">☆ Favoriten</button></div>
+      <label class="sort-label">Sortieren <select id="sort"><option value="recent">Zuletzt importiert</option><option value="name">Name A–Z</option><option value="parts">Bauteile</option></select></label>
+      <div class="board-list" id="board-list" aria-live="polite"></div>
+      <div class="catalog-footer"><span class="tiny-chip">PCB</span><div>Deine Daten, griffbereit.<small id="formats">Formate werden geladen …</small></div></div>
+    </aside>
+
+    <section class="board-area" aria-label="Platinenansicht" id="drop-zone">
+      <div id="board-tabs"></div>
+      <div class="board-heading"><div><div class="eyebrow">BOARD EXPLORER</div><h2 id="board-title">Dein nächster Blick ins Detail.</h2><p id="board-subtitle">Wähle eine Platine aus deiner Bibliothek.</p></div><button class="icon-button" id="favorite" aria-label="Als Favorit markieren" aria-pressed="false" disabled>☆</button></div>
+      <div class="viewer-toolbar">
+        <div class="segmented" aria-label="Platinenseite"><button data-side="3" class="active" aria-pressed="true" disabled>Beide</button><button data-side="1" aria-pressed="false" disabled>Oberseite</button><button data-side="2" aria-pressed="false" disabled>Unterseite</button></div>
+        <div class="view-options"><label><input type="checkbox" id="labels" checked disabled> Labels</label><label><input type="checkbox" id="mirror" disabled> Spiegeln</label><label><input type="checkbox" id="butterfly" disabled> Nebeneinander</label><select id="trace-layer" aria-label="Leiterbahnebene" disabled><option value="">Leiterbahnen aus</option></select><select id="net-walk" aria-label="Nachbarnetze hervorheben" disabled><option value="0">Nachbarnetze aus</option><option value="1">Nachbarnetze: 1 Stufe</option><option value="2">Nachbarnetze: 2 Stufen</option></select><select id="pdf-select" aria-label="Schaltplan öffnen" disabled><option value="">Kein Schaltplan</option></select><button class="text-button" id="pdf-close" hidden>Schaltplan schließen</button></div>
+      </div>
+      <div class="board-split">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="board-canvas" tabindex="0" aria-label="Interaktive PCB-Ansicht. Ziehen zum Verschieben, Mausrad oder Plus und Minus zum Zoomen, Taste 0 zum Einpassen."></canvas>
+        <div class="empty-view" id="empty-view">
+          <svg class="empty-board" viewBox="0 0 160 120" fill="none" aria-hidden="true"><rect x="22" y="12" width="116" height="96" rx="10"/><rect x="59" y="37" width="42" height="42" rx="3"/><path d="M69 27v10m11-10v10m11-10v10M69 79v12m11-12v12m11-12v12M48 47h11m-11 11h11m-11 11h11m42-22h11m-11 11h11m-11 11h11M33 93h12V72m82-46h-13v12M36 29h9v18"/><circle cx="33" cy="25" r="3"/><circle cx="127" cy="95" r="3"/></svg>
+          <span class="eyebrow">DEIN PCB-ARCHIV</span><h3>Jede Verbindung.<br>Ein Stück klarer.</h3><p>Ziehe deine PCB-Dateien hierher oder importiere sie in deine persönliche Bibliothek.</p>
+          <button class="primary" id="empty-import">＋ Erste Platine importieren</button>
+          <small>PCB / XZZ · KiCad · BRD und weitere Boardview-Formate</small>
+        </div>
+        <div class="canvas-controls"><button id="zoom-in" aria-label="Vergrößern" disabled>＋</button><button id="zoom-out" aria-label="Verkleinern" disabled>−</button><span></span><button id="fit" aria-label="Platine einpassen" title="Einpassen (0)" disabled>⛶</button></div>
+        <div class="drag-overlay" id="drag-overlay" hidden>PCB-Dateien hier ablegen</div>
+      </div>
+      <div class="pdf-dock" id="pdf-dock" hidden></div>
+      </div>
+      <div class="part-compare" id="part-compare"></div>
+      <footer class="viewer-footer"><span><i class="status-dot"></i><span id="viewer-status">Bereit für deine erste Platine</span></span><span id="dimensions">Mausrad: Zoom · Ziehen: Verschieben</span></footer>
+      <div class="board-summary" id="board-summary" hidden><div><span>BAUTEILE</span><strong id="parts-count">—</strong></div><div><span>PINS</span><strong id="pins-count">—</strong></div><div><span>NETZE</span><strong id="nets-count">—</strong></div><div class="summary-format"><span>DATEIFORMAT</span><strong id="source-format">—</strong></div></div>
+    </section>
+
+    <aside class="inspector" aria-label="Bauteile und Netze">
+      <div class="inspector-heading"><span class="eyebrow">INSPEKTOR</span><span class="tiny-chip">mm</span></div>
+      <div class="entity-tabs"><button class="active" data-tab="parts" aria-pressed="true">Bauteile <span id="parts-tab-count">0</span></button><button data-tab="nets" aria-pressed="false">Netze <span id="nets-tab-count">0</span></button><button data-tab="worklist" aria-pressed="false" title="Arbeitsliste (Alt+L)">Liste</button><button data-tab="colors" aria-pressed="false">Farben</button></div>
+      <label class="search entity-search" id="entity-search-box"><span aria-hidden="true">⌕</span><textarea id="entity-search" rows="1" spellcheck="false" placeholder="Bauteil oder Wert suchen …" title="Jede Zeile filtert weiter, z. B. 20uF, 10V, C12*" aria-label="Bauteile oder Netze durchsuchen, jede Zeile filtert weiter" disabled></textarea></label>
+      <div class="side-panel" id="worklist-panel" hidden></div>
+      <div class="side-panel" id="colors-panel" hidden></div>
+      <div class="entity-list" id="entity-list"><p class="placeholder">Importiere eine Platine, um ihre Bauteile und Netze zu erkunden.</p></div>
+      <div class="selection" id="selection" aria-live="polite"><span class="eyebrow">AUSWAHL</span><p class="placeholder">Klicke auf ein Bauteil oder einen Pin, um die Details zu sehen.</p></div>
+      <details class="file-details" id="file-details" hidden><summary>Datei & Notizen</summary><form id="metadata-form"><label>Name<input id="edit-title" required maxlength="160"></label><label>Notizen<textarea id="edit-notes" rows="3" maxlength="10000" placeholder="Revision, Gerät, Reparaturhinweise …"></textarea></label><button type="submit" class="secondary">Speichern</button></form><div class="file-actions"><a id="download" class="text-button">Original herunterladen ↗</a><button class="text-button danger" id="delete">Aus Bibliothek löschen</button></div></details>
+    </aside>
+  </main>
+  <div class="notification" id="notification" role="status" hidden></div>
+  <dialog id="delete-dialog"><form method="dialog"><h2>Platine löschen?</h2><p id="delete-description"></p><div class="dialog-actions"><button value="cancel" class="secondary">Abbrechen</button><button value="delete" class="delete-button">Endgültig löschen</button></div></form></dialog>
+</body>
+</html>

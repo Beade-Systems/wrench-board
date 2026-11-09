@@ -5,11 +5,17 @@ import struct
 
 import pytest
 
-from api.board.parser._tvw_engine.board_mapper import is_plausible_arc, to_board
+from api.board.parser._tvw_engine.board_mapper import (
+    arc_angles,
+    is_plausible_arc,
+    plausible_arcs,
+    to_board,
+)
 from api.board.parser._tvw_engine.cipher import encode
 from api.board.parser._tvw_engine.magic import is_production_binary
 from api.board.parser._tvw_engine.walker import (
     Aperture,
+    ArcRecord,
     Layer,
     LineRecord,
     PinRecord,
@@ -1385,16 +1391,39 @@ def test_gvn970_comment_a_equals_comment_b_invariant(gvn970_components):
 
 
 @pytest.mark.parametrize(
-    ("center", "radius", "expected"),
+    ("arc", "expected"),
     [
-        ((10.0, 10.0), 0.0, False),
-        ((10.0, 10.0), -5.0, False),
-        ((10.0, 10.0), 12.5, True),
-        ((10.0, 10.0), 100_000.0, True),
-        ((-4040.8, 10.14), 11_274_813.44, False),
-        ((503_316.48, 36_826.25), 40.0, False),
-        ((15.0, -9_090_798.57), 40.0, False),
+        (ArcRecord(1500, 6519, 0, 0.0, 360.0), False),
+        (ArcRecord(1500, 6519, -500, 0.0, 360.0), False),
+        (ArcRecord(1088000, 1500, 6519, 180.0, -360.0), True),
+        (ArcRecord(1500, 1500, 10_000_000, 0.0, 90.0), True),
+        (ArcRecord(1500, 1500, 1_127_481_344, 0.0, 90.0), False),
+        (ArcRecord(50_331_648, 3_682_625, 4000, 0.0, 90.0), False),
+        (ArcRecord(1500, 1500, 6519, float("nan"), 90.0), False),
+        (ArcRecord(1500, 1500, 6519, 45.0, 1e30), False),
     ],
 )
-def test_arcs_with_impossible_geometry_are_rejected(center, radius, expected):
-    assert is_plausible_arc(*center, radius) is expected
+def test_arcs_with_impossible_geometry_are_rejected(arc, expected):
+    assert is_plausible_arc(arc) is expected
+
+
+def test_mostly_invalid_arc_table_is_dropped_whole():
+    good = ArcRecord(1500, 1500, 6519, 0.0, 360.0)
+    bad = ArcRecord(1500, 1500, 6519, float("nan"), 0.0)
+    assert plausible_arcs([good, good, bad]) == [good, good]
+    assert plausible_arcs([good, bad, bad]) == []
+
+
+@pytest.mark.parametrize(
+    ("start", "sweep", "expected"),
+    [(0.0, 360.0, (0.0, 360.0)), (180.0, -360.0, (180.0, 540.0)), (90.0, 45.0, (90.0, 135.0)),
+     (315.0, -45.0, (270.0, 315.0)), (10.0, -30.0, (340.0, 370.0))],
+)
+def test_arc_angles_are_counter_clockwise(start, sweep, expected):
+    assert arc_angles(ArcRecord(0, 0, 100, start, sweep)) == expected
+
+
+def test_read_arcs_decodes_centre_radius_and_angles():
+    raw = struct.pack("<iI", 1, 0) + struct.pack("<IIiiiff", 691, 16, 263014, -404080, 1014, 180.0, 45.0)
+    arcs, _end = _read_arcs(raw, 0, len(raw))
+    assert arcs == [ArcRecord(263014, -404080, 1014, 180.0, 45.0)]

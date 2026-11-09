@@ -206,9 +206,6 @@ these shapes.
 
 ## Architecture — the two paths
 
-For the full reference (event flows, tool dispatch, on-disk artefact map,
-known architectural debt), see `docs/ARCHITECTURE.md`.
-
 There are **two distinct LLM paths**, by design:
 
 1. **Pipeline (knowledge factory)** — `api/pipeline/`. Direct `messages.create`
@@ -313,8 +310,9 @@ auto-generated scenarios into the frozen oracle.
 
 ### Self-modifying subsystems — `microsolder-evolve`
 
-The repo ships a local skill (`microsolder-evolve`) running an autonomous
-nightly loop that modifies `simulator.py` or `hypothesize.py`, scores via
+`make evolve-*` drives an autonomous nightly loop, powered by a separately
+installed `microsolder-evolve` skill (the runner refuses to start without it),
+that modifies `simulator.py` or `hypothesize.py`, scores via
 `scripts/eval_simulator.py`, and keeps (commit prefixed `evolve:`) or reverts
 via `git` — authorised to commit unattended inside those two files.
 

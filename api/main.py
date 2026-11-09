@@ -132,16 +132,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "(toutes les routes accessibles sans auth). En managé : set le token + "
             "réseau privé (cf. DEPLOYMENT.md)."
         )
-    # Seed shipped demo packs (e.g. MNT Reform) so the first-run example tour
-    # has a fully-analyzed device to walk. Idempotent + non-destructive.
-    try:
-        from api.pipeline.demo_seed import seed_demo_packs
-
-        seeded = seed_demo_packs(Path(settings.memory_root))
-        if seeded:
-            logger.info("demo packs seeded: %d", seeded)
-    except Exception as exc:  # noqa: BLE001 — seeding must never block startup
-        logger.warning("demo-pack seeding skipped: %s", exc)
     # Kick off boardview pre-warm in background — don't await. The server
     # is answering requests immediately; per-thread parse populates the
     # /render cache so the first dashboard open for each device is instant.

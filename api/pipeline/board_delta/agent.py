@@ -4,14 +4,14 @@ import logging
 
 from anthropic import AsyncAnthropic
 
-from api.pipeline.tool_call import call_with_forced_tool
 from api.pipeline.board_delta.prompts import (
-    DELTA_SYSTEM,
     DELTA_STRUCTURE_SYSTEM,
+    DELTA_SYSTEM,
     DELTA_USER_TEMPLATE,
 )
 from api.pipeline.board_delta.schemas import DeltaBoard
 from api.pipeline.board_delta.store import normalize_board_number
+from api.pipeline.tool_call import call_with_forced_tool
 
 logger = logging.getLogger("wrench_board.pipeline.board_delta")
 

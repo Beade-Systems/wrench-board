@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import re
 from pathlib import Path
+
 from api.pipeline.board_delta.schemas import DeltaBoard
 
 _SEP = re.compile(r"[\s_/]+")

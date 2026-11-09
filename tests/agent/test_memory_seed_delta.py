@@ -1,7 +1,8 @@
 from pathlib import Path
+
+from api.agent.memory_seed import build_board_delta_block
 from api.pipeline.board_delta.schemas import DeltaBoard
 from api.pipeline.board_delta.store import write_delta
-from api.agent.memory_seed import build_board_delta_block
 
 
 def test_block_none_when_no_delta(tmp_path: Path):

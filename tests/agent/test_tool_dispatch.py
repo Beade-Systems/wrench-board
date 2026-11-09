@@ -190,8 +190,9 @@ async def test_mb_expand_knowledge_refused_when_plan_gated(tmp_path: Path, monke
 @pytest.mark.asyncio
 async def test_mb_expand_knowledge_allowed_when_capable(tmp_path: Path, monkeypatch):
     """A capable session (Pro / self-host) reaches expand_pack."""
-    from api.agent.session_caps import set_can_expand
     from unittest.mock import AsyncMock
+
+    from api.agent.session_caps import set_can_expand
 
     set_can_expand(True)
     import api.pipeline.expansion as expansion

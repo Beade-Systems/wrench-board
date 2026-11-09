@@ -1,6 +1,6 @@
 import pytest
 
-from api.agent.board_ref import set_board_ref, current_board_ref
+from api.agent.board_ref import current_board_ref, set_board_ref
 
 
 @pytest.fixture(autouse=True)

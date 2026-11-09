@@ -1,7 +1,9 @@
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
+
 from api.main import app
 from api.pipeline.board_delta.schemas import DeltaBoard
 

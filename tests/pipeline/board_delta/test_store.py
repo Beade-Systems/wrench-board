@@ -1,6 +1,12 @@
 from pathlib import Path
+
 from api.pipeline.board_delta.schemas import DeltaBoard
-from api.pipeline.board_delta.store import normalize_board_number, write_delta, read_delta, delta_path
+from api.pipeline.board_delta.store import (
+    delta_path,
+    normalize_board_number,
+    read_delta,
+    write_delta,
+)
 
 
 def test_normalize_is_stable_and_filesystem_safe():

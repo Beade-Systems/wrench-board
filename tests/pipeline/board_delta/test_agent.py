@@ -8,7 +8,6 @@ import pytest
 from api.pipeline.board_delta.agent import generate_board_delta
 from api.pipeline.board_delta.schemas import DeltaBoard
 
-
 # ---------------------------------------------------------------------------
 # Fake Anthropic client for Phase A (web_search research)
 # ---------------------------------------------------------------------------

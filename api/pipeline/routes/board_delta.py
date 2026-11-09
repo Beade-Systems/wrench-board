@@ -5,7 +5,7 @@ GET  /pipeline/packs/{slug}/board-delta/{board}  — retrieve a stored delta
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
@@ -41,7 +41,7 @@ async def create_board_delta(
         board_number=board_number,
     )
     delta.generated_by_tenant = x_owner_ref
-    delta.generated_at = datetime.now(timezone.utc).isoformat()
+    delta.generated_at = datetime.now(UTC).isoformat()
     write_delta(memory_root=Path(settings.memory_root), device_slug=slug, delta=delta)
     report_delta_usage(
         owner_ref=x_owner_ref,

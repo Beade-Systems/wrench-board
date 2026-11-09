@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+
 from api.pipeline.board_delta.schemas import DeltaBoard
 
 

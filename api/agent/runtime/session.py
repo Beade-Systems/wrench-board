@@ -22,7 +22,6 @@ from api.agent.chat_history import (
     save_ma_session_id,
 )
 from api.agent.owner_ref import set_owner_ref
-from api.agent.session_caps import set_can_expand
 from api.agent.runtime import _aux
 from api.agent.runtime._aux import (
     DEFAULT_TIER,
@@ -38,6 +37,7 @@ from api.agent.runtime.replay import (
     _replay_jsonl_history_to_ws,
     _replay_ma_history_to_ws,
 )
+from api.agent.session_caps import set_can_expand
 from api.agent.session_start_mode import (
     SessionStartMode,
     decide_session_start_mode,

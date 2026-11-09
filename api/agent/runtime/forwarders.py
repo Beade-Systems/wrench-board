@@ -25,7 +25,6 @@ from api.agent.chat_history import (
     touch_conversation,
 )
 from api.agent.owner_ref import current_owner_ref
-from api.agent.session_caps import current_can_expand
 from api.agent.pricing import compute_turn_cost
 from api.agent.runtime._aux import (
     TierLiteral,
@@ -47,6 +46,7 @@ from api.agent.runtime.subagents import (
     _run_subagent_consultation,
 )
 from api.agent.sanitize import sanitize_agent_text
+from api.agent.session_caps import current_can_expand
 from api.session.state import SessionState
 
 

@@ -11,8 +11,13 @@ from api.pipeline.reconcile import (
     find_registry_fictions,
     seen_refdes_from_texts,
 )
-from api.pipeline.schemas import KnowledgeGraph, KnowledgeNode
-from api.pipeline.schemas import Registry, RegistryComponent, RegistrySignal
+from api.pipeline.schemas import (
+    KnowledgeGraph,
+    KnowledgeNode,
+    Registry,
+    RegistryComponent,
+    RegistrySignal,
+)
 from api.pipeline.schematic.schemas import (
     ComponentNode,
     ElectricalGraph,

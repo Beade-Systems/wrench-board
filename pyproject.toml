@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PCB Board"
+name = "pcb-board"
 version = "0.1.0"
 description = "Agent-native board-level diagnostics workbench powered by Claude Opus 4.8."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13,<3.14"
 authors = [
     { name = "Beade Systems" },
 ]
@@ -22,8 +22,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Framework :: FastAPI",
     "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
 ]
@@ -52,6 +51,11 @@ dev = [
     "pytest-asyncio ~= 0.26.0",
     "ruff ~= 0.15.0",
 ]
+
+browser = ["playwright ~= 1.64.0"]
+
+[tool.uv]
+required-version = "==0.13.7"
 
 [project.urls]
 Homepage = "https://github.com/Junkz3/wrench-board"
@@ -86,9 +90,11 @@ indent-style = "space"
 minversion = "8.0"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "-m 'not browser'"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
 markers = [
+    "browser: automated Chromium tests (run via make test-browser)",
     "slow: accuracy or perf benchmarks that take >30s (skipped by default in `make test`, included in `make test-all`)",
 ]

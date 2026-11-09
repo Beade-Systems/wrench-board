@@ -1,11 +1,9 @@
-.PHONY: install run test test-all test-fast test-eval eval-all lint format clean help build-field-corpus demo-fallback pin-cdn tools-inventory doctor check-web
+.PHONY: install-prod install-native install-browser update-lock serve test-browser install run test test-all test-fast test-eval eval-all lint format clean help build-field-corpus demo-fallback pin-cdn tools-inventory doctor check-web
 
-PYTHON ?= python3
+UV ?= uv
 VENV ?= .venv
-PIP = $(VENV)/bin/pip
 PY = $(VENV)/bin/python
 UVICORN = $(VENV)/bin/uvicorn
-PYTEST = $(VENV)/bin/pytest
 RUFF = $(VENV)/bin/ruff
 
 PORT ?= 8000
@@ -17,7 +15,11 @@ HOST ?= 127.0.0.1
 help:
 	@echo "wrench-board — common tasks"
 	@echo ""
-	@echo "  make install   Create .venv and install dependencies (incl. dev)"
+	@echo "  make install   Install locked dependencies (incl. dev; requires uv 0.13.7)"
+	@echo "  make install-prod / install-browser  Install server / browser-test dependencies"
+	@echo "  make install-native  Build optional Rust parser accelerators (requires cargo; re-run after install)"
+	@echo "  make serve     Start server without reload or cloud bootstrap"
+	@echo "  make test-browser  Run isolated HTTP + Chromium tests"
 	@echo "  make run       Start uvicorn in dev mode on port $(PORT) with --reload"
 	@echo "  make test      Run pytest (fast subset, skips slow benchmarks) — live output, --durations=10"
 	@echo "  make test-all  Run all pytest tests (incl. slow accuracy benchmarks)"
@@ -29,10 +31,32 @@ help:
 	@echo "  make tools-inventory  Regenerate docs/tools.md from api/agent/manifest.py"
 	@echo "  make doctor    Run local health check (env/pack/board) — exit 1 on critical failure"
 
+# uv's exact version is declared in pyproject.toml; see docs/development.md.
 install:
-	$(PYTHON) -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	$(PIP) install -e ".[dev]"
+	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --locked --extra dev
+
+install-prod:
+	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --locked --no-dev
+
+# Optional: pure-Python fallbacks work without these. `uv sync` removes them, so
+# re-run after install / install-prod. Versions match the Dockerfile.
+install-native:
+	rm -rf $(VENV)/native-wheels
+	for d in rust/*/; do (cd "$$d" && $(UV) tool run --from maturin==1.9.6 maturin build --locked --release -i "$(abspath $(PY))" --out "$(abspath $(VENV))/native-wheels") || exit 1; done
+	$(UV) pip install --python $(PY) $(VENV)/native-wheels/*.whl
+
+install-browser:
+	UV_PROJECT_ENVIRONMENT=$(VENV) $(UV) sync --locked --extra dev --extra browser
+	$(PY) -m playwright install chromium
+
+update-lock:
+	$(UV) lock --upgrade
+
+serve:
+	$(PY) -m uvicorn api.main:app --host $(HOST) --port $(PORT)
+
+test-browser:
+	$(PY) -B -m pytest -p no:cacheprovider tests/browser/ -m browser -v --tb=short
 
 run:
 	@PORT=$(PORT) HOST=$(HOST) bash scripts/start.sh
@@ -49,15 +73,15 @@ build-field-corpus:
 # `--durations=10` flags the 10 slowest tests so we can mark them `@slow` if
 # they shouldn't be in the fast subset.
 test:
-	$(PY) -u -m pytest tests/ -v --tb=short --durations=10 -m "not slow"
+	$(PY) -u -m pytest tests/ -v --tb=short --durations=10 -m "not slow and not browser"
 
 test-all:
-	$(PY) -u -m pytest tests/ -v --tb=short --durations=10
+	$(PY) -u -m pytest tests/ -v --tb=short --durations=10 -m "not browser"
 
 # Iteration-friendly: stop at first failure, then re-run failures first next
 # time. Use during active debugging; `make test` for the full sweep.
 test-fast:
-	$(PY) -u -m pytest tests/ -v --tb=short -x --ff -m "not slow"
+	$(PY) -u -m pytest tests/ -v --tb=short -x --ff -m "not slow and not browser"
 
 # Score floor guard: fail the build if the simulator + hypothesize stack
 # drops below 0.5 on the frozen MNT Reform bench. The floor only becomes
@@ -102,10 +126,7 @@ format:
 	$(RUFF) format api/ tests/
 
 clean:
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type d -name ".pytest_cache" -exec rm -rf {} +
-	find . -type d -name ".ruff_cache" -exec rm -rf {} +
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
+	find '$(CURDIR)' -type d \( -name .venv -o -name venv -o -path '$(abspath $(VENV))' -o -name .git \) -prune -o -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name '*.egg-info' \) -prune -exec rm -rf {} +
 
 # Demo plan B — restart uvicorn in direct (non-Managed-Agents) mode.
 # Use if Managed Agents API has an outage during the demo.

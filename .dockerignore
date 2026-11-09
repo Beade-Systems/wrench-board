@@ -1,5 +1,5 @@
 # Contexte de build léger. Le Dockerfile copie explicitement api/ web/
-# board_assets/ scripts/ pyproject README managed_ids.json. On EXCLUT surtout :
+# board_assets/ scripts/ pyproject README uv.lock. On EXCLUT surtout :
 #  - memory/ : données tenant (packs/cache, le moat) → volume monté au runtime,
 #    JAMAIS baké dans l'image.
 #  - les gros répertoires hors-runtime (evolve*, benchmark, archives).
@@ -25,3 +25,12 @@ wrench_board.egg-info
 *.log
 .vscode
 .idea
+
+.env
+.env.*
+!.env.example
+managed_ids.json
+xzz_downloads
+*.egg-info
+.claude
+.codex

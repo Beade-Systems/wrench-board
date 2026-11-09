@@ -275,6 +275,8 @@ async def test_batch_mode_caches_batch_results_and_direct_fallbacks_failures(
     from api.pipeline.schematic import batch_vision
 
     fake_rendered = _fake_rendered_pages(tmp_path / "render", 3)
+    # This test exercises batch caching, not PDF validation or repair.
+    monkeypatch.setattr(orchestrator, "ensure_renderable_pdf", lambda p, _d: p)
     monkeypatch.setattr(orchestrator, "render_pages", lambda *_, **__: fake_rendered)
 
     memory_root = tmp_path / "memory"

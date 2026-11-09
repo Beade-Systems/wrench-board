@@ -123,6 +123,22 @@ def test_kicad_parser_uses_matching_sidecar_without_subprocess(tmp_path, monkeyp
     assert len(board.pins) == 2
 
 
+@pytest.mark.parametrize("net_code, expected", [(42, "GND"), (900, "+5V"), (0, None), (77, None)])
+def test_pin_net_lookup_handles_sparse_unknown_and_unconnected_codes(net_code, expected):
+    from api.board.parser.kicad import _json_to_board
+
+    data = _fake_extract()
+    data["nets"] = [
+        {"code": 42, "name": "GND"},
+        {"code": 900, "name": "+5V"},
+        {"code": 42, "name": "duplicate-must-not-win"},
+        {"code": 0, "name": "unconnected-must-stay-empty"},
+    ]
+    data["pins"][0]["net_code"] = net_code
+    board = _json_to_board(data, file_hash="sha256:test", board_id="test")
+    assert board.pins[0].net == expected
+
+
 def test_kicad_parser_ignores_stale_sidecar(tmp_path, monkeypatch):
     import json as _json
     import subprocess as _subprocess

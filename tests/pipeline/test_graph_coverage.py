@@ -12,7 +12,6 @@ from __future__ import annotations
 import pytest
 
 from api.pipeline.qa.graph_coverage import (
-    CoverageReport,
     compare_graph_to_board,
 )
 

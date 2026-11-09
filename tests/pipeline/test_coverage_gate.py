@@ -3,9 +3,6 @@ with a boardview present gets a PASS/WARN/FAIL verdict written to disk."""
 
 import json
 import types
-from pathlib import Path
-
-import pytest
 
 from api.pipeline.qa import graph_coverage
 

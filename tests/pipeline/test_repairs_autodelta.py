@@ -15,9 +15,8 @@ No network calls are made; ``generate_board_delta`` is patched at import time.
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,7 +26,6 @@ from api.main import app
 from api.pipeline import events
 from api.pipeline.board_delta.schemas import DeltaBoard
 from api.pipeline.routes.repairs import _should_autogenerate_delta
-
 
 # ---------------------------------------------------------------------------
 # Fixtures (mirror the shared conftest.py pattern)

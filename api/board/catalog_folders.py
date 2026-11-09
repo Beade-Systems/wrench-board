@@ -101,3 +101,53 @@ def folder_listing(
         "counts": dict(current),
         "folders": [dict(row) for row in folders],
     }
+
+
+# The parsed model is often just a folder name, so only a board number may group.
+_GROUP_KEY = "coalesce(board_number, id)"
+_GROUP_ORDER = {
+    "name": "min(name COLLATE NOCASE), min(path)",
+    "recent": "max(modified_ns) DESC, min(path)",
+    "size": "max(size_bytes) DESC, min(path)",
+}
+
+
+def grouped_files(
+    connection: sqlite3.Connection,
+    columns: str,
+    where: str,
+    params: list[str],
+    sort: str,
+    offset: int,
+    limit: int,
+) -> dict:
+    """One page of files with the revisions of a board number folded into one item."""
+    files, total = connection.execute(
+        f"SELECT count(*), count(DISTINCT {_GROUP_KEY}) FROM files{where}", params
+    ).fetchone()
+    keys = [
+        row[0]
+        for row in connection.execute(
+            f"SELECT {_GROUP_KEY} FROM files{where} GROUP BY 1 "
+            f"ORDER BY {_GROUP_ORDER[sort]} LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        )
+    ]
+    marks = ",".join("?" * len(keys))
+    members: defaultdict[str, list[dict]] = defaultdict(list)
+    rows = connection.execute(
+        f"SELECT {columns}, {_GROUP_KEY} AS group_key FROM files{where} "
+        f"AND {_GROUP_KEY} IN ({marks})",
+        [*params, *keys],
+    )
+    for row in rows:
+        item = dict(row)
+        members[item.pop("group_key")].append(item)
+    items = []
+    for key in keys:
+        revisions = sorted(members[key], key=lambda item: natural_key(item["name"]))
+        item = dict(revisions[0])
+        if len(revisions) > 1:
+            item["revisions"] = revisions
+        items.append(item)
+    return {"items": items, "total": total, "files": files, "offset": offset, "limit": limit}

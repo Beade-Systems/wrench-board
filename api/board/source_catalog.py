@@ -22,7 +22,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from api.board.board_identity import is_global_number, normalize_board_number, parse_identity
-from api.board.catalog_folders import build_folders, folder_listing
+from api.board.catalog_folders import build_folders, folder_listing, grouped_files
 from api.board.http_errors import import_errors
 from api.board.imports import import_library_path
 from api.board.library_store import LibraryStore
@@ -409,6 +409,7 @@ def list_source_files(
     category: str = Query(default="", max_length=200),
     folder: str | None = Query(default=None, max_length=1000),
     recursive: bool = False,
+    group: bool = False,
     board_number: str = Query(default="", max_length=100),
     sort: str = Query(default="name", pattern="^(name|recent|size)$"),
     offset: int = Query(default=0, ge=0),
@@ -445,11 +446,16 @@ def list_source_files(
         "recent": "modified_ns DESC, path",
         "size": "size_bytes DESC, path",
     }[sort]
+    columns = (
+        "id, name, path, category, extension, kind, size_bytes, modified_ns, "
+        "board_number, brand, model"
+    )
     with _connection(root) as connection:
+        if group and folder is not None and not recursive:
+            return grouped_files(connection, columns, where, params, sort, offset, limit)
         total = connection.execute("SELECT count(*) FROM files" + where, params).fetchone()[0]
         rows = connection.execute(
-            "SELECT id, name, path, category, extension, kind, size_bytes, modified_ns, "
-            "board_number, brand, model FROM files"
+            f"SELECT {columns} FROM files"
             + where
             + " ORDER BY "
             + order

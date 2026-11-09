@@ -38,6 +38,10 @@ def server(tmp_path_factory):
     nested = source / "Phones" / "1 Apple" / "A1234"
     nested.mkdir(parents=True)
     shutil.copyfile(SECOND_FIXTURE, nested / "nested-board.brd")
+    laptops = source / "Laptop"
+    laptops.mkdir()
+    shutil.copyfile(FIXTURE, laptops / "820-01234-A.brd")
+    shutil.copyfile(SECOND_FIXTURE, laptops / "820-01234-B.brd")
     (source / "Phones" / "2 Samsung").mkdir()
     shutil.copyfile(SECOND_FIXTURE, source / "Phones" / "2 Samsung" / "S1-board.brd")
     env = os.environ | {
@@ -427,6 +431,16 @@ def test_catalog_browses_the_folder_tree(page, server):
     expect(grid).not_to_contain_text("catalog-board")
     expect(page.locator("#folder-grid")).to_be_hidden()
     page.locator("#source-search").fill("")
+    # Revisions of one board number share a card; each chip opens its file.
+    page.goto(server + "/library.html#folder/Laptop", wait_until="domcontentloaded")
+    chips = page.locator(".source-group .revision-chip")
+    expect(chips).to_have_count(2)
+    expect(page.locator(".source-group h2")).to_have_text("820-01234")
+    expect(chips.nth(1)).to_have_text("B")
+    chips.nth(1).click()
+    expect(page.locator("#viewer-status")).to_have_text("Platine geladen")
+    page.goto(server + "/library.html#folder/Phones", wait_until="domcontentloaded")
+    expect(cards.first).to_be_visible()
     # A folder without files of the chosen kind disappears from the tree.
     page.locator("#source-kind").select_option("pdf")
     expect(page.locator("#folder-tree .tree-label")).to_have_count(0)

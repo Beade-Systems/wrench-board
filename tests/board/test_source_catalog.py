@@ -261,6 +261,32 @@ def test_natural_key_orders_numbers_by_value():
     ]
 
 
+def test_group_folds_revisions_of_one_board_number(client, linked):
+    folder = next(
+        item["path"].rsplit("/", 1)[0]
+        for item in client.get(
+            "/api/library/source/files", params={"q": "A2992", "kind": "board"}
+        ).json()["items"]
+    )
+    params = {"folder": folder, "kind": "all"}
+    flat = client.get("/api/library/source/files", params=params).json()
+    grouped = client.get("/api/library/source/files", params={**params, "group": True}).json()
+    assert grouped["files"] == flat["total"]
+    assert grouped["total"] <= flat["total"]
+    folded = [item for item in grouped["items"] if "revisions" in item]
+    assert sum(len(item["revisions"]) - 1 for item in folded) == flat["total"] - grouped["total"]
+    assert all(item["board_number"] for item in folded)
+
+
+def test_files_without_a_board_number_are_never_grouped(client, source):
+    grouped = client.get(
+        "/api/library/source/files",
+        params={"folder": "Phones/Other", "kind": "all", "group": True},
+    ).json()
+    assert grouped["total"] == grouped["files"] == 3
+    assert not any("revisions" in item for item in grouped["items"])
+
+
 def test_documents_for_imported_filename_use_the_board_number(client, linked):
     # A folder prefix in the name must not leak into the lookup.
     result = client.get(

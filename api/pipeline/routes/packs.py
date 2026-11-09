@@ -377,7 +377,11 @@ def list_packs(
     if not root.exists():
         return []
     return sorted(
-        (_summarize_pack(d, x_owner_ref) for d in root.iterdir() if d.is_dir()),
+        (
+            _summarize_pack(d, x_owner_ref)
+            for d in root.iterdir()
+            if d.is_dir() and not d.name.startswith("_")
+        ),
         key=lambda s: s.device_slug,
     )
 

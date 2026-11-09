@@ -73,6 +73,20 @@ _PAD_RENDER_SHRINK = 0.65
 # that.
 _TEST_PAD_MAX_RADIUS_MILS = 4.0
 
+# Some files carry arc records whose radius or centre decodes to hundreds of
+# metres (the raw value is often a float bit pattern: 0x43340000 = 180.0).
+# No board reaches this far, and one such arc wrecks fit-to-board.
+_MAX_ARC_EXTENT_MILS = 100_000.0
+
+
+def is_plausible_arc(cx_mils: float, cy_mils: float, radius_mils: float) -> bool:
+    return (
+        0 < radius_mils <= _MAX_ARC_EXTENT_MILS
+        and abs(cx_mils) <= _MAX_ARC_EXTENT_MILS
+        and abs(cy_mils) <= _MAX_ARC_EXTENT_MILS
+    )
+
+
 # Default fallback aperture size when a pin's pin_local_index doesn't
 # resolve to any aperture in the layer table.
 _DEFAULT_APERTURE_MILS = 10.0
@@ -786,7 +800,9 @@ def to_board(file: TVWFile, *, board_id: str, file_hash: str) -> Board:
                 )
             )
         for arc in layer.arcs:
-            if arc.radius <= 0:
+            if not is_plausible_arc(
+                arc.cx / _COORD_DIVISOR, arc.cy / _COORD_DIVISOR, arc.radius / _COORD_DIVISOR
+            ):
                 continue
             arcs.append(
                 Arc(

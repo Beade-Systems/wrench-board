@@ -22,6 +22,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from api.board.board_identity import is_global_number, normalize_board_number, parse_identity
+from api.board.catalog_folders import build_folders, folder_listing
 from api.board.http_errors import import_errors
 from api.board.imports import import_library_path
 from api.board.library_store import LibraryStore
@@ -33,7 +34,7 @@ _DOCUMENTS = {".pdf"}
 _ARCHIVES = {".zip", ".rar", ".7z"}
 _OTHER = {".bin", ".obdata", ".faz"}
 # Bump when the files/devices shape changes: an older database is rebuilt.
-_SCHEMA_VERSION = "2"
+_SCHEMA_VERSION = "3"
 _FILE_COLUMNS = (
     "id, name, path, directory, stem, category, extension, kind, size_bytes, modified_ns, "
     "search_text, board_number, brand, model"
@@ -172,6 +173,7 @@ def _index(root: Path, *, force: bool = False) -> Path:
                         ORDER BY brand IS NULL, brand COLLATE NOCASE,
                                  model IS NULL, model COLLATE NOCASE, board_number;
                 """)
+                build_folders(connection)
                 connection.executemany(
                     "INSERT INTO metadata VALUES (?,?)",
                     [
@@ -405,6 +407,8 @@ def list_source_files(
     q: str = Query(default="", max_length=300),
     kind: str = Query(default="board", pattern="^(all|board|pdf|archive|other)$"),
     category: str = Query(default="", max_length=200),
+    folder: str | None = Query(default=None, max_length=1000),
+    recursive: bool = False,
     board_number: str = Query(default="", max_length=100),
     sort: str = Query(default="name", pattern="^(name|recent|size)$"),
     offset: int = Query(default=0, ge=0),
@@ -419,6 +423,14 @@ def list_source_files(
     if category:
         clauses.append("category = ?")
         params.append(category)
+    if folder is not None and not (recursive and not folder):
+        if recursive:
+            # A range on the index: "0" is the character right after "/".
+            clauses.append("(directory = ? OR (directory >= ? AND directory < ?))")
+            params.extend([folder, f"{folder}/", f"{folder}0"])
+        else:
+            clauses.append("directory = ?")
+            params.append(folder)
     if board_number.strip():
         clauses.append("board_number = ?")
         params.append(normalize_board_number(board_number))
@@ -469,6 +481,20 @@ def list_source_devices(
             [*params, limit, offset],
         ).fetchall()
     return {"items": [dict(row) for row in rows], "total": total, "offset": offset, "limit": limit}
+
+
+@router.get("/folders")
+def list_source_folders(
+    path: str = Query(default="", max_length=1000),
+    kind: str = Query(default="board", pattern="^(all|board|pdf|archive|other)$"),
+    owner: str | None = Header(default=None, alias="X-Owner-Ref"),
+) -> dict:
+    root = _source(owner)
+    with _connection(root) as connection:
+        listing = folder_listing(connection, path, root.name, kind)
+    if listing is None:
+        raise HTTPException(404, "Ordner nicht gefunden.")
+    return listing
 
 
 @router.get("/documents")

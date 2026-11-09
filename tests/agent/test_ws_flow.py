@@ -299,8 +299,9 @@ async def test_direct_cam_capture_round_trip(monkeypatch: pytest.MonkeyPatch) ->
     """
     _stub_session(monkeypatch, _board_with_u7())
     import api.agent.runtime_direct as rt
+    import api.agent.runtime_direct_tools as rt_tools
 
-    monkeypatch.setattr(rt, "persist_macro", lambda **_k: Path("/tmp/cap.jpg"))
+    monkeypatch.setattr(rt_tools, "persist_macro", lambda **_k: Path("/tmp/cap.jpg"))
 
     captured_msgs: list[list[dict]] = []
 
@@ -422,6 +423,7 @@ async def test_direct_protocol_accept_dispatches_after_confirmation(
     """
     _stub_session(monkeypatch, _board_with_u7())
     import api.agent.runtime_direct as rt
+    import api.agent.runtime_direct_tools as rt_tools
 
     calls: list[str] = []
 
@@ -429,7 +431,7 @@ async def test_direct_protocol_accept_dispatches_after_confirmation(
         calls.append(name)
         return {"ok": True, "event": {"type": "protocol_proposed", "protocol_id": "p1"}}
 
-    monkeypatch.setattr(rt, "_dispatch_protocol_tool", _stub_dispatch)
+    monkeypatch.setattr(rt_tools, "_dispatch_protocol_tool", _stub_dispatch)
     fake_client = _mock_anthropic([
         _stream_tool_use("bv_propose_protocol", _protocol_payload_u7(), tool_id="toolu_p1"),
         _stream_text("Protocole lancé."),
@@ -520,6 +522,7 @@ async def test_direct_protocol_confirmation_timeout_emits_frame(
     protocol_confirmation_timeout frame is emitted and no dispatch runs."""
     _stub_session(monkeypatch, _board_with_u7())
     import api.agent.runtime_direct as rt
+    import api.agent.runtime_direct_tools as rt_tools
 
     calls: list[str] = []
 
@@ -527,7 +530,7 @@ async def test_direct_protocol_confirmation_timeout_emits_frame(
         calls.append(name)
         return {"ok": True}
 
-    monkeypatch.setattr(rt, "_dispatch_protocol_tool", _stub_dispatch)
+    monkeypatch.setattr(rt_tools, "_dispatch_protocol_tool", _stub_dispatch)
     fake_client = _mock_anthropic([
         _stream_tool_use("bv_propose_protocol", _protocol_payload_u7(), tool_id="toolu_p3"),
         _stream_text("D'accord."),
@@ -540,6 +543,7 @@ async def test_direct_protocol_confirmation_timeout_emits_frame(
         ma_stream_event_timeout_seconds=600.0,
         ma_protocol_confirmation_timeout_seconds=0.05,
     ))
+    monkeypatch.setattr(rt_tools, "get_settings", rt.get_settings)
 
     ws = _BlockingFakeWS(["propose un protocole"])
     task = asyncio.create_task(

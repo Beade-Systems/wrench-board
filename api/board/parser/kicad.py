@@ -191,6 +191,11 @@ def _json_to_board(data: dict, *, file_hash: str, board_id: str) -> Board:
                     pad_shape=pr.get("pad_shape"),
                     pad_size=pad_size,
                     pad_rotation_deg=pr.get("pad_rotation_deg"),
+                    # KiCad pad number ("1", "A1", "EP"); empty for
+                    # mechanical / unnamed pads, which pcbnew lists first —
+                    # so `index` (file order) and the silkscreen number
+                    # disagree on those footprints. Lookups go by name.
+                    name=(pr.get("pin_number") or "").strip() or None,
                 )
             )
 

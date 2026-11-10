@@ -180,10 +180,13 @@ def test_enum_constraints_present() -> None:
     assert set(bv_lv["properties"]["layer"]["enum"]) == {"top", "bottom"}
 
 
-def test_bv_show_pin_minimum() -> None:
-    """Req 8 — pin index must be >= 1."""
+def test_bv_show_pin_accepts_number_or_pad_name() -> None:
+    """Req 8 — pin is a pad number (>= 1) or a pad name string ("A1", "EP")."""
     schema = next(t for t in BV_TOOLS if t["name"] == "bv_show_pin")["input_schema"]
-    assert schema["properties"]["pin"].get("minimum") == 1
+    variants = {v["type"]: v for v in schema["properties"]["pin"]["oneOf"]}
+    assert set(variants) == {"integer", "string"}
+    assert variants["integer"].get("minimum") == 1
+    assert variants["string"].get("minLength") == 1
 
 
 def test_profile_tools_always_present() -> None:

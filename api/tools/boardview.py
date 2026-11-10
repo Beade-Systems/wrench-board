@@ -8,7 +8,7 @@ from typing import Any
 from api.board.validator import (
     resolve_net,
     resolve_part,
-    resolve_pin,
+    resolve_pin_matches,
     suggest_similar,
 )
 from api.session.state import SessionState
@@ -237,7 +237,7 @@ def measure_distance(session: SessionState, *, refdes_a: str, refdes_b: str) -> 
     }
 
 
-def show_pin(session: SessionState, *, refdes: str, pin: int) -> dict[str, Any]:
+def show_pin(session: SessionState, *, refdes: str, pin: int | str) -> dict[str, Any]:
     err = _no_board(session)
     if err:
         return err
@@ -245,11 +245,22 @@ def show_pin(session: SessionState, *, refdes: str, pin: int) -> dict[str, Any]:
     if part is None:
         return _unknown_refdes(session, refdes)
     refdes = part.refdes
-    p = resolve_pin(session.board, refdes, pin)
-    if p is None:
+    matches = resolve_pin_matches(session.board, refdes, pin)
+    if not matches:
         return {"ok": False, "reason": "unknown-pin", "suggestions": []}
-    event = ShowPin(refdes=refdes, pin=pin, pos=(p.pos.x, p.pos.y))
-    return {"ok": True, "summary": f"{refdes}.{pin} at ({p.pos.x}, {p.pos.y}).", "event": event}
+    p = matches[0]
+    label: int | str = p.name if p.name is not None else p.index
+    event = ShowPin(refdes=refdes, pin=label, pos=(p.pos.x, p.pos.y))
+    summary = f"{refdes}.{label} at ({p.pos.x}, {p.pos.y})."
+    result: dict[str, Any] = {"ok": True, "summary": summary, "event": event}
+    if len(matches) > 1:
+        # Pad names repeat (EP, GND tabs) — say so instead of silently
+        # pointing at the first one as if it were the only pad.
+        result["shared_pads"] = len(matches)
+        result["summary"] += (
+            f" {len(matches)} pads share the name {label!r}; showing the first."
+        )
+    return result
 
 
 def dim_unrelated(session: SessionState) -> dict[str, Any]:

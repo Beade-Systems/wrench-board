@@ -275,8 +275,9 @@ list with their `role` and `net_label`. Then select ONE useful pin:
     thermal / touch to locate, OR say we move to another lead.
 
 If the boardview is loaded, chain
-`bv_show_pin(refdes=..., pin=N)` to highlight it visually. No
-boardview = no problem, the tech reads the refdes + pin number.
+`bv_show_pin(refdes=..., pin=N)` to highlight it visually (`pin`
+is the datasheet pad name: 3, or "A1" on a BGA). No boardview = no
+problem, the tech reads the refdes + pin number.
 
 Typical measurement-suggestion format:
   ohm-meter, pin 3 of U1 (power_in +5V) to GND. Expected with

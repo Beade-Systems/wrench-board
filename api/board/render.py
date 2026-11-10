@@ -255,6 +255,8 @@ def _convert_pin(pin: Pin, pin_index: int, net_index: dict[str, Net],
         "layer": _layer_name(pin.layer),
         "is_gnd": _is_ground(net, pin.net),
         "pin_index": pin_index,
+        # Silkscreen pad name ("3", "A1", "EP") when the format carries one.
+        "name": pin.name,
     }
 
 

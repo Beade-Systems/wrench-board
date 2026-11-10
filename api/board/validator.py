@@ -65,16 +65,53 @@ def resolve_net(board: Board, net_name: str) -> Net | None:
     return board.net_by_name(net_name)
 
 
-def resolve_pin(board: Board, refdes: str, pin_index: int) -> Pin | None:
-    """Return the Pin at `(refdes, pin_index)` (1-based within the part), or None."""
+def resolve_pin_matches(board: Board, refdes: str, pin: int | str) -> list[Pin]:
+    """All pads of `refdes` that `pin` designates, in file order ([] if none).
+
+    `pin` is what a technician reads off the silkscreen / datasheet: a pad
+    *name* (``3``, ``"3"``, ``"A1"``, ``"EP"``). Resolution order:
+
+    1. exact match on `Pin.name` (stringified, whitespace-stripped) — pad
+       names are not unique (``EP`` / ``GND`` / mounting tabs repeat), so
+       every pad carrying that name is returned;
+    2. fallback on `Pin.index` (1-based file order) when `pin` is an int or
+       a decimal string — only for parts that carry *no* pad names at all,
+       the norm on formats that ship none (most `.brd` dialects).
+
+    Name-first matters: KiCad emits unnamed mechanical pads first, so file
+    order and pad number disagree on those footprints. For the same reason
+    a named part never falls back to file order: U1 numbered 1..200 plus
+    two unnamed tabs would otherwise map "201" onto pad "199".
+    """
     part = resolve_part(board, refdes)
-    if part is None:
-        return None
-    for i in part.pin_refs:
-        pin = board.pins[i]
-        if pin.index == pin_index:
-            return pin
-    return None
+    if part is None or isinstance(pin, bool):
+        return []
+    if isinstance(pin, int):
+        label, number = str(pin), pin
+    elif isinstance(pin, str):
+        label = pin.strip()
+        number = int(label) if label.isdecimal() else None
+    else:
+        return []
+    if not label:
+        return []
+    pads = [board.pins[i] for i in part.pin_refs]
+    named = [p for p in pads if p.name is not None and p.name.strip() == label]
+    if named:
+        return named
+    if number is None or any(p.name is not None for p in pads):
+        return []
+    return [p for p in pads if p.index == number][:1]
+
+
+def resolve_pin(board: Board, refdes: str, pin: int | str) -> Pin | None:
+    """Return the first pad `pin` designates on `refdes`, or None.
+
+    See `resolve_pin_matches` for the name-then-index rules; use it
+    directly when the caller needs to know how many pads share a name.
+    """
+    matches = resolve_pin_matches(board, refdes, pin)
+    return matches[0] if matches else None
 
 
 def suggest_similar(board: Board, refdes: str, k: int = 3) -> list[str]:

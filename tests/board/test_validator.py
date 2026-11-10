@@ -162,3 +162,62 @@ def test_suggest_similar_bad_k_and_input():
     assert suggest_similar(board, "R1", k=0) == []
     assert suggest_similar(board, "R1", k=-2) == []
     assert suggest_similar(board, None, k=3) == []
+
+
+def _named_pin_board():
+    from api.board.model import Board, Layer, Part, Pin, Point
+
+    names = [None, None, "1", "2", "3", "A1", "EP", "EP"]
+    pins = [
+        Pin(part_refdes="U1", index=i, pos=Point(x=i * 10, y=0), layer=Layer.TOP,
+            name=n, net=f"N{i}")
+        for i, n in enumerate(names, start=1)
+    ]
+    part = Part(refdes="U1", layer=Layer.TOP, is_smd=True,
+                bbox=(Point(x=0, y=0), Point(x=100, y=10)),
+                pin_refs=list(range(len(pins))))
+    return Board(board_id="t", file_hash="sha256:0", source_format="test",
+                 outline=[], parts=[part], pins=pins, nets=[], nails=[])
+
+
+def test_resolve_pin_by_name_before_index():
+    board = _named_pin_board()
+    # Pad named "3" is the 5th pad in file order — name wins over index.
+    assert resolve_pin(board, "U1", 3).index == 5
+    assert resolve_pin(board, "U1", "3").index == 5
+    assert resolve_pin(board, "U1", " 1 ").index == 3
+    assert resolve_pin(board, "U1", "A1").index == 6
+
+
+def test_resolve_pin_named_part_never_falls_back_to_file_order():
+    board = _named_pin_board()
+    # 8 pads, but none is *named* "8" — file order would point at an EP pad.
+    assert resolve_pin(board, "U1", 8) is None
+    assert resolve_pin(board, "U1", "7") is None
+    assert resolve_pin(board, "U1", "B2") is None
+
+
+def test_resolve_pin_index_fallback_on_unnamed_part():
+    board = _named_pin_board()
+    for pin in board.pins:
+        pin.name = None
+    assert resolve_pin(board, "U1", 8).index == 8
+    assert resolve_pin(board, "U1", "7").index == 7
+    assert resolve_pin(board, "U1", 99) is None
+    assert resolve_pin(board, "U1", "A1") is None
+
+
+def test_resolve_pin_repeated_name_returns_every_pad():
+    from api.board.validator import resolve_pin_matches
+
+    board = _named_pin_board()
+    matches = resolve_pin_matches(board, "U1", "EP")
+    assert [p.index for p in matches] == [7, 8]
+    assert resolve_pin(board, "U1", "EP").index == 7
+
+
+def test_resolve_pin_rejects_bad_pin_input():
+    board = _named_pin_board()
+    assert resolve_pin(board, "U1", "") is None
+    assert resolve_pin(board, "U1", True) is None
+    assert resolve_pin(board, "U1", None) is None

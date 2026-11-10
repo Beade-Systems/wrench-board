@@ -100,8 +100,10 @@ class Measure(_BVEvent):
 class ShowPin(_BVEvent):
     type: Literal["boardview.show_pin"] = "boardview.show_pin"
     refdes: str
-    pin: int
-    pos: tuple[int, int]
+    # Pad name when the board carries one ("3", "A1"), else the 1-based
+    # index. Informational — the frontend positions the marker from `pos`.
+    pin: int | str
+    pos: tuple[float, float]  # mils; float — XZZ / sub-mil pad positions
 
 
 class UploadError(_BVEvent):

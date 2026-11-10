@@ -291,3 +291,21 @@ def test_unknown_lowercase_suggests_case_insensitive_first(session):
     r = highlight_component(session, refdes="r2")
     assert r["ok"] is False
     assert r["suggestions"][0] == "R1"
+
+
+def test_show_pin_by_pad_name_reports_shared_pads(session):
+    board = session.board
+    pins = [board.pins[i] for i in board.part_by_refdes("R1").pin_refs]
+    pins[0].name = "EP"
+    pins[1].name = "EP"
+    result = show_pin(session, refdes="R1", pin="EP")
+    assert result["ok"] is True
+    assert result["event"].pin == "EP"
+    assert result["shared_pads"] == 2
+    assert "2 pads share" in result["summary"]
+
+
+def test_show_pin_unknown_pad_name(session):
+    result = show_pin(session, refdes="R1", pin="A1")
+    assert result["ok"] is False
+    assert result["reason"] == "unknown-pin"

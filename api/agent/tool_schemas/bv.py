@@ -169,12 +169,23 @@ BV_TOOLS: list[dict] = [
     {
         "type": "custom",
         "name": "bv_show_pin",
-        "description": "Point to a specific pin of a component (e.g. for a probe instruction).",
+        "description": (
+            "Point to a specific pin of a component (e.g. for a probe "
+            "instruction). `pin` is the pad name as printed in the "
+            "datasheet / footprint: a number (3) or a BGA / named pad "
+            "(\"A1\", \"EP\"). The result reports `shared_pads` when "
+            "several pads carry that name (EP, GND tabs)."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "refdes": {"type": "string"},
-                "pin": {"type": "integer", "minimum": 1},
+                "pin": {
+                    "oneOf": [
+                        {"type": "integer", "minimum": 1},
+                        {"type": "string", "minLength": 1},
+                    ],
+                },
             },
             "required": ["refdes", "pin"],
         },

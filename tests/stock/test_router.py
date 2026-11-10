@@ -180,3 +180,12 @@ def test_create_donor_rejects_unknown_condition_with_422(client):
 def test_create_donor_rejects_traversal_slug(client, slug):
     r = client.post("/api/stock/donors", json={"device_slug": slug, "label": "x"})
     assert r.status_code == 422
+
+
+def test_consume_unknown_refdes_is_404(client):
+    donor_id = client.post("/api/stock/donors", json={
+        "device_slug": "iphone-x", "label": "x",
+    }).json()["donor_id"]
+    r = client.post(f"/api/stock/donors/{donor_id}/consume", json={"refdes": "U99999"})
+    assert r.status_code == 404
+    assert client.post(f"/api/stock/donors/{donor_id}/consume", json={"refdes": "C1"}).status_code == 200

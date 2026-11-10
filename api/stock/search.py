@@ -38,8 +38,24 @@ def _load_parts_index(slug: str) -> PartsIndex | None:
     return PartsIndex.model_validate_json(p.read_text(encoding="utf-8"))
 
 
+_IDENTITY_FIELDS = ("value_canonical", "package", "mpn")
+
+
 def _is_strict_match(entry: PartsIndexEntry, q: StockSearchQuery) -> bool:
-    """Type, package, value_canonical, MPN must match. voltage_rating ≥ requested."""
+    """Type, package, value_canonical, MPN must match. voltage_rating ≥ requested.
+
+    An omitted query field is a wildcard only for tolerant parts. For
+    `exact_only` parts (ICs, feedback / sense resistors, tuned caps, …) every
+    identity field the donor entry carries must be pinned by the query —
+    otherwise `{"type": "ic"}` would return every IC as an "exact" match.
+    `blocked` parts are never offered.
+    """
+    if entry.safety_class == "blocked":
+        return False
+    if entry.safety_class == "exact_only":
+        for field in _IDENTITY_FIELDS:
+            if getattr(entry, field) is not None and getattr(q, field) is None:
+                return False
     if q.type and entry.type != q.type:
         return False
     if q.package and entry.package != q.package:

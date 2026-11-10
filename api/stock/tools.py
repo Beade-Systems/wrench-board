@@ -14,6 +14,7 @@ from api.config import get_settings
 from api.stock.schemas import PartsIndex, StockSearchQuery
 from api.stock.search import stock_search as _search_impl
 from api.stock.store import (
+    UnknownRefdesError,
     consume_part,
     load_inventory,
     mark_donor,
@@ -39,8 +40,12 @@ def stock_consume(payload: dict[str, Any]) -> dict[str, Any]:
     refdes = payload["refdes"]
     notes = payload.get("notes")
     repair_id = payload.get("repair_id")
-    ok = consume_part(donor_id=donor_id, refdes=refdes, repair_id=repair_id, notes=notes,
-                      owner_ref=current_owner_ref())
+    try:
+        ok = consume_part(donor_id=donor_id, refdes=refdes, repair_id=repair_id, notes=notes,
+                          owner_ref=current_owner_ref())
+    except UnknownRefdesError:
+        return {"ok": False, "found": False,
+                "reason": f"refdes {refdes!r} is not on this donor's board (parts_index)"}
     if not ok:
         return {"ok": False, "reason": f"donor_id {donor_id!r} not found in stock"}
     return {"ok": True, "donor_id": donor_id, "refdes": refdes}

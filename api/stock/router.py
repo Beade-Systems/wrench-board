@@ -20,6 +20,7 @@ from api.stock.schemas import (
 )
 from api.stock.search import stock_search
 from api.stock.store import (
+    UnknownRefdesError,
     consume_part,
     load_inventory,
     mark_donor,
@@ -114,8 +115,12 @@ def delete_donor(donor_id: str, owner_ref: OwnerRef = None):
 
 @router.post("/donors/{donor_id}/consume")
 def consume_endpoint(donor_id: str, body: _ConsumeBody, owner_ref: OwnerRef = None):
-    if not consume_part(donor_id=donor_id, refdes=body.refdes,
-                        repair_id=body.repair_id, notes=body.notes, owner_ref=owner_ref):
+    try:
+        ok = consume_part(donor_id=donor_id, refdes=body.refdes,
+                          repair_id=body.repair_id, notes=body.notes, owner_ref=owner_ref)
+    except UnknownRefdesError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    if not ok:
         raise HTTPException(status_code=404, detail="donor_id not found")
     return {"ok": True}
 

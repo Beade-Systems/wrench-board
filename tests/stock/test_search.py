@@ -166,3 +166,43 @@ def test_donor_without_parts_index_silently_skipped(two_donors, tmp_path):
     ))
     # Same 3 matches as before (the new donor is silently skipped)
     assert len(res.exact_matches) >= 3
+
+
+def _single_donor(tmp_path, monkeypatch, entries):
+    memory = tmp_path / "memory"
+    (memory / "_stock").mkdir(parents=True)
+    (memory / "dev").mkdir()
+    monkeypatch.setattr("api.stock.store._memory_root", lambda: memory)
+    monkeypatch.setattr("api.stock.store._stock_root", lambda: memory / "_stock")
+    monkeypatch.setattr("api.stock.search._memory_root", lambda: memory)
+    idx = PartsIndex(
+        schema_version="1.0", device_slug="dev", generated_at=datetime.now(UTC),
+        source_electrical_graph_hash="x" * 64, entries={e.refdes: e for e in entries},
+    )
+    (memory / "dev" / "parts_index.json").write_text(idx.model_dump_json())
+    save_inventory(StockInventory(donors={"d1": DonorEntry(
+        donor_id="d1", device_slug="dev", label="donor",
+        added_at=datetime.now(UTC),
+    )}))
+
+
+def test_exact_only_ic_needs_pinned_identity(tmp_path, monkeypatch):
+    ic = _entry("U1", "ic", value=None, package="QFN48", type_="ic", kind="ic",
+                mpn="TPS65", safety="exact_only")
+    _single_donor(tmp_path, monkeypatch, [ic])
+    # Vague query: type only → must NOT surface the PMIC as an exact match.
+    assert stock_search(StockSearchQuery(type="ic", requested_role="pmic")).exact_matches == []
+    hit = stock_search(StockSearchQuery(type="ic", package="QFN48", mpn="TPS65"))
+    assert [m.refdes for m in hit.exact_matches] == ["U1"]
+
+
+def test_tolerant_part_still_matches_partial_query(tmp_path, monkeypatch):
+    _single_donor(tmp_path, monkeypatch, [_entry("C1", "decoupling", mpn="GRM155")])
+    hit = stock_search(StockSearchQuery(type="capacitor", value_canonical="0.1uF", package="0402"))
+    assert [m.refdes for m in hit.exact_matches] == ["C1"]
+
+
+def test_blocked_part_never_offered(tmp_path, monkeypatch):
+    _single_donor(tmp_path, monkeypatch, [_entry("C9", "tank", safety="blocked")])
+    hit = stock_search(StockSearchQuery(type="capacitor", value_canonical="0.1uF", package="0402"))
+    assert hit.exact_matches == []

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import json
 import os
 import re
 import tempfile
@@ -199,6 +200,25 @@ def unmark_donor(donor_id: str, owner_ref: str | None = None) -> bool:
         return True
 
 
+class UnknownRefdesError(LookupError):
+    """`refdes` is not part of the donor device's parts_index."""
+
+    def __init__(self, refdes: str):
+        super().__init__(f"refdes {refdes!r} not in this donor's parts_index")
+        self.refdes = refdes
+
+
+def _known_refdes(device_slug: str) -> set[str] | None:
+    """Refdes set of the device's parts_index, or None when there is none."""
+    path = _memory_root() / device_slug / "parts_index.json"
+    if not path.exists():
+        return None
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8")).get("entries", {}))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def consume_part(
     donor_id: str,
     refdes: str,
@@ -206,11 +226,20 @@ def consume_part(
     notes: str | None = None,
     owner_ref: str | None = None,
 ) -> bool:
-    """Mark a refdes consumed on a donor. Idempotent — re-call updates notes."""
+    """Mark a refdes consumed on a donor. Idempotent — re-call updates notes.
+
+    Raises UnknownRefdesError when the donor's device has a parts_index and
+    `refdes` is not in it — consuming a part that does not exist on the
+    board would fabricate inventory (anti-hallucination rule). Without a
+    parts_index there is nothing to check against, so the call is accepted.
+    """
     with _exclusive_lock(owner_ref):
         inv = _read_inventory_unlocked(owner_ref)
         if donor_id not in inv.donors:
             return False
+        known = _known_refdes(inv.donors[donor_id].device_slug)
+        if known is not None and refdes not in known:
+            raise UnknownRefdesError(refdes)
         inv.donors[donor_id].consumed[refdes] = ConsumedEvent(
             refdes=refdes,
             consumed_at=datetime.now(UTC),

@@ -6,7 +6,6 @@ import uuid
 from typing import Any
 
 from api.board.validator import (
-    is_valid_refdes,
     resolve_net,
     resolve_part,
     resolve_pin,
@@ -69,10 +68,16 @@ def highlight_component(
     if err:
         return err
 
-    targets = [refdes] if isinstance(refdes, str) else list(refdes)
-    for r in targets:
-        if not is_valid_refdes(session.board, r):
+    requested = [refdes] if isinstance(refdes, str) else list(refdes)
+    targets: list[str] = []
+    for r in requested:
+        part = resolve_part(session.board, r)
+        if part is None:
             return _unknown_refdes(session, r)
+        # Canonical board spelling — `u1` resolves to U1, and the event /
+        # session must carry U1 or the frontend lookup misses.
+        if part.refdes not in targets:
+            targets.append(part.refdes)
 
     if not additive:
         session.highlights = set()
@@ -96,6 +101,7 @@ def focus_component(session: SessionState, *, refdes: str, zoom: float = 1.4) ->
     part = resolve_part(session.board, refdes)
     if part is None:
         return _unknown_refdes(session, refdes)
+    refdes = part.refdes
 
     auto_flipped = False
     target_side = "top" if part.layer.value & 1 else "bottom"
@@ -159,8 +165,10 @@ def annotate(session: SessionState, *, refdes: str, label: str) -> dict[str, Any
     err = _no_board(session)
     if err:
         return err
-    if not is_valid_refdes(session.board, refdes):
+    part = resolve_part(session.board, refdes)
+    if part is None:
         return _unknown_refdes(session, refdes)
+    refdes = part.refdes
     ann_id = f"ann-{uuid.uuid4().hex[:8]}"
     session.annotations[ann_id] = {"refdes": refdes, "label": label}
     event = AnnotateEvent(refdes=refdes, label=label, id=ann_id)
@@ -191,6 +199,7 @@ def draw_arrow(session: SessionState, *, from_refdes: str, to_refdes: str) -> di
         return _unknown_refdes(session, from_refdes)
     if b is None:
         return _unknown_refdes(session, to_refdes)
+    from_refdes, to_refdes = a.refdes, b.refdes
     arr_id = f"arr-{uuid.uuid4().hex[:8]}"
     frm = _part_center(a)
     to = _part_center(b)
@@ -213,6 +222,7 @@ def measure_distance(session: SessionState, *, refdes_a: str, refdes_b: str) -> 
         return _unknown_refdes(session, refdes_a)
     if pb is None:
         return _unknown_refdes(session, refdes_b)
+    refdes_a, refdes_b = pa.refdes, pb.refdes
     (ax, ay) = _part_center(pa)
     (bx, by) = _part_center(pb)
     dx_mils = ax - bx
@@ -231,8 +241,10 @@ def show_pin(session: SessionState, *, refdes: str, pin: int) -> dict[str, Any]:
     err = _no_board(session)
     if err:
         return err
-    if not is_valid_refdes(session.board, refdes):
+    part = resolve_part(session.board, refdes)
+    if part is None:
         return _unknown_refdes(session, refdes)
+    refdes = part.refdes
     p = resolve_pin(session.board, refdes, pin)
     if p is None:
         return {"ok": False, "reason": "unknown-pin", "suggestions": []}

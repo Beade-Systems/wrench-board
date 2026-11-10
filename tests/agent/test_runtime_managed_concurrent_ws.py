@@ -555,9 +555,8 @@ async def test_two_ws_concurrent_session_state_board_mutation(
         return real_is_valid(board, refdes)
 
     monkeypatch.setattr(_v, "is_valid_refdes", stub_is_valid)
-    monkeypatch.setattr(
-        "api.tools.boardview.is_valid_refdes", stub_is_valid,
-    )
+    # bv_highlight now resolves through `validator.resolve_part`, which
+    # only needs `part_by_refdes` / `parts` — the stub board provides both.
 
     shared_session = SessionState()
     shared_session.board = _StubBoard({"U7", "R5"})
@@ -669,9 +668,8 @@ async def test_two_ws_concurrent_non_additive_highlight_documents_clobber(
         return real_is_valid(board, refdes)
 
     monkeypatch.setattr(_v, "is_valid_refdes", stub_is_valid)
-    monkeypatch.setattr(
-        "api.tools.boardview.is_valid_refdes", stub_is_valid,
-    )
+    # bv_highlight now resolves through `validator.resolve_part`, which
+    # only needs `part_by_refdes` / `parts` — the stub board provides both.
 
     shared_session = SessionState()
     shared_session.board = _StubBoard({"U7", "R5"})

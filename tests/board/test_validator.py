@@ -22,10 +22,16 @@ def test_is_valid_refdes_true():
     assert is_valid_refdes(board, "C1") is True
 
 
-def test_is_valid_refdes_false_is_case_sensitive():
+def test_is_valid_refdes_false():
     board = _board()
-    assert is_valid_refdes(board, "r1") is False
     assert is_valid_refdes(board, "U999") is False
+    assert is_valid_refdes(board, "") is False
+    assert is_valid_refdes(board, None) is False
+
+
+def test_is_valid_refdes_case_insensitive_fallback():
+    board = _board()
+    assert is_valid_refdes(board, "r1") is True
 
 
 def test_resolve_part():
@@ -93,3 +99,66 @@ def test_suggest_similar_handles_whitespace():
     # `" R1 "` should match `R1` at distance 0 after strip — first result.
     padded = suggest_similar(board, " R1 ", k=1)
     assert padded == ["R1"]
+
+
+def _board_with(refdes_list):
+    from api.board.model import Board, Layer, Part, Point
+
+    parts = [
+        Part(
+            refdes=r,
+            layer=Layer.TOP,
+            is_smd=True,
+            bbox=(Point(x=0, y=0), Point(x=1, y=1)),
+            pin_refs=[],
+        )
+        for r in refdes_list
+    ]
+    return Board(
+        board_id="t", file_hash="sha256:0", source_format="test",
+        outline=[], parts=parts, pins=[], nets=[], nails=[],
+    )
+
+
+def test_resolve_part_case_insensitive_returns_canonical():
+    board = _board()
+    part = resolve_part(board, "r1")
+    assert part is not None and part.refdes == "R1"
+    assert resolve_part(board, "  c1\t").refdes == "C1"
+
+
+def test_resolve_part_ambiguous_case_keeps_exact_only():
+    board = _board_with(["R1", "r1", "C1"])
+    assert resolve_part(board, "R1").refdes == "R1"
+    assert resolve_part(board, "r1").refdes == "r1"
+    # Two candidates differ only by case and neither is the exact
+    # spelling asked for: refuse rather than guess.
+    board2 = _board_with(["Ab1", "aB1"])
+    assert resolve_part(board2, "AB1") is None
+    assert resolve_part(board2, "Ab1").refdes == "Ab1"
+
+
+def test_resolve_part_bad_input():
+    board = _board()
+    assert resolve_part(board, None) is None
+    assert resolve_part(board, "   ") is None
+    assert resolve_part(board, 42) is None
+
+
+def test_resolve_pin_case_insensitive_refdes():
+    board = _board()
+    pin = resolve_pin(board, "r1", 1)
+    assert pin is not None and pin.part_refdes == "R1"
+
+
+def test_suggest_similar_ranks_casefold_returns_original_spelling():
+    board = _board_with(["C1", "D1", "F1", "U1", "U10"])
+    assert suggest_similar(board, "u1", k=3) == ["U1", "C1", "D1"]
+    assert suggest_similar(board, "u1", k=1) == ["U1"]
+
+
+def test_suggest_similar_bad_k_and_input():
+    board = _board()
+    assert suggest_similar(board, "R1", k=0) == []
+    assert suggest_similar(board, "R1", k=-2) == []
+    assert suggest_similar(board, None, k=3) == []

@@ -259,3 +259,35 @@ def test_compose_scene_empty_returns_ok():
     assert result["events"] == []
     assert result["errors"] == []
     assert "empty" in result["summary"]
+
+
+def test_handlers_emit_canonical_refdes_for_lowercase_input(session):
+    r = highlight_component(session, refdes=["r1", "R1", "c1"])
+    assert r["ok"] is True
+    assert r["event"].refdes == ["R1", "C1"]
+    assert session.highlights == {"R1", "C1"}
+
+    r = focus_component(session, refdes="r1")
+    assert r["ok"] is True
+    assert r["event"].refdes == "R1"
+    assert session.highlights == {"R1"}
+    assert session.last_focused == "R1"
+
+    r = annotate(session, refdes=" c1 ", label="x")
+    assert r["ok"] is True and r["event"].refdes == "C1"
+    assert session.annotations[r["event"].id]["refdes"] == "C1"
+
+    r = measure_distance(session, refdes_a="r1", refdes_b="c1")
+    assert r["event"].from_refdes == "R1" and r["event"].to_refdes == "C1"
+
+    r = draw_arrow(session, from_refdes="r1", to_refdes="c1")
+    assert r["ok"] is True and "R1" in r["summary"]
+
+    r = show_pin(session, refdes="r1", pin=1)
+    assert r["ok"] is True and r["event"].refdes == "R1"
+
+
+def test_unknown_lowercase_suggests_case_insensitive_first(session):
+    r = highlight_component(session, refdes="r2")
+    assert r["ok"] is False
+    assert r["suggestions"][0] == "R1"

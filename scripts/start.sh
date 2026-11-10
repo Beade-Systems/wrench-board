@@ -16,7 +16,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-MODE="${DIAGNOSTIC_MODE:-managed}"
+# Read a KEY from the process env first, then from .env (no sourcing — .env
+# values are never executed). Prints the raw value, quotes stripped.
+env_or_dotenv() {
+    local key="$1" val="${!1:-}"
+    if [ -z "$val" ] && [ -f .env ]; then
+        val="$(grep -E "^[[:space:]]*${key}[[:space:]]*=" .env | tail -n1 | cut -d= -f2- || true)"
+        val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
+        val="$(printf '%s' "$val" | tr -d '[:space:]')"
+    fi
+    printf '%s' "$val"
+}
+
+MODE="$(env_or_dotenv DIAGNOSTIC_MODE)"
+MODE="${MODE:-managed}"
+API_KEY="$(env_or_dotenv ANTHROPIC_API_KEY)"
 IDS_FILE="managed_ids.json"
 PORT="${PORT:-8000}"
 # Bind interface — defaults to 127.0.0.1 so the dev server is local-only.
@@ -25,7 +39,12 @@ HOST="${HOST:-127.0.0.1}"
 PYTHON=".venv/bin/python"
 UVICORN=".venv/bin/uvicorn"
 
-if [ "$MODE" != "direct" ] && [ ! -f "$IDS_FILE" ]; then
+if [ "$MODE" != "direct" ] && [ ! -f "$IDS_FILE" ] && [ -z "$API_KEY" ]; then
+    # Bootstrap would only sleep 5 s and then exit on the missing key, taking
+    # the server down with it. Start anyway: pure-data endpoints work, and the
+    # app logs the missing-key warning itself.
+    echo "ANTHROPIC_API_KEY not set — skipping Managed Agents bootstrap." >&2
+elif [ "$MODE" != "direct" ] && [ ! -f "$IDS_FILE" ]; then
     cat <<'EOF'
 
   Managed Agents bootstrap required
@@ -53,4 +72,6 @@ EOF
     echo
 fi
 
-exec "$UVICORN" api.main:app --reload --host "$HOST" --port "$PORT"
+# Watch only the backend package: edits under memory/, board_assets/, web/,
+# tests/ or scripts/ never require a server restart.
+exec "$UVICORN" api.main:app --reload --reload-dir api --host "$HOST" --port "$PORT"

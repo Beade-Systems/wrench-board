@@ -233,7 +233,37 @@ async def mb_record_finding(
     JSON-first write to `memory/{slug}/field_reports/*.md`. When the MA
     memory_stores flag is on, the same content is mirrored to the device's
     memory store so native `memory_search` can surface it too.
+
+    Field reports feed every later session (`mb_recall_field_reports`, the
+    MA memory store), so an unknown refdes or an empty finding is refused
+    here rather than archived as a confirmed fact (hard rule #3). The refdes
+    is checked against the device's electrical graph when one exists — the
+    same source `mb_validate_finding` uses.
     """
+    if not isinstance(refdes, str) or not refdes.strip():
+        return {"json_status": "rejected", "found": False, "reason": "missing_refdes"}
+    for field_name, value in (("symptom", symptom), ("confirmed_cause", confirmed_cause)):
+        if not isinstance(value, str) or not value.strip():
+            return {"json_status": "rejected", "reason": f"missing_{field_name}"}
+    refdes = refdes.strip()
+
+    from api.tools.validation import _known_refdes
+
+    known = _known_refdes(memory_root, device_slug)
+    if known is not None and refdes not in known:
+        if refdes.upper() in known:
+            refdes = refdes.upper()
+        else:
+            import difflib
+
+            return {
+                "json_status": "rejected",
+                "found": False,
+                "reason": "unknown_refdes",
+                "refdes": refdes,
+                "closest_matches": difflib.get_close_matches(refdes, sorted(known), n=5),
+            }
+
     return await record_field_report(
         client=client,
         device_slug=device_slug,

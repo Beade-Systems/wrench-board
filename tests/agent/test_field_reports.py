@@ -200,3 +200,31 @@ async def test_mb_record_finding_writes_to_disk(tmp_path: Path, monkeypatch):
     assert len(read) == 1
     assert read[0]["refdes"] == "U7"
     assert read[0]["confirmed_cause"] == "PMIC dead"
+
+
+async def test_mb_record_finding_refuses_unknown_refdes(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("MA_MEMORY_STORE_ENABLED", "false")
+    monkeypatch.setattr("api.tools.validation._known_refdes", lambda *_: {"U7", "U9"})
+    status = await mb_record_finding(
+        client=None, device_slug="demo-pi", refdes="U9999",
+        symptom="no boot", confirmed_cause="dead", memory_root=tmp_path,
+    )
+    assert status["json_status"] == "rejected"
+    assert status["reason"] == "unknown_refdes"
+    assert list_field_reports(device_slug="demo-pi", memory_root=tmp_path) == []
+    # Case-only mismatch is normalised, not refused.
+    ok = await mb_record_finding(
+        client=None, device_slug="demo-pi", refdes="u7",
+        symptom="no boot", confirmed_cause="PMIC dead", memory_root=tmp_path,
+    )
+    assert ok["json_status"] == "written"
+
+
+async def test_mb_record_finding_refuses_empty_finding(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("MA_MEMORY_STORE_ENABLED", "false")
+    status = await mb_record_finding(
+        client=None, device_slug="demo-pi", refdes="", symptom="",
+        confirmed_cause="", memory_root=tmp_path,
+    )
+    assert status["json_status"] == "rejected"
+    assert list_field_reports(device_slug="demo-pi", memory_root=tmp_path) == []

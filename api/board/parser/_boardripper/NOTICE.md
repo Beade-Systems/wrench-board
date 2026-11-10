@@ -26,7 +26,7 @@ python3 scripts/build_allegro_bridge.py --esbuild /path/to/esbuild
 
 All input sources are shipped; no downloads occur at runtime. Node 18 or newer
 is required, selectable with `WRENCH_BOARD_NODE`. Imports have a 60-second
-wall-clock timeout and a 512-MB V8 heap limit (not a total-process RSS limit).
+wall-clock timeout and a default 1024-MiB V8 heap limit (adjustable in Settings or `ALLEGRO_HEAP_MB`) (not a total-process RSS limit).
 The Docker runtime installs Node through its distribution package manager.
 
 Do not treat a subprocess boundary as removing license obligations. Before

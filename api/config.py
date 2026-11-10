@@ -138,6 +138,11 @@ class Settings(BaseSettings):
     # .kicad_pcb files for full boards can exceed 100 MB (MNT Reform is ~25 MB,
     # larger mainboards push past 100 MB). 200 MB leaves headroom while protecting
     # /tmp and RAM from a malicious oversized upload on POST /api/board/parse.
+    allegro_heap_mb: int = Field(
+        default=1024, ge=128, le=4096,
+        description="Node/V8 heap limit for Allegro imports in MiB (not total process memory).",
+    )
+
     board_upload_max_bytes: int = Field(
         default=200 * 1024 * 1024,
         ge=1,

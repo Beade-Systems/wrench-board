@@ -109,3 +109,20 @@ def test_vendored_sources_match_pinned_revision():
             "vendor/" + name.removeprefix("src/frontend/src/") if name.startswith("src/") else name
         )
         assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == digest
+
+
+def test_heap_limit_and_helpful_out_of_memory_error(monkeypatch):
+    from api.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "allegro_heap_mb", 768)
+    monkeypatch.setattr("api.board.parser.allegro.node_executable", lambda: "node")
+
+    def failed(command, **kwargs):
+        assert "--max-old-space-size=768" in command
+        return subprocess.CompletedProcess(
+            command, -6, b"", b"FATAL ERROR: JavaScript heap out of memory"
+        )
+
+    monkeypatch.setattr(subprocess, "run", failed)
+    with pytest.raises(InvalidBoardFile, match="Speicherlimit von 768 MiB"):
+        AllegroParser().parse(b"test", file_hash="h", board_id="b")

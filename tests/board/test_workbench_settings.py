@@ -142,3 +142,20 @@ def test_audit_real_fixture_and_reject_escape(setup_settings):
     assert response["counts"] == {"ok": 1}
     report = client.get("/api/workbench/settings/audit/report", headers=HEADERS).json()
     assert report["results"][0]["parts"] == 2
+
+
+def test_allegro_memory_setting_is_bounded_and_persistent(setup_settings):
+    client, settings, root = setup_settings
+    body = update_body(root) | {"allegro_heap_mb": 2048}
+    response = client.put("/api/workbench/settings", headers=HEADERS, json=body)
+    assert response.status_code == 200
+    assert response.json()["allegro_heap_mb"] == settings.allegro_heap_mb == 2048
+    reloaded = apply_preferences(config.Settings(_env_file=None, memory_root=settings.memory_root))
+    assert reloaded.allegro_heap_mb == 2048
+    assert (
+        client.put(
+            "/api/workbench/settings", headers=HEADERS, json=body | {"allegro_heap_mb": 8192}
+        ).status_code
+        == 422
+    )
+    assert settings.allegro_heap_mb == 2048

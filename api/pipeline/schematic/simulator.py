@@ -795,7 +795,7 @@ class SimulationEngine:
         components: dict[str, ComponentState],
         rail_voltage: dict[str, float],
     ) -> tuple[list[str], list[str]]:
-        """Compute dead components + dead rails with one transitive rail pass.
+        """Compute dead components + dead rails as a transitive fixpoint.
 
         Semantics:
           1. `effective_dead` = `self.killed` ∪ every component whose
@@ -812,8 +812,10 @@ class SimulationEngine:
              `degraded` with a voltage below TOLERANCE_UVLO (its consumers
              cannot power on, so for cascade purposes the rail itself is dead).
           4. `dead_components` is then extended to include consumers of the
-             dead rails — closes the "if a rail is dead its consumers are too"
-             invariant in a single linear pass.
+             dead rails. Steps 3+4 repeat until neither set grows, so a
+             consumer that itself sources a rail (passive / LDO chain)
+             propagates its death transitively — the "if a rail is dead its
+             consumers are too" invariant holds as a fixpoint.
 
         Downstream callers (bridge, tool, endpoint, evaluator) read
         `cascade_dead_*` to decide what's affected; relying only on
@@ -850,41 +852,50 @@ class SimulationEngine:
         # failure topology but invisible in the final state enum
         # (e.g. a rail sourced by an opened filter bead).
         dead_rails: set[str] = set(self._forced_dead_rails)
-        for label, rail in self.electrical.power_rails.items():
-            final_state = rails.get(label)
-            # Transitive source death — check this FIRST, before the
-            # `final_state == "stable"` skip. `_stabilise_rails` only marks a
-            # rail "off" when its immediate source IC is already "dead" at
-            # phase-walk time. A source that is merely transitively dead
-            # (sourced the rail but itself never activated because its own
-            # `power_in` rail was off one hop up) leaves the rail stuck at
-            # "stable" in the phase-walk output. Step 2 updated
-            # `dead_components` to cover exactly that transitive case, so
-            # we consult it here regardless of `final_state`. This is safe:
-            # a rail whose source is genuinely live cannot have its source
-            # in `dead_components` (step 1+2 only add live-input or
-            # construction-dead components).
-            if rail.source_refdes and rail.source_refdes in dead_components:
-                dead_rails.add(label)
-                continue
-            if final_state == "stable":
-                continue
-            if final_state == "shorted":
-                dead_rails.add(label)
-                continue
-            if final_state == "degraded":
-                voltage = rail_voltage.get(label)
-                if voltage is not None and voltage < TOLERANCE_UVLO:
+        # Steps 3+4 iterate to a transitive fixpoint: a consumer killed in
+        # step 4 may itself source a further rail (filter bead / inductor /
+        # LDO chains), which must then die in step 3, and so on. Both sets
+        # only grow and are bounded by the graph, so the loop terminates.
+        while True:
+            before = (len(dead_rails), len(dead_components))
+            for label, rail in self.electrical.power_rails.items():
+                final_state = rails.get(label)
+                # Transitive source death — check this FIRST, before the
+                # `final_state == "stable"` skip. `_stabilise_rails` only marks
+                # a rail "off" when its immediate source IC is already "dead"
+                # at phase-walk time. A source that is merely transitively
+                # dead (sourced the rail but itself never activated because
+                # its own `power_in` rail was off one hop up) leaves the rail
+                # stuck at "stable" in the phase-walk output. Steps 2/4 put
+                # exactly that transitive case in `dead_components`, so we
+                # consult it here regardless of `final_state`. This is safe:
+                # a rail whose source is genuinely live cannot have its source
+                # in `dead_components` (only live-input or construction-dead
+                # components are added).
+                if rail.source_refdes and rail.source_refdes in dead_components:
                     dead_rails.add(label)
+                    continue
+                if final_state == "stable":
+                    continue
+                if final_state == "shorted":
+                    dead_rails.add(label)
+                    continue
+                if final_state == "degraded":
+                    voltage = rail_voltage.get(label)
+                    if voltage is not None and voltage < TOLERANCE_UVLO:
+                        dead_rails.add(label)
 
-        # Step 4 — extend dead_components to consumers of any dead rail.
-        for refdes, comp in self.electrical.components.items():
-            if refdes in dead_components:
-                continue
-            if components.get(refdes) == "on":
-                continue
-            ins = [p.net_label for p in comp.pins if p.role == "power_in" and p.net_label]
-            if ins and any(n in dead_rails for n in ins):
-                dead_components.add(refdes)
+            # Step 4 — extend dead_components to consumers of any dead rail.
+            for refdes, comp in self.electrical.components.items():
+                if refdes in dead_components:
+                    continue
+                if components.get(refdes) == "on":
+                    continue
+                ins = [p.net_label for p in comp.pins if p.role == "power_in" and p.net_label]
+                if ins and any(n in dead_rails for n in ins):
+                    dead_components.add(refdes)
+
+            if (len(dead_rails), len(dead_components)) == before:
+                break
 
         return sorted(dead_components), sorted(dead_rails)

@@ -759,7 +759,7 @@ async def create_repair(
             allow_expand=allow_expand,
         )
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False, include_context=False)) from exc
 
     settings = _pkg.get_settings()
     memory_root = Path(settings.memory_root)

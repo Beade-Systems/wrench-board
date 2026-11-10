@@ -6,12 +6,13 @@ See docs/superpowers/specs/2026-05-08-stock-inventory-design.md §10.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from api.config import get_settings
+from api.path_safety import is_safe_slug
 from api.stock.schemas import (
     PartsIndex,
     StockSearchQuery,
@@ -38,7 +39,16 @@ OwnerRef = Annotated[str | None, Header(alias="X-Owner-Ref")]
 class _MarkDonorBody(BaseModel):
     device_slug: str
     label: str
-    condition: str = "donor_only"
+    # Mirrors DonorEntry.condition — validated here so a bad value is a 422,
+    # not a ValidationError raised deep in the store (was an HTTP 500).
+    condition: Literal["donor_only", "potentially_repairable"] = "donor_only"
+
+    @field_validator("device_slug")
+    @classmethod
+    def _slug_is_path_safe(cls, v: str) -> str:
+        if not is_safe_slug(v):
+            raise ValueError("device_slug must be a canonical slug with no '..'")
+        return v
 
 
 class _ConsumeBody(BaseModel):

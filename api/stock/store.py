@@ -31,6 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from api.config import get_settings
+from api.path_safety import is_safe_slug
 from api.stock.schemas import (
     ConsumedEvent,
     DonorEntry,
@@ -168,7 +169,9 @@ def mark_donor(
     The id allocation + write happen under one exclusive lock so concurrent
     callers cannot collide on the same NNN counter.
     """
-    if not (_memory_root() / device_slug).exists():
+    # `..` / `.` would resolve to memory_root itself (or above) and pass the
+    # existence check below — treat a non-canonical slug as unknown.
+    if not is_safe_slug(device_slug) or not (_memory_root() / device_slug).is_dir():
         raise FileNotFoundError(f"device_slug not found in memory/: {device_slug}")
 
     with _exclusive_lock(owner_ref):

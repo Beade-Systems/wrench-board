@@ -7,18 +7,13 @@ endpoints and must be rejected at the HTTP boundary before any disk I/O.
 
 from __future__ import annotations
 
-import re
-
 from fastapi import HTTPException
 
-# Repair ids are generated via `uuid.uuid4().hex[:12]` → 12 hex chars. We
-# keep the validator permissive enough to accept legacy / manually-seeded
-# ids (short alphanumeric + `._-`) while rejecting anything that could
-# escape the `memory/{slug}/repairs/{repair_id}/` subtree when used as a
-# filesystem path segment.
-_REPAIR_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+# Repair ids are generated via `uuid.uuid4().hex[:12]` → 12 hex chars. The
+# shared predicate stays permissive enough to accept legacy / manually-seeded
+# ids (short alphanumeric + `._-`) while rejecting anything that could escape
+# the `memory/{slug}/repairs/{repair_id}/` subtree.
+from api.path_safety import is_safe_id, is_safe_slug
 
 
 def _validate_repair_id(repair_id: str) -> str:
@@ -29,7 +24,7 @@ def _validate_repair_id(repair_id: str) -> str:
     the measurement HTTP routes that append `repair_id` into a filesystem
     path without further sanitisation.
     """
-    if not repair_id or repair_id in {".", ".."} or not _REPAIR_ID_RE.match(repair_id):
+    if not is_safe_id(repair_id):
         raise HTTPException(status_code=400, detail={"reason": "invalid_repair_id"})
     return repair_id
 
@@ -43,7 +38,7 @@ def _validate_slug(slug: str) -> str:
     disk. Consecutive dots are rejected even though the character class allows
     a single `.` — `..` is a path-traversal marker by any reasonable reading.
     """
-    if not _SLUG_RE.fullmatch(slug) or ".." in slug:
+    if not is_safe_slug(slug):
         raise HTTPException(
             status_code=422,
             detail=(

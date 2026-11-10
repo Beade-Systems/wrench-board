@@ -167,3 +167,16 @@ def test_tool_stock_search_shape(client):
                 "package": "0402", "requested_role": "decoupling"})
     assert "exact_matches" in out
     assert len(out["exact_matches"]) == 1
+
+
+def test_create_donor_rejects_unknown_condition_with_422(client):
+    r = client.post("/api/stock/donors", json={
+        "device_slug": "iphone-x", "label": "x", "condition": "zzz",
+    })
+    assert r.status_code == 422
+
+
+@pytest.mark.parametrize("slug", ["..", ".", "../iphone-x"])
+def test_create_donor_rejects_traversal_slug(client, slug):
+    r = client.post("/api/stock/donors", json={"device_slug": slug, "label": "x"})
+    assert r.status_code == 422

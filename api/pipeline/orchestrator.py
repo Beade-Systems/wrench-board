@@ -227,7 +227,10 @@ async def _noop_on_event(_event: dict[str, Any]) -> None:
 def _slugify(label: str) -> str:
     """Turn a device label into a safe directory slug."""
     slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", label.strip().lower())
-    slug = re.sub(r"-+", "-", slug).strip("-")
+    # `..` is a path-traversal marker: never let it survive into a directory
+    # name, and never start with `.` (hidden dir / `.` / `..` segments).
+    slug = re.sub(r"\.{2,}", "-", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-.")
     return slug or "unknown-device"
 
 

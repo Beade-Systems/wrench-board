@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from api.path_safety import is_safe_id, is_safe_slug
 from api.pipeline.schemas import _DeviceKind
 from api.pipeline.schematic.simulator import Failure, RailOverride
 
@@ -173,6 +174,19 @@ class RepairRequest(BaseModel):
             "True = standalone/self-host behaviour unchanged."
         ),
     )
+
+    @field_validator("device_slug")
+    @classmethod
+    def _device_slug_is_path_safe(cls, v: str | None) -> str | None:
+        # An explicit slug is used verbatim as memory/{slug}/ — reject rather
+        # than silently rewrite anything that could escape memory_root.
+        if v is None or v == "":
+            return None
+        if not is_safe_slug(v):
+            raise ValueError(
+                "device_slug must match ^[a-z0-9][a-z0-9._-]*$ with no '..' sequences"
+            )
+        return v
 
 
 class DisambiguationCandidate(BaseModel):
@@ -382,6 +396,14 @@ class HypothesizeRequest(BaseModel):
     metrics_rails: dict[str, dict] = Field(default_factory=dict)
     max_results: int = Field(default=5, ge=1, le=20)
     repair_id: str | None = None
+
+    @field_validator("repair_id")
+    @classmethod
+    def _repair_id_is_path_safe(cls, v: str | None) -> str | None:
+        # repair_id becomes a directory under memory/{slug}/repairs/.
+        if v is not None and not is_safe_id(v):
+            raise ValueError("repair_id must match [A-Za-z0-9._-]{1,64} and not be '.' / '..'")
+        return v
 
 
 # --- Measurements -----------------------------------------------------------

@@ -24,6 +24,7 @@ from api.board.parser.base import (
     parser_for,
 )
 from api.config import get_settings
+from api.path_safety import is_safe_slug
 
 router = APIRouter(prefix="/api/board", tags=["board"])
 
@@ -113,6 +114,13 @@ async def render_board(
     # router's module-load graph (FastAPI registers them in opposite order).
     from api.pipeline import _find_owner_boardview
 
+    if not is_safe_slug(slug):
+        # `slug` is joined onto memory_root and board_assets/ — never let a
+        # traversal value pick an arbitrary file to parse.
+        raise HTTPException(
+            status_code=422,
+            detail={"detail": "invalid-slug", "message": f"invalid slug {slug!r}"},
+        )
     settings = get_settings()
     pack_dir = Path(settings.memory_root) / slug
     path = _find_owner_boardview(slug, pack_dir, x_owner_ref)

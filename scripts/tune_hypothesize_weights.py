@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import api.pipeline.schematic.hypothesize as hypothesize_mod
-from api.pipeline.schematic.hypothesize import Observations, _SCORE_VISIBILITY
+from api.pipeline.schematic.hypothesize import _SCORE_VISIBILITY, Observations
 
 FIXTURE = Path(__file__).resolve().parents[1] / "tests/pipeline/schematic/fixtures/hypothesize_scenarios.json"
 MEMORY_ROOT = Path(__file__).resolve().parents[1] / "memory"

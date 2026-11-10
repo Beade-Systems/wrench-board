@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,34 @@ def _load_module():
 
 
 eval_all = _load_module()
+
+
+@pytest.mark.parametrize("score", ["NaN", "Infinity", "-Infinity", "1e999", "true", '"0.5"'])
+@pytest.mark.parametrize("prefix", ["", "[info] running\n"])
+def test_invalid_scores_cannot_pass_evaluation(score, prefix):
+    value, _, error = eval_all._parse_stdout_score(prefix + '{"score": ' + score + '}')
+    assert value is None
+    assert error
+
+
+def test_regex_score_overflow_is_rejected():
+    value, _, error = eval_all._parse_stdout_score('output: "score": 1e999')
+    assert value is None
+    assert error
+
+
+@pytest.mark.parametrize("size", [10, 5000])
+def test_timeout_output_can_be_serialized(monkeypatch, size):
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 1, output=b"x" * size, stderr=b"bad\xff")
+
+    monkeypatch.setattr(eval_all.subprocess, "run", timeout)
+    result = eval_all.make_simulator_runner(timeout=1).run()
+    assert not result.ok
+    assert result.error == "timeout after 1s"
+    assert isinstance(result.raw_output, str)
+    assert isinstance(result.stderr, str)
+    json.dumps(eval_all.asdict(result))
 
 
 # ---------------------------------------------------------------------------

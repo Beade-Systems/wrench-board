@@ -87,7 +87,7 @@ def _delete(client: httpx.Client, store_id: str, memory_id: str) -> bool:
     return resp.status_code in (200, 204, 404)
 
 
-def _trim_marker(marker_path: Path) -> bool:
+def _trim_marker(marker_path: Path, filenames: tuple[str, ...] = PURGE_FILES) -> bool:
     """Drop the purged filenames from the marker's `files` map. Returns True
     if the marker was rewritten."""
     try:
@@ -97,7 +97,7 @@ def _trim_marker(marker_path: Path) -> bool:
     files = data.get("files")
     if not isinstance(files, dict):
         return False
-    removed = [k for k in PURGE_FILES if k in files]
+    removed = [k for k in filenames if k in files]
     if not removed:
         return False
     for k in removed:
@@ -123,6 +123,7 @@ def main() -> int:
     print(f"Scanning {len(markers)} device(s)…")
     total_deleted = 0
     total_trimmed = 0
+    failed = False
     with httpx.Client(timeout=30.0) as client:
         for marker_path in markers:
             slug = marker_path.parent.name
@@ -130,6 +131,7 @@ def main() -> int:
                 marker = json.loads(marker_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError) as exc:
                 print(f"  [{slug}] marker unreadable: {exc}")
+                failed = True
                 continue
             store_id = marker.get("memory_store_id") or marker.get("store_id")
             if not store_id:
@@ -139,16 +141,19 @@ def main() -> int:
             try:
                 paths = _list_paths_to_ids(client, store_id)
             except httpx.HTTPStatusError as exc:
+                failed = True
                 print(
                     f"  [{slug}] list failed {exc.response.status_code}: "
                     f"{exc.response.text[:120]}"
                 )
                 continue
             except httpx.HTTPError as exc:
+                failed = True
                 print(f"  [{slug}] list raised: {exc}")
                 continue
 
             targets = [(p, paths[p]) for p in PURGE_PATHS if p in paths]
+            removable = [Path(p).name for p in PURGE_PATHS if p not in paths]
             if not targets:
                 print(f"  [{slug}] {store_id}: clean already")
             else:
@@ -156,13 +161,20 @@ def main() -> int:
                     if args.dry_run:
                         print(f"  [{slug}] would delete {path} (id={mid})")
                     else:
-                        ok = _delete(client, store_id, mid)
+                        try:
+                            ok = _delete(client, store_id, mid)
+                        except httpx.HTTPError as exc:
+                            print(f"  [{slug}] delete failed: {exc}")
+                            ok = False
                         flag = "✓" if ok else "✗"
                         print(f"  [{slug}] {flag} delete {path}")
                         if ok:
                             total_deleted += 1
+                            removable.append(Path(path).name)
+                        else:
+                            failed = True
 
-            if not args.dry_run and _trim_marker(marker_path):
+            if not args.dry_run and _trim_marker(marker_path, tuple(removable)):
                 total_trimmed += 1
                 print(f"  [{slug}] marker trimmed")
 
@@ -170,7 +182,7 @@ def main() -> int:
         print("\nDRY RUN — re-run without --dry-run to apply.")
     else:
         print(f"\nDeleted {total_deleted} memories, trimmed {total_trimmed} markers.")
-    return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

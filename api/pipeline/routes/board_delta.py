@@ -9,9 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
-from fastapi import APIRouter, Form, Header, HTTPException
+from fastapi import APIRouter, Form, Header
 
 from api.config import get_settings
+from api.errors import CodedHTTPException
 from api.pipeline.board_delta.agent import generate_board_delta
 from api.pipeline.board_delta.store import normalize_board_number, read_delta, write_delta
 from api.pipeline.build_metering import report_delta_usage
@@ -36,9 +37,10 @@ async def create_board_delta(
     _validate_slug(slug)  # becomes memory/{slug}/board_deltas/ — no traversal
     settings = get_settings()
     if not settings.anthropic_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail={"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
+        raise CodedHTTPException(
+            503,
+            "missing_api_key",
+            {"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
         )
     client = AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=settings.anthropic_max_retries)
     delta = await generate_board_delta(
@@ -72,5 +74,10 @@ async def get_board_delta(slug: str, board: str):
         board_number=board,
     )
     if delta is None:
-        raise HTTPException(status_code=404, detail=f"No board delta for {board!r}")
+        raise CodedHTTPException(
+            404,
+            "board_delta_not_found",
+            f"No board delta for {board!r}",
+            {"board": board},
+        )
     return delta.model_dump()

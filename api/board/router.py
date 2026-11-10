@@ -11,7 +11,7 @@ from fastapi import APIRouter, File, Header, HTTPException, Response, UploadFile
 
 from api.board import render_store
 from api.board.byte_cache import ByteCache
-from api.board.http_errors import import_errors
+from api.board.http_errors import error_detail, import_errors
 from api.board.imports import board_import_service
 from api.board.parser.base import (
     BoardParserError,
@@ -119,7 +119,7 @@ async def render_board(
         # traversal value pick an arbitrary file to parse.
         raise HTTPException(
             status_code=422,
-            detail={"detail": "invalid-slug", "message": f"invalid slug {slug!r}"},
+            detail={"detail": "invalid-slug", "slug": slug, "message": f"invalid slug {slug!r}"},
         )
     settings = get_settings()
     pack_dir = Path(settings.memory_root) / slug
@@ -129,6 +129,7 @@ async def render_board(
             status_code=404,
             detail={
                 "detail": "no-boardview",
+                "slug": slug,
                 "message": f"no boardview on disk for slug={slug!r}",
             },
         )
@@ -137,7 +138,7 @@ async def render_board(
     except OSError as e:
         raise HTTPException(
             status_code=500,
-            detail={"detail": "io-error", "message": str(e)},
+            detail=error_detail("io-error", e),
         ) from e
     gzipped = render_gzip_enabled() and "gzip" in accept_encoding
     try:
@@ -147,7 +148,7 @@ async def render_board(
     except UnsupportedFormatError as e:
         raise HTTPException(
             status_code=415,
-            detail={"detail": "unsupported-format", "message": str(e)},
+            detail=error_detail("unsupported-format", e),
         ) from e
     except (
         ObfuscatedFileError,
@@ -159,12 +160,12 @@ async def render_board(
     ) as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "parse-error", "message": str(e)},
+            detail=error_detail("parse-error", e),
         ) from e
     except OSError as e:
         raise HTTPException(
             status_code=500,
-            detail={"detail": "io-error", "message": str(e)},
+            detail=error_detail("io-error", e),
         ) from e
     # A preset Content-Encoding makes GZipMiddleware pass the body through.
     headers = {"Vary": "Accept-Encoding"}

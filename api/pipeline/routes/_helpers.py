@@ -7,12 +7,11 @@ endpoints and must be rejected at the HTTP boundary before any disk I/O.
 
 from __future__ import annotations
 
-from fastapi import HTTPException
-
 # Repair ids are generated via `uuid.uuid4().hex[:12]` → 12 hex chars. The
 # shared predicate stays permissive enough to accept legacy / manually-seeded
 # ids (short alphanumeric + `._-`) while rejecting anything that could escape
 # the `memory/{slug}/repairs/{repair_id}/` subtree.
+from api.errors import CodedHTTPException
 from api.path_safety import is_safe_id, is_safe_slug
 
 
@@ -25,7 +24,11 @@ def _validate_repair_id(repair_id: str) -> str:
     path without further sanitisation.
     """
     if not is_safe_id(repair_id):
-        raise HTTPException(status_code=400, detail={"reason": "invalid_repair_id"})
+        raise CodedHTTPException(
+            400,
+            "invalid_repair_id",
+            {"reason": "invalid_repair_id"},
+        )
     return repair_id
 
 
@@ -39,11 +42,13 @@ def _validate_slug(slug: str) -> str:
     a single `.` — `..` is a path-traversal marker by any reasonable reading.
     """
     if not is_safe_slug(slug):
-        raise HTTPException(
-            status_code=422,
-            detail=(
+        raise CodedHTTPException(
+            422,
+            "invalid_slug",
+            (
                 f"Invalid device_slug {slug!r} — must match "
                 "^[a-z0-9][a-z0-9._-]*$ with no '..' sequences."
             ),
+            {"slug": slug},
         )
     return slug

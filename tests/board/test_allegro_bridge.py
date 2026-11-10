@@ -70,12 +70,52 @@ def test_mapping_preserves_coordinates_connectivity_and_uncertainty():
 def test_v15_warns_and_empty_results_fail():
     data = payload()
     data["formatVersion"] = "15.x"
-    assert (
-        "experimentell" in board_from_boardripper(data, file_hash="h", board_id="b").parser_notes[0]
-    )
+    board = board_from_boardripper(data, file_hash="h", board_id="b")
+    assert "experimental" in board.parser_notes[0]
+    # The codes stay index-aligned: the upstream free-text note has none.
+    assert board.parser_note_codes == [{"code": "allegro_v15_experimental", "params": {}}, None]
     data["parts"] = []
-    with pytest.raises(InvalidBoardFile, match="keine Bauteile"):
+    with pytest.raises(InvalidBoardFile) as error:
         board_from_boardripper(data, file_hash="h", board_id="b")
+    assert error.value.code == "allegro_no_parts"
+
+
+def test_upstream_notes_get_codes_and_unknown_text_stays_plain():
+    data = payload()
+    data["parserNotes"] = [
+        "Incomplete parse: only 10 of 40 board objects were read before a malformed block "
+        "stopped the walk. Some parts, nets, or traces may be missing.",
+        "3 components have a netlist but no stored position in this file. "
+        "2 were located from the routing that ends on their pads and are drawn with a dashed "
+        "amber outline \u2014 their pads are recovered, not read, and only some pads of each "
+        "resolve. 1 could not be located (mounting holes and parts with too little routing).",
+        "1 component have a netlist but no stored position in this file. ",
+        "Something upstream added later",
+    ]
+    data["parts"][0]["meta"]["note"] = (
+        "Position recovered from routing \u2014 5 of 8 pads located "
+        "(3 from trace ends, 2 filled in from the pad pitch). Not stored in the file."
+    )
+    board = board_from_boardripper(data, file_hash="h", board_id="b")
+    assert board.parser_notes == data["parserNotes"]
+    assert board.parser_note_codes == [
+        {"code": "allegro_incomplete_parse", "params": {"parsed": 10, "total": 40}},
+        {
+            "code": "allegro_unplaced_recovered_lost",
+            "params": {"unplaced": 3, "recovered": 2, "lost": 1},
+        },
+        {"code": "allegro_unplaced", "params": {"unplaced": 1}},
+        None,
+    ]
+    assert board.parts[0].import_note_code == {
+        "code": "allegro_position_recovered_detail",
+        "params": {"resolved": 5, "total": 8, "trace_ends": 3, "interpolated": 2},
+    }
+    # Free text the bridge does not know keeps its text and gets no code.
+    assert (
+        board_from_boardripper(payload(), file_hash="h", board_id="b").parts[0].import_note_code
+        is None
+    )
 
 
 def test_subprocess_timeout_is_reported(monkeypatch):
@@ -85,14 +125,16 @@ def test_subprocess_timeout_is_reported(monkeypatch):
         raise subprocess.TimeoutExpired("node", 60)
 
     monkeypatch.setattr(subprocess, "run", timeout)
-    with pytest.raises(InvalidBoardFile, match="Zeitlimit"):
+    with pytest.raises(InvalidBoardFile) as error:
         AllegroParser().parse(b"data", file_hash="h", board_id="b")
+    assert (error.value.code, error.value.params) == ("allegro_timeout", {"seconds": 60})
 
 
 @pytest.mark.skipif(not node_executable(), reason="Node not installed")
 def test_actual_node_rejects_truncated_file():
-    with pytest.raises(InvalidBoardFile, match="Allegro-Import fehlgeschlagen"):
+    with pytest.raises(InvalidBoardFile) as error:
         AllegroParser().parse(b"\x00\x04\x14\x00", file_hash="h", board_id="b")
+    assert error.value.code == "allegro_failed"
 
 
 def test_v15_dispatch(tmp_path):
@@ -124,5 +166,6 @@ def test_heap_limit_and_helpful_out_of_memory_error(monkeypatch):
         )
 
     monkeypatch.setattr(subprocess, "run", failed)
-    with pytest.raises(InvalidBoardFile, match="Speicherlimit von 768 MiB"):
+    with pytest.raises(InvalidBoardFile) as error:
         AllegroParser().parse(b"test", file_hash="h", board_id="b")
+    assert (error.value.code, error.value.params) == ("allegro_out_of_memory", {"heap_mb": 768})

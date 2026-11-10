@@ -8,6 +8,13 @@ from api.board.parser.base import MissingFZKeyError, UnsupportedFormatError, par
 from api.config import get_settings
 
 
+def _coded(result, exc):
+    """Adds the parser's stable code, when it has one, next to the message."""
+    if getattr(exc, "code", None):
+        result.update(code=exc.code, params=exc.params)
+    return result
+
+
 def main():
     get_settings()  # Apply saved runtime keys in the child, too.
     path = Path(sys.argv[1])
@@ -21,11 +28,11 @@ def main():
             "nets": len(board.nets),
         }
     except MissingFZKeyError as exc:
-        result = {"status": "key_missing", "message": str(exc)}
+        result = _coded({"status": "key_missing", "message": str(exc)}, exc)
     except UnsupportedFormatError as exc:
-        result = {"status": "unsupported", "message": str(exc)}
+        result = _coded({"status": "unsupported", "message": str(exc)}, exc)
     except Exception as exc:
-        result = {"status": "error", "message": f"{type(exc).__name__}: {exc}"[:500]}
+        result = _coded({"status": "error", "message": f"{type(exc).__name__}: {exc}"[:500]}, exc)
     print(json.dumps(result))
 
 

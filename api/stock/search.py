@@ -82,7 +82,9 @@ def _rank_key(match: StockSearchMatch) -> tuple:
 def stock_search(query: StockSearchQuery, owner_ref: str | None = None) -> StockSearchResult:
     inv = load_inventory(owner_ref)
     if not inv.donors:
-        return StockSearchResult(empty_reason="no donors in stock")
+        return StockSearchResult(
+            empty_reason="no donors in stock", empty_reason_code="no_donors"
+        )
 
     exact: list[StockSearchMatch] = []
 
@@ -115,4 +117,5 @@ def stock_search(query: StockSearchQuery, owner_ref: str | None = None) -> Stock
     return StockSearchResult(
         exact_matches=sorted(exact, key=_rank_key),
         empty_reason=None if exact else "no matching parts available",
+        empty_reason_code=None if exact else "no_match",
     )

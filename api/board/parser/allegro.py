@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 from collections import defaultdict
@@ -20,6 +21,54 @@ from api.board.parser.test_link import _GROUND_RE, _POWER_RE
 
 BRIDGE = Path(__file__).parent / "_boardripper" / "bridge.cjs"
 TIMEOUT_SECONDS = 60
+
+
+# Upstream BoardRipper emits its notes as English sentences. The known shapes
+# are recognised here so the UI can translate them; anything else stays text.
+_UNPLACED_NOTE = re.compile(
+    r"^(?P<unplaced>\d+) components? have a netlist but no stored position in this file\. "
+    r"(?:(?P<recovered>\d+) were located from the routing .*?resolve\. )?"
+    r"(?:(?P<lost>\d+) could not be located .*)?$",
+    re.DOTALL,
+)
+_INCOMPLETE_NOTE = re.compile(
+    r"^Incomplete parse: only (?P<parsed>\d+) of (?P<total>\d+) board objects were read "
+)
+_RECOVERED_NOTE = re.compile(
+    r"^Position recovered from routing \u2014 (?P<resolved>\d+) of (?P<total>\d+) pads located"
+    r"(?: \((?P<trace_ends>\d+) from trace ends, (?P<interpolated>\d+) filled in from the pad pitch\))?"
+    r"\. Not stored in the file\.$"
+)
+
+
+def _numbers(match):
+    return {name: int(value) for name, value in match.groupdict().items() if value is not None}
+
+
+def parser_note_code(note):
+    """`{code, params}` for a recognised upstream board note, else None."""
+    match = _INCOMPLETE_NOTE.match(str(note))
+    if match:
+        return {"code": "allegro_incomplete_parse", "params": _numbers(match)}
+    match = _UNPLACED_NOTE.match(str(note))
+    if not match:
+        return None
+    params = _numbers(match)
+    suffix = "_".join(name for name in ("recovered", "lost") if name in params)
+    return {"code": f"allegro_unplaced_{suffix}" if suffix else "allegro_unplaced", "params": params}
+
+
+def import_note_code(note):
+    """`{code, params}` for a recognised upstream part note, else None."""
+    match = _RECOVERED_NOTE.match(str(note or ""))
+    if not match:
+        return None
+    params = _numbers(match)
+    detailed = "interpolated" in params
+    return {
+        "code": "allegro_position_recovered_detail" if detailed else "allegro_position_recovered",
+        "params": params,
+    }
 
 
 def node_executable():
@@ -44,8 +93,11 @@ def _side(value):
 def board_from_boardripper(data, *, file_hash, board_id):
     """Map already absolute mil coordinates and rebuild global pin references."""
     notes = list(data.get("parserNotes") or [])
+    # Index-aligned with `notes`; unrecognised upstream notes stay free text (None).
+    note_codes: list[dict | None] = [parser_note_code(note) for note in notes]
     if str(data.get("formatVersion", "")).startswith("15"):
-        notes.insert(0, "Allegro 15: experimenteller Import; Daten können unvollständig sein.")
+        notes.insert(0, "Allegro 15: experimental import; data may be incomplete.")
+        note_codes.insert(0, {"code": "allegro_v15_experimental", "params": {}})
     parts, pins = [], []
     net_pins = defaultdict(list)
     for net in data.get("nets", []):
@@ -54,7 +106,10 @@ def board_from_boardripper(data, *, file_hash, board_id):
     for source in data["parts"]:
         name = source["name"]
         if not name or name in names:
-            raise InvalidBoardFile("allegro: leere oder doppelte Bauteilbezeichnung")
+            raise InvalidBoardFile(
+                "allegro: empty or duplicate component reference",
+                code="allegro_duplicate_refdes",
+            )
         names.add(name)
         refs = []
         for number, pin in enumerate(source["pins"], 1):
@@ -100,11 +155,13 @@ def board_from_boardripper(data, *, file_hash, board_id):
                 rotation_deg=source.get("angleDeg", meta.get("angleDeg")),
                 placement_inferred=bool(source.get("placementInferred")),
                 import_note=meta.get("note"),
+                import_note_code=import_note_code(meta.get("note")),
             )
         )
     if not parts or not pins:
         raise InvalidBoardFile(
-            "allegro: keine Bauteile oder Pins gelesen; diese Dateivariante wird noch nicht unterstützt"
+            "allegro: no components or pins read; this file variant is not supported yet",
+            code="allegro_no_parts",
         )
     return Board(
         board_id=board_id,
@@ -143,6 +200,7 @@ def board_from_boardripper(data, *, file_hash, board_id):
             for v in data.get("vias", [])
         ],
         parser_notes=notes,
+        parser_note_codes=note_codes,
         layer_names=data.get("layerNames") or [],
     )
 
@@ -157,7 +215,8 @@ class AllegroParser(BoardParser):
         executable = node_executable()
         if not executable or not BRIDGE.is_file():
             raise InvalidBoardFile(
-                "Allegro benötigt Node.js ab Version 18 und den mitgelieferten BoardRipper-Importer."
+                "Allegro needs Node.js 18 or newer and the bundled BoardRipper importer.",
+                code="allegro_node_missing",
             )
         try:
             process = subprocess.run(
@@ -168,21 +227,29 @@ class AllegroParser(BoardParser):
             )
         except subprocess.TimeoutExpired as exc:
             raise InvalidBoardFile(
-                "Allegro-Import überschreitet das Zeitlimit von 60 Sekunden."
+                f"Allegro import exceeded the time limit of {TIMEOUT_SECONDS} seconds.",
+                code="allegro_timeout",
+                params={"seconds": TIMEOUT_SECONDS},
             ) from exc
         except OSError as exc:
             raise InvalidBoardFile(
-                f"Allegro-Importer konnte nicht gestartet werden: {exc}"
+                f"The Allegro importer could not be started: {exc}",
+                code="allegro_start_failed",
+                params={"reason": str(exc)},
             ) from exc
         if process.returncode:
             stderr = process.stderr.decode(errors="replace")
             if "heap out of memory" in stderr.lower() or "allocation failed" in stderr.lower():
                 raise InvalidBoardFile(
-                    f"Allegro-Import überschreitet das Speicherlimit von {heap_mb} MiB. "
-                    "Unter Einstellungen → Boardview-Schlüssel und Import das Allegro-Speicherlimit erhöhen."
+                    f"Allegro import exceeded the memory limit of {heap_mb} MiB. "
+                    "Raise the Allegro memory limit under Settings → Boardview keys and import.",
+                    code="allegro_out_of_memory",
+                    params={"heap_mb": heap_mb},
                 )
             raise InvalidBoardFile(
-                "Allegro-Import fehlgeschlagen: " + process.stderr.decode(errors="replace")[-1000:]
+                "Allegro import failed: " + stderr[-1000:],
+                code="allegro_failed",
+                params={"reason": stderr[-1000:]},
             )
         try:
             return board_from_boardripper(
@@ -190,5 +257,7 @@ class AllegroParser(BoardParser):
             )
         except (ValueError, KeyError, TypeError) as exc:
             raise InvalidBoardFile(
-                f"Allegro-Importer lieferte ungültige Board-Daten: {exc}"
+                f"The Allegro importer returned invalid board data: {exc}",
+                code="allegro_invalid_data",
+                params={"reason": str(exc)},
             ) from exc

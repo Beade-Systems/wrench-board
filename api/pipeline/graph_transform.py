@@ -51,6 +51,7 @@ def pack_to_graph_payload(
 
     Returned shape matches what web/index.html's D3 layer expects:
       node: {id, type, label, description, confidence, meta, subsystem}
+            action nodes also carry {verb, target} (stable verb code + refdes)
       edge: {source, target, relation, label, weight}
       subsystems: list[{key, label, count}]  # sorted by count desc, unknown last
     """
@@ -187,11 +188,16 @@ def pack_to_graph_payload(
             continue
         action_id = f"act:{rule_id}"
         label, top_mechanism = _derive_action_label(rule)
+        verb, target = _derive_action_parts(rule)
         nodes.append(
             {
                 "id": action_id,
                 "type": "action",
                 "label": label,
+                # Stable verb code + its object, so the UI composes the caption
+                # in its own language; `label` stays the English rendering.
+                "verb": verb,
+                "target": target,
                 "description": top_mechanism,
                 "confidence": rule.get("confidence", 0.6),
                 "meta": {"rule_id": rule_id},
@@ -280,16 +286,16 @@ def pack_to_graph_payload(
 
 _ACTION_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
-        "Jumper",
+        "jumper",
         ("jumper", "torn flex", "broken trace", "pad lift", "pad-lift", "trace cut", "trace break"),
     ),
     (
-        "Reball",
+        "reball",
         ("reball", "bga ball", "perimeter ball", "cracked ball", "cracked bga", "ball array"),
     ),
-    ("Reflow", ("reflow", "cold joint", "cracked solder", "cracked joint")),
+    ("reflow", ("reflow", "cold joint", "cracked solder", "cracked joint")),
     (
-        "Lift",
+        "lift",
         (
             "leaky", "shorted cap", "shorted decoupling", "shorted mlcc", "leaky mlcc",
             "lift cap", "lift the", "shorted capacitor", "nand-adjacent cap",
@@ -297,7 +303,7 @@ _ACTION_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "Replace",
+        "replace",
         (
             "replace", "die failure", "damaged", "blown", "swap", "burn",
             "internal failure", "regulator failure", "die damage", "internal gpu",
@@ -305,50 +311,70 @@ _ACTION_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "Hunt short on",
+        "hunt_short",
         ("short to ground", "short to gnd", "shorted to gnd", "shorted to ground"),
     ),
 )
 
 
 _REFDES_PREFIX_VERBS: dict[str, str] = {
-    "C": "Lift",      # capacitor — almost always lifted when shorted/leaky
-    "U": "Replace",   # IC
-    "Q": "Replace",   # MOSFET / transistor
-    "L": "Replace",   # inductor
-    "R": "Replace",   # resistor
-    "D": "Replace",   # diode
-    "J": "Jumper",    # connector — typically pad-repair / jumper
+    "C": "lift",      # capacitor — almost always lifted when shorted/leaky
+    "U": "replace",   # IC
+    "Q": "replace",   # MOSFET / transistor
+    "L": "replace",   # inductor
+    "R": "replace",   # resistor
+    "D": "replace",   # diode
+    "J": "jumper",    # connector — typically pad-repair / jumper
 }
+
+
+# Stable verb code → English caption prefix. The codes are the contract with
+# the frontend (`graph.action_verb.<code>` dictionary keys) — never rename one.
+_VERB_LABELS: dict[str, str] = {
+    "jumper": "Jumper",
+    "reball": "Reball",
+    "reflow": "Reflow",
+    "lift": "Lift",
+    "replace": "Replace",
+    "hunt_short": "Hunt short on",
+    "repair": "Repair",
+}
+
+
+def _top_cause(rule: dict[str, Any]) -> dict[str, Any] | None:
+    causes = rule.get("likely_causes") or []
+    if not causes:
+        return None
+    return sorted(causes, key=lambda c: c.get("probability", 0.0), reverse=True)[0]
+
+
+def _derive_action_parts(rule: dict[str, Any]) -> tuple[str, str]:
+    """Return `(verb_code, target)` for a rule's synthesized action.
+
+    `verb_code` is one of `_VERB_LABELS` or `"investigate"` (rule without
+    causes, target = rule id). Chosen from the top-probability cause's
+    mechanism keywords, else from the refdes's PCB prefix (C/U/Q/L/R/D/J).
+    """
+    top = _top_cause(rule)
+    if top is None:
+        return ("investigate", rule.get("id", "rule"))
+    refdes = top.get("refdes") or "component"
+    mech_lower = (top.get("mechanism") or "").lower()
+    for verb, keywords in _ACTION_KEYWORDS:
+        if any(kw in mech_lower for kw in keywords):
+            return (verb, refdes)
+    return (_REFDES_PREFIX_VERBS.get(refdes[:1].upper(), "repair"), refdes)
 
 
 def _derive_action_label(rule: dict[str, Any]) -> tuple[str, str]:
     """Pick a short imperative microsoldering action label from a rule.
 
-    Returns `(label, top_mechanism)`. The label uses the top-probability
-    cause's refdes, preceded by a verb inferred from the cause's mechanism
-    string. When no mechanism keyword fires, the refdes's PCB prefix
-    (C/U/Q/L/R/D/J) chooses a reasonable default. `top_mechanism` is kept
-    for the node's description.
+    Returns `(label, top_mechanism)` — the English rendering of
+    `_derive_action_parts` plus the top cause's mechanism, kept for the
+    node's description.
     """
-    causes = rule.get("likely_causes") or []
-    if not causes:
-        return (f"Investigate — {rule.get('id', 'rule')}", "")
-
-    sorted_causes = sorted(
-        causes,
-        key=lambda c: c.get("probability", 0.0),
-        reverse=True,
-    )
-    top = sorted_causes[0]
-    refdes = top.get("refdes") or "component"
-    mechanism = top.get("mechanism") or ""
-    mech_lower = mechanism.lower()
-
-    for verb, keywords in _ACTION_KEYWORDS:
-        if any(kw in mech_lower for kw in keywords):
-            return (f"{verb} {refdes}", mechanism)
-
-    prefix = refdes[:1].upper() if refdes else ""
-    verb = _REFDES_PREFIX_VERBS.get(prefix, "Repair")
-    return (f"{verb} {refdes}", mechanism)
+    verb, target = _derive_action_parts(rule)
+    top = _top_cause(rule)
+    if top is None:
+        return (f"Investigate — {target}", "")
+    return (f"{_VERB_LABELS[verb]} {target}", top.get("mechanism") or "")

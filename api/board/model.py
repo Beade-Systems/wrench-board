@@ -88,6 +88,8 @@ class Part(BaseModel):
     # its refdes to the placed sibling's `dnp_alternates`.
     placement_inferred: bool = False
     import_note: str | None = None
+    # `{code, params}` when the UI can translate `import_note`; else None.
+    import_note_code: dict | None = None
     is_dnp: bool = False
     dnp_alternates: list[str] = []
 
@@ -218,6 +220,9 @@ class Board(BaseModel):
     markers: list[Marker] = []
     mech_holes: list[MechanicalHole] = []
     parser_notes: list[str] = []
+    # Index-aligned with `parser_notes`: `{code, params}` for notes the UI can
+    # translate, None for free text. Empty on boards stored before codes existed.
+    parser_note_codes: list[dict | None] = []
     layer_names: list[str] = []
 
     # Private indexes built in model_post_init — excluded from serialization.

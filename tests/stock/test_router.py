@@ -189,3 +189,59 @@ def test_consume_unknown_refdes_is_404(client):
     r = client.post(f"/api/stock/donors/{donor_id}/consume", json={"refdes": "U99999"})
     assert r.status_code == 404
     assert client.post(f"/api/stock/donors/{donor_id}/consume", json={"refdes": "C1"}).status_code == 200
+
+
+# --- machine-readable error codes (UI localisation) -----------------------
+
+
+def test_errors_carry_code_and_params_next_to_detail(client):
+    """Coded errors are additive: `detail` is unchanged, `code`/`params` ride along."""
+    r = client.delete("/api/stock/donors/nope-001")
+    assert r.status_code == 404
+    assert r.json() == {
+        "detail": "donor_id not found",
+        "code": "donor_not_found",
+        "params": {"donor": "nope-001"},
+    }
+
+    r = client.get("/api/stock/donors/nope-001/parts")
+    assert (r.status_code, r.json()["code"]) == (404, "donor_not_found")
+
+    r = client.post("/api/stock/donors/nope-001/consume", json={"refdes": "C1"})
+    assert (r.status_code, r.json()["code"]) == (404, "donor_not_found")
+
+    r = client.post("/api/stock/donors", json={"device_slug": "no-such-device", "label": "x"})
+    assert r.status_code == 404
+    body = r.json()
+    assert body["code"] == "device_not_found"
+    assert body["params"] == {"slug": "no-such-device"}
+    assert "no-such-device" in body["detail"]
+
+
+def test_consume_errors_are_coded(client):
+    donor_id = client.post("/api/stock/donors", json={
+        "device_slug": "iphone-x", "label": "x",
+    }).json()["donor_id"]
+
+    r = client.post(f"/api/stock/donors/{donor_id}/consume", json={"refdes": "U99999"})
+    assert r.status_code == 404
+    body = r.json()
+    assert body["code"] == "unknown_refdes"
+    assert body["params"] == {"refdes": "U99999", "donor": donor_id}
+    assert "U99999" in body["detail"]
+
+    r = client.delete(f"/api/stock/donors/{donor_id}/consume/C1")
+    assert r.status_code == 404
+    assert r.json() == {
+        "detail": "not found",
+        "code": "consume_not_found",
+        "params": {"refdes": "C1", "donor": donor_id},
+    }
+
+
+def test_search_empty_reason_code_over_http(client):
+    r = client.post("/api/stock/search", json={"type": "capacitor"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["empty_reason"] == "no donors in stock"
+    assert body["empty_reason_code"] == "no_donors"

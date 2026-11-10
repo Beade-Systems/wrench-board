@@ -23,6 +23,7 @@ from api.board.library import router as library_router
 from api.board.router import router as board_router
 from api.board.source_catalog import router as source_catalog_router
 from api.config import get_settings
+from api.errors import install_error_handlers
 from api.http_security import (
     ServiceTokenMiddleware,
     should_fail_unprotected,
@@ -191,6 +192,7 @@ def _install_compression(target: FastAPI, *, service_token: str) -> None:
 
 _install_compression(app, service_token=get_settings().engine_service_token)
 
+install_error_handlers(app)
 app.include_router(pipeline_router)
 app.include_router(board_router)
 app.include_router(library_router)

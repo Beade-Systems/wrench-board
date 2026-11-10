@@ -159,3 +159,45 @@ def test_allegro_memory_setting_is_bounded_and_persistent(setup_settings):
         == 422
     )
     assert settings.allegro_heap_mb == 2048
+
+
+def test_settings_errors_carry_stable_codes_and_params(setup_settings):
+    client, settings, root = setup_settings
+
+    def put(extra):
+        return client.put(
+            "/api/workbench/settings", headers=HEADERS, json=update_body(root) | extra
+        ).json()
+
+    assert client.get("/api/workbench/settings").json()["code"] == "settings_page_required"
+    assert put({"fz_key": "broken"})["code"] == "fz_key_format"
+    assert put({"xzz_key": "zz"})["code"] == "xzz_key_format"
+    unreadable = put({"folders": ["/nonexistent-board-folder"]})
+    assert unreadable["code"] == "folder_unreadable"
+    assert unreadable["params"] == {"folder": "/nonexistent-board-folder"}
+    assert unreadable["detail"] == "Folder not readable: /nonexistent-board-folder"
+    assert put({"active_folder": str(root / "elsewhere")})["code"] == "active_folder_not_linked"
+    browse = client.get(
+        "/api/workbench/settings/directories", headers=HEADERS, params={"path": "/nonexistent-x"}
+    )
+    assert (browse.status_code, browse.json()["code"]) == (422, "directory_unreadable")
+
+
+def test_audit_messages_carry_codes(setup_settings, monkeypatch):
+    client, settings, root = setup_settings
+    (root / "sample.fz").write_bytes(_make_zlib_payload(_MIN_BOARD))
+    escape = client.post("/api/workbench/settings/audit", headers=HEADERS, json={"folder": ".."})
+    assert escape.json()["code"] == "audit_folder_outside"
+    monkeypatch.setattr(settings, "board_upload_max_bytes", 1)
+    assert client.post("/api/workbench/settings/audit", headers=HEADERS, json={}).status_code == 200
+    for _ in range(100):
+        response = client.get("/api/workbench/settings/audit", headers=HEADERS).json()
+        if response["state"] != "running":
+            break
+        time.sleep(0.05)
+    result = response["recent"][0]
+    assert (result["status"], result["code"]) == ("too_large", "upload_limit_exceeded")
+    assert result["message"] == "Upload size limit exceeded"
+    stopping = client.post("/api/workbench/settings/audit/cancel", headers=HEADERS).json()
+    assert (stopping["code"], stopping["params"]) == ("stopping", {"seconds": 60})
+    assert "60 seconds" in stopping["message"]

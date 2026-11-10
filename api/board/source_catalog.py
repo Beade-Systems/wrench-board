@@ -28,6 +28,7 @@ from api.board.imports import import_library_path
 from api.board.library_store import LibraryStore
 from api.board.parser.base import _REGISTRY
 from api.config import get_settings
+from api.errors import CodedHTTPException
 
 router = APIRouter(prefix="/api/library/source", tags=["pcb-library"])
 _DOCUMENTS = {".pdf"}
@@ -60,10 +61,14 @@ _STEM_NOISE = frozenset(
 
 def _source(owner: str | None) -> Path:
     if owner is not None:
-        raise HTTPException(404, "Lokale Sammlung nicht verfügbar.")
+        raise CodedHTTPException(
+            404, "local_collection_unavailable", "Local collection not available."
+        )
     configured = get_settings().pcb_library_source_root
     if not configured or not (root := Path(configured).resolve()).is_dir():
-        raise HTTPException(404, "Der Ordner xzz_downloads ist nicht verfügbar.")
+        raise CodedHTTPException(
+            404, "source_folder_unavailable", "The collection folder is not available."
+        )
     return root
 
 
@@ -204,10 +209,12 @@ def _file(root: Path, file_id: str) -> tuple[dict, Path]:
     with _connection(root) as connection:
         row = connection.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
     if row is None:
-        raise HTTPException(404, "Datei nicht gefunden.")
+        raise CodedHTTPException(404, "file_not_found", "File not found.")
     path = (root / row["path"]).resolve()
     if not path.is_relative_to(root) or not path.is_file():
-        raise HTTPException(404, "Datei nicht mehr vorhanden. Bitte den Katalog aktualisieren.")
+        raise CodedHTTPException(
+            404, "file_gone", "The file no longer exists. Please refresh the catalog."
+        )
     return dict(row), path
 
 
@@ -499,7 +506,7 @@ def list_source_folders(
     with _connection(root) as connection:
         listing = folder_listing(connection, path, root.name, kind)
     if listing is None:
-        raise HTTPException(404, "Ordner nicht gefunden.")
+        raise CodedHTTPException(404, "folder_not_found", "Folder not found.")
     return listing
 
 
@@ -538,9 +545,10 @@ async def open_source_file(
     root = _source(owner)
     record, path = await asyncio.to_thread(_file, root, file_id)
     if record["kind"] != "board":
-        raise HTTPException(
+        raise CodedHTTPException(
             415,
-            "Diese Datei ist kein unterstütztes Boardview. Bitte herunterladen oder als PDF öffnen.",
+            "not_a_boardview",
+            "This file is not a supported boardview. Download it or open it as a PDF.",
         )
     # Import just the chosen file, reusing deduplication and the upload limits.
     with import_errors():

@@ -33,7 +33,9 @@ class NativeCadParser(BoardParser):
                 )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 raise InvalidBoardFile(
-                    f"{self.source_format}: KiCad-Import nicht verfügbar: {exc}"
+                    f"{self.source_format}: KiCad import not available: {exc}",
+                    code="kicad_import_unavailable",
+                    params={"format": self.source_format, "reason": str(exc)},
                 ) from exc
         if process.returncode:
             message = process.stderr.decode(errors="replace")[-800:]
@@ -43,9 +45,17 @@ class NativeCadParser(BoardParser):
                 json.loads(process.stdout), file_hash=file_hash, board_id=board_id
             )
         except (ValueError, KeyError) as exc:
-            raise InvalidBoardFile(f"{self.source_format}: ungültiges Importergebnis") from exc
+            raise InvalidBoardFile(
+                f"{self.source_format}: invalid import result",
+                code="cad_import_invalid_result",
+                params={"format": self.source_format},
+            ) from exc
         if not board.parts or not board.pins:
-            raise InvalidBoardFile(f"{self.source_format}: keine Bauteile oder Pins importiert")
+            raise InvalidBoardFile(
+                f"{self.source_format}: no components or pins imported",
+                code="cad_import_no_parts",
+                params={"format": self.source_format},
+            )
         board.source_format = self.source_format
         return board
 

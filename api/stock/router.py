@@ -8,10 +8,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header
 from pydantic import BaseModel, field_validator
 
 from api.config import get_settings
+from api.errors import CodedHTTPException
 from api.path_safety import is_safe_slug
 from api.stock.schemas import (
     PartsIndex,
@@ -69,6 +70,10 @@ def _load_parts_index_or_none(slug: str) -> PartsIndex | None:
     return PartsIndex.model_validate_json(p.read_text(encoding="utf-8"))
 
 
+def _donor_not_found(donor_id: str) -> CodedHTTPException:
+    return CodedHTTPException(404, "donor_not_found", "donor_id not found", {"donor": donor_id})
+
+
 @router.get("/donors")
 def list_donors(owner_ref: OwnerRef = None):
     inv = load_inventory(owner_ref)
@@ -101,7 +106,9 @@ def create_donor(body: _MarkDonorBody, owner_ref: OwnerRef = None):
             owner_ref=owner_ref,
         )
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise CodedHTTPException(
+            404, "device_not_found", str(e), {"slug": body.device_slug}
+        ) from e
     has_pi = _load_parts_index_or_none(body.device_slug) is not None
     return {"donor_id": donor_id, "has_parts_index": has_pi}
 
@@ -109,7 +116,7 @@ def create_donor(body: _MarkDonorBody, owner_ref: OwnerRef = None):
 @router.delete("/donors/{donor_id}")
 def delete_donor(donor_id: str, owner_ref: OwnerRef = None):
     if not unmark_donor(donor_id, owner_ref=owner_ref):
-        raise HTTPException(status_code=404, detail="donor_id not found")
+        raise _donor_not_found(donor_id)
     return {"ok": True}
 
 
@@ -119,16 +126,20 @@ def consume_endpoint(donor_id: str, body: _ConsumeBody, owner_ref: OwnerRef = No
         ok = consume_part(donor_id=donor_id, refdes=body.refdes,
                           repair_id=body.repair_id, notes=body.notes, owner_ref=owner_ref)
     except UnknownRefdesError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise CodedHTTPException(
+            404, "unknown_refdes", str(e), {"refdes": e.refdes, "donor": donor_id}
+        ) from e
     if not ok:
-        raise HTTPException(status_code=404, detail="donor_id not found")
+        raise _donor_not_found(donor_id)
     return {"ok": True}
 
 
 @router.delete("/donors/{donor_id}/consume/{refdes}")
 def unconsume_endpoint(donor_id: str, refdes: str, owner_ref: OwnerRef = None):
     if not unconsume_part(donor_id=donor_id, refdes=refdes, owner_ref=owner_ref):
-        raise HTTPException(status_code=404, detail="not found")
+        raise CodedHTTPException(
+            404, "consume_not_found", "not found", {"refdes": refdes, "donor": donor_id}
+        )
     return {"ok": True}
 
 
@@ -141,7 +152,7 @@ def search_endpoint(query: StockSearchQuery, owner_ref: OwnerRef = None) -> Stoc
 def list_donor_parts(donor_id: str, owner_ref: OwnerRef = None):
     inv = load_inventory(owner_ref)
     if donor_id not in inv.donors:
-        raise HTTPException(status_code=404, detail="donor_id not found")
+        raise _donor_not_found(donor_id)
     donor = inv.donors[donor_id]
     idx = _load_parts_index_or_none(donor.device_slug)
     if idx is None:

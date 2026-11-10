@@ -20,6 +20,17 @@ from api.board.parser.base import (
 logger = logging.getLogger(__name__)
 
 
+def error_detail(kind: str, error: Exception, **fields) -> dict:
+    """Legacy `{detail: kind, message}` body, plus the parser's own stable
+    `code` / `params` when it has one (the UI translates by code, most specific
+    first, and falls back to `message`)."""
+    detail = {"detail": kind, **fields, "message": str(error)}
+    if getattr(error, "code", None):
+        detail["code"] = error.code
+        detail["params"] = dict(getattr(error, "params", None) or {})
+    return detail
+
+
 @contextmanager
 def import_errors():
     try:
@@ -31,49 +42,49 @@ def import_errors():
         # than letting them propagate as a generic 500.
         raise HTTPException(
             status_code=501,
-            detail={"detail": "parser-not-implemented", "message": str(e)},
+            detail=error_detail("parser-not-implemented", e),
         ) from e
     except UnsupportedFormatError as e:
         raise HTTPException(
             status_code=415,
-            detail={"detail": "unsupported-format", "message": str(e)},
+            detail=error_detail("unsupported-format", e),
         ) from e
     except MissingFZKeyError as e:
         # Specific 422 so the frontend can prompt the tech for a key
         # rather than dumping a generic invalid-board message.
         raise HTTPException(
             status_code=422,
-            detail={"detail": "fz-key-missing", "message": str(e)},
+            detail=error_detail("fz-key-missing", e),
         ) from e
     except ObfuscatedFileError as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "obfuscated", "message": str(e)},
+            detail=error_detail("obfuscated", e),
         ) from e
     except MalformedHeaderError as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "malformed-header", "field": e.field, "message": str(e)},
+            detail=error_detail("malformed-header", e, field=e.field),
         ) from e
     except PinPartMismatchError as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "pin-part-mismatch", "pin_index": e.pin_index, "message": str(e)},
+            detail=error_detail("pin-part-mismatch", e, pin_index=e.pin_index),
         ) from e
     except InvalidBoardFile as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "invalid-board-file", "message": str(e)},
+            detail=error_detail("invalid-board-file", e),
         ) from e
     except BoardParserError as e:
         raise HTTPException(
             status_code=422,
-            detail={"detail": "parse-error", "message": str(e)},
+            detail=error_detail("parse-error", e),
         ) from e
     except OSError as e:
         raise HTTPException(
             status_code=400,
-            detail={"detail": "io-error", "message": str(e)},
+            detail=error_detail("io-error", e),
         ) from e
     except (IndexError, KeyError, ValueError, struct.error, MemoryError) as e:
         # Last line of defence: a parser bug on hostile / truncated input

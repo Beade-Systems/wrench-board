@@ -235,6 +235,8 @@ async def test_missing_api_key_emits_error_and_closes(
     assert ws._closed is True
     assert ws.sent and ws.sent[0]["type"] == "error"
     assert ws.sent[0]["code"] == "missing_api_key"
+    # The sentence is only the English fallback — the UI translates by code.
+    assert ws.sent[0]["text"].startswith("ANTHROPIC_API_KEY is missing")
     # The bail-out path is hit before AsyncAnthropic(...) is invoked.
     assert constructed == []
 
@@ -751,6 +753,9 @@ async def test_api_error_mid_stream_emits_error_and_does_not_propagate(
     stream_errors = [m for m in ws.sent if m.get("type") == "stream_error"]
     assert stream_errors, "no stream_error frame emitted on APIError"
     assert stream_errors[0].get("error") == "api_error"
+    # `code` mirrors the legacy `error` field (same key as "error" frames).
+    assert stream_errors[0].get("code") == "api_error"
+    assert stream_errors[0]["message"].startswith("The model service")
 
 
 class _StallingStream:
@@ -844,6 +849,11 @@ async def test_stream_stall_exhausts_retries_then_errors(
         if m.get("type") == "stream_error" and m.get("error") == "stream_timeout"
     ]
     assert errs, "terminal stream_timeout must be emitted after retries exhausted"
+    assert errs[0]["code"] == "stream_timeout"
+    assert isinstance(errs[0]["params"]["seconds"], int)
+    retries = [m for m in ws.sent if m.get("type") == "stream_retry"]
+    assert retries and retries[0]["code"] == "stream_retry"
+    assert retries[0]["params"] == {"attempt": 1, "max": 1}
 
 
 class _HangingOpenStream:

@@ -28,6 +28,7 @@ from pydantic import ValidationError
 
 import api.pipeline as _pkg  # noqa: PLC0415 — module-attribute lookups for patchability
 from api.agent.memory_stores import delete_repair_store
+from api.errors import CodedHTTPException
 from api.pipeline import events
 from api.pipeline.build_state import read_build_state
 from api.pipeline.device_registry import get_device_registry_store, resolve_device
@@ -367,7 +368,12 @@ def get_repair(repair_id: str) -> RepairSummary:
     settings = _pkg.get_settings()
     root = Path(settings.memory_root)
     if not root.exists():
-        raise HTTPException(status_code=404, detail=f"No repair {repair_id!r}")
+        raise CodedHTTPException(
+            404,
+            "repair_not_found",
+            f"No repair {repair_id!r}",
+            {"repair_id": repair_id},
+        )
     for pack_dir in root.iterdir():
         if not pack_dir.is_dir():
             continue
@@ -385,7 +391,12 @@ def get_repair(repair_id: str) -> RepairSummary:
                 board_number=payload.get("board_number") or None,
                 build_state=marker.get("status") if marker else None,
             )
-    raise HTTPException(status_code=404, detail=f"No repair {repair_id!r}")
+    raise CodedHTTPException(
+        404,
+        "repair_not_found",
+        f"No repair {repair_id!r}",
+        {"repair_id": repair_id},
+    )
 
 
 @router.delete("/repairs/{repair_id}")
@@ -409,7 +420,12 @@ async def delete_repair(repair_id: str) -> dict:
     settings = _pkg.get_settings()
     root = Path(settings.memory_root)
     if not root.exists():
-        raise HTTPException(status_code=404, detail=f"No repair {repair_id!r}")
+        raise CodedHTTPException(
+            404,
+            "repair_not_found",
+            f"No repair {repair_id!r}",
+            {"repair_id": repair_id},
+        )
 
     metadata_file: Path | None = None
     device_slug: str | None = None
@@ -423,7 +439,12 @@ async def delete_repair(repair_id: str) -> dict:
             break
 
     if metadata_file is None or device_slug is None:
-        raise HTTPException(status_code=404, detail=f"No repair {repair_id!r}")
+        raise CodedHTTPException(
+            404,
+            "repair_not_found",
+            f"No repair {repair_id!r}",
+            {"repair_id": repair_id},
+        )
 
     # 1. MA cleanup (best-effort). Drives off the on-disk marker so that a
     # repair which never opened a session simply no-ops here.
@@ -453,9 +474,11 @@ async def delete_repair(repair_id: str) -> dict:
             logger.error(
                 "delete_repair: rmtree failed for %s: %s", subdir, exc
             )
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to remove repair directory: {exc}",
+            raise CodedHTTPException(
+                500,
+                "repair_delete_failed",
+                f"Failed to remove repair directory: {exc}",
+                {"error": str(exc)},
             ) from exc
 
     try:
@@ -464,9 +487,11 @@ async def delete_repair(repair_id: str) -> dict:
         logger.error(
             "delete_repair: unlink failed for %s: %s", metadata_file, exc
         )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to remove repair metadata: {exc}",
+        raise CodedHTTPException(
+            500,
+            "repair_delete_failed",
+            f"Failed to remove repair metadata: {exc}",
+            {"error": str(exc)},
         ) from exc
 
     return {
@@ -494,7 +519,12 @@ def list_repair_conversations(repair_id: str) -> dict:
             found_slug = metadata_file.parent.parent.name
             break
     if not found_slug:
-        raise HTTPException(status_code=404, detail=f"unknown repair_id {repair_id}")
+        raise CodedHTTPException(
+            404,
+            "repair_not_found",
+            f"unknown repair_id {repair_id}",
+            {"repair_id": repair_id},
+        )
     convs = list_conversations(device_slug=found_slug, repair_id=repair_id)
     return {
         "device_slug": found_slug,
@@ -526,7 +556,12 @@ def delete_repair_conversation(repair_id: str, conv_id: str) -> dict:
             found_slug = metadata_file.parent.parent.name
             break
     if not found_slug:
-        raise HTTPException(status_code=404, detail=f"unknown repair_id {safe_repair_id}")
+        raise CodedHTTPException(
+            404,
+            "repair_not_found",
+            f"unknown repair_id {safe_repair_id}",
+            {"repair_id": safe_repair_id},
+        )
 
     try:
         removed = delete_conversation(
@@ -535,15 +570,19 @@ def delete_repair_conversation(repair_id: str, conv_id: str) -> dict:
             conv_id=safe_conv_id,
         )
     except OSError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to remove conversation: {exc}",
+        raise CodedHTTPException(
+            500,
+            "conversation_delete_failed",
+            f"Failed to remove conversation: {exc}",
+            {"error": str(exc)},
         ) from exc
 
     if not removed:
-        raise HTTPException(
-            status_code=404,
-            detail=f"unknown conversation {safe_conv_id} for repair {safe_repair_id}",
+        raise CodedHTTPException(
+            404,
+            "conversation_not_found",
+            f"unknown conversation {safe_conv_id} for repair {safe_repair_id}",
+            {"conv_id": safe_conv_id, "repair_id": safe_repair_id},
         )
 
     return {
@@ -648,6 +687,7 @@ async def _run_pipeline_with_events(
                 "type": "pipeline_failed",
                 "status": "ERROR",
                 "error": str(exc),
+                "code": "unexpected_error",
                 "elapsed_s": time.monotonic() - t0,
             },
         )
@@ -759,7 +799,11 @@ async def create_repair(
             allow_expand=allow_expand,
         )
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors(include_url=False, include_context=False)) from exc
+        raise CodedHTTPException(
+            422,
+            "invalid_repair_request",
+            exc.errors(include_url=False, include_context=False),
+        ) from exc
 
     settings = _pkg.get_settings()
     memory_root = Path(settings.memory_root)
@@ -1071,6 +1115,7 @@ async def cancel_repair(device_slug: str) -> dict:
             "type": "pipeline_failed",
             "status": "CANCELLED",
             "error": "analysis cancelled",
+            "code": "cancelled",
         },
     )
     logger.info("[API] /pipeline/repairs/%s/cancel · pipeline cancelled", slug)

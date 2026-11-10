@@ -14,7 +14,7 @@ from pathlib import Path
 
 from anthropic import AsyncAnthropic
 
-from api.agent.macros import persist_macro
+from api.agent.macros import MacroUploadError, persist_macro
 from api.agent.runtime._aux import _MAX_MACRO_BYTES, logger
 from api.session.state import SessionState
 
@@ -50,11 +50,18 @@ async def _handle_client_upload_macro(
     try:
         bytes_ = _b64.b64decode(b64, validate=True)
     except Exception as exc:  # noqa: BLE001
-        raise ValueError(f"invalid base64 payload: {exc}") from exc
+        raise MacroUploadError(
+            "upload_invalid_base64", f"invalid base64 payload: {exc}"
+        ) from exc
 
     if len(bytes_) > _MAX_MACRO_BYTES:
-        raise ValueError(
-            f"macro upload too large: {len(bytes_)} bytes > {_MAX_MACRO_BYTES} cap"
+        raise MacroUploadError(
+            "upload_too_large",
+            f"macro upload too large: {len(bytes_)} bytes > {_MAX_MACRO_BYTES} cap",
+            {
+                "size_mb": round(len(bytes_) / 1024 / 1024, 1),
+                "max_mb": round(_MAX_MACRO_BYTES / 1024 / 1024, 1),
+            },
         )
 
     persist_macro(

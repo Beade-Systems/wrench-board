@@ -199,6 +199,9 @@ async def test_pipeline_emits_pipeline_failed_on_rejected_verdict(
     failures = [e for e in events if e["type"] == "pipeline_failed"]
     assert len(failures) == 1
     assert failures[0]["status"] == "REJECTED"
+    # Stable machine code next to the human sentence, for UI localisation.
+    assert failures[0]["code"] == "auditor_rejected"
+    assert failures[0]["error"]
 
 
 async def test_pipeline_rejects_when_max_revise_rounds_exhausted(
@@ -258,6 +261,10 @@ async def test_pipeline_rejects_when_max_revise_rounds_exhausted(
     failures = [e for e in events if e["type"] == "pipeline_failed"]
     assert len(failures) == 1
     assert failures[0]["status"] == "REJECTED"
+    assert failures[0]["code"] == "revision_unrecoverable"
+    assert failures[0]["params"]["reason"] in {"regression", "rounds_exhausted"}
+    assert failures[0]["params"]["rounds"] >= 1
+    assert isinstance(failures[0]["error"], str) and failures[0]["error"]
 
     persisted = (tmp_path / "demo" / "audit_verdict.json").read_text()
     assert '"overall_status": "REJECTED"' in persisted

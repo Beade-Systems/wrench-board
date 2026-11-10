@@ -16,11 +16,12 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header
 from pydantic import BaseModel
 
 import api.pipeline as _pkg  # noqa: PLC0415 — module-attribute lookups for patchability
 from api.agent.field_reports import list_field_reports
+from api.errors import CodedHTTPException
 from api.pipeline import device_kind as device_kind_module
 from api.pipeline import sources
 from api.pipeline.build_state import read_build_state
@@ -327,9 +328,11 @@ def _read_optional_json(path: Path) -> dict | None:
     try:
         return json.loads(path.read_text())
     except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid JSON in {path.name}: {exc}",
+        raise CodedHTTPException(
+            422,
+            "pack_file_invalid_json",
+            f"Invalid JSON in {path.name}: {exc}",
+            {"filename": path.name},
         ) from exc
 
 
@@ -473,7 +476,12 @@ async def get_pack(
     slug = _slugify(device_slug)
     pack_dir = root / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
     return _summarize_pack(pack_dir, x_owner_ref)
 
 
@@ -495,7 +503,12 @@ async def get_pack_full(
     slug = _slugify(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     owner_has_staged = bool(x_owner_ref) and (pack_dir / "_staged" / x_owner_ref).is_dir()
     if _is_migrated(pack_dir) or owner_has_staged:
@@ -568,7 +581,12 @@ async def expand_device_pack(
             owner_ref=x_owner_ref,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise CodedHTTPException(
+            422,
+            "expand_failed",
+            str(exc),
+            {"error": str(exc)},
+        ) from exc
 
 
 @router.get("/packs/{device_slug}/graph")
@@ -578,15 +596,22 @@ def get_pack_graph(device_slug: str) -> dict:
     slug = _slugify(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     if _is_migrated(pack_dir):
         files = _effective_pack_files(Path(settings.memory_root), slug, pack_dir)
         missing = [k for k in ("registry", "knowledge_graph", "rules", "dictionary") if files[k] is None]
         if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Pack for {slug!r} is incomplete: {missing[0]}.json",
+            raise CodedHTTPException(
+                422,
+                "pack_incomplete",
+                f"Pack for {slug!r} is incomplete: {missing[0]}.json",
+                {"slug": slug, "filename": f"{missing[0]}.json"},
             )
         registry = files["registry"]
         knowledge_graph = files["knowledge_graph"]
@@ -599,9 +624,11 @@ def get_pack_graph(device_slug: str) -> dict:
             rules = json.loads((pack_dir / "rules.json").read_text())
             dictionary = json.loads((pack_dir / "dictionary.json").read_text())
         except FileNotFoundError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Pack for {slug!r} is incomplete: {exc.filename}",
+            raise CodedHTTPException(
+                422,
+                "pack_incomplete",
+                f"Pack for {slug!r} is incomplete: {exc.filename}",
+                {"slug": slug, "filename": str(exc.filename)},
             ) from exc
 
     return pack_to_graph_payload(
@@ -648,7 +675,12 @@ async def confirm_pack_kind(
     pack_dir = memory_root / slug
 
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     # Local import: repairs.py imports packs.py at module load (it pulls in
     # `_pack_is_complete`), so importing repairs at packs' module top would be
@@ -756,8 +788,18 @@ async def get_pending_kind(device_slug: str) -> dict:
     slug = _validate_slug(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
     pending = device_kind_module.read_pending_kind(pack_dir)
     if pending is None:
-        raise HTTPException(status_code=404, detail=f"No pending kind for {slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pending_kind_not_found",
+            f"No pending kind for {slug!r}",
+            {"slug": slug},
+        )
     return pending

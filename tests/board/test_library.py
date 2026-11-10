@@ -149,7 +149,8 @@ def test_concurrent_duplicate_imports_publish_once(client, memory_root):
 def test_library_page_and_format_info(client):
     response = client.get("/library.html")
     assert response.status_code == 200
-    assert 'lang="de"' in response.text
+    assert '<html lang="' in response.text
+    assert "/js/i18n.js" in response.text
     assert "/js/pcb_library.js" in response.text
     info = client.get("/api/library").json()
     assert {".pcb", ".brd", ".kicad_pcb"} <= set(info["extensions"])
@@ -301,3 +302,27 @@ def test_get_json_stays_spliced_with_worklist_present(memory_root):
         )
     )
     assert store.get(board_id)["board"] == board
+
+
+def test_errors_carry_stable_codes_next_to_the_english_text(client, memory_root):
+    missing = client.get(f"/api/library/boards/{'0' * 64}")
+    assert missing.status_code == 404
+    assert missing.json() == {"detail": "Board not found.", "code": "board_not_found"}
+    board_id = upload(client).json()["board"]["id"]
+    blank = client.patch(f"/api/library/boards/{board_id}", json={"title": "   "})
+    assert (blank.status_code, blank.json()["code"]) == (422, "title_empty")
+
+
+def test_import_errors_keep_their_kind_and_add_the_parser_code(client, memory_root):
+    unknown = upload(client, name="board.unknownformat", data=b"data")
+    assert unknown.status_code == 415
+    detail = unknown.json()["detail"]
+    assert detail["detail"] == "unsupported-format"
+    assert (detail["code"], detail["params"]) == (
+        "unsupported_extension",
+        {"extension": ".unknownformat"},
+    )
+    assert isinstance(detail["message"], str) and detail["message"]
+    # Kinds without a more specific parser code stay exactly as before.
+    empty = upload(client, data=b"").json()["detail"]
+    assert empty == {"detail": "empty-file", "message": "uploaded file is empty"}

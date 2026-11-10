@@ -298,6 +298,38 @@ async def test_session_create_failure_releases_claim(
         "session.create failure must release the guard claim — otherwise "
         "the user is permablocked from reopening the conversation"
     )
+    # The failure frame carries a stable code; the raw exception text rides
+    # along as `detail` (the UI shows it after the translated sentence).
+    frames = [c.args[0] for c in ws.send_json.call_args_list]
+    err = next(f for f in frames if f.get("type") == "error")
+    assert err["code"] == "session_create_failed"
+    assert err["detail"] == "simulated 429 burst"
+    assert "simulated 429 burst" in err["text"]
+
+
+@pytest.mark.asyncio
+async def test_missing_managed_ids_emits_coded_error(monkeypatch):
+    """No bootstrapped agent → coded error frame, bootstrap hint kept as detail."""
+    from api.agent import runtime_managed as rm
+
+    _stale_settings(monkeypatch, rm)
+
+    def _raise():
+        raise RuntimeError("managed_ids.json not found. Run bootstrap.")
+    monkeypatch.setattr(rm, "load_managed_ids", _raise)
+
+    ws = MagicMock()
+    ws.accept = AsyncMock()
+    ws.send_json = AsyncMock()
+    ws.close = AsyncMock()
+
+    await rm.run_diagnostic_session_managed(ws, "demo", tier="fast")
+
+    frame = ws.send_json.call_args_list[0].args[0]
+    assert frame["type"] == "error"
+    assert frame["code"] == "managed_agents_not_configured"
+    assert frame["text"] == frame["detail"] == "managed_ids.json not found. Run bootstrap."
+    ws.close.assert_awaited()
     # Error frame was emitted and WS closed (existing behavior preserved).
     sent = [c.args[0] for c in ws.send_json.await_args_list]
     err = [p for p in sent if p.get("type") == "error"]

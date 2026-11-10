@@ -542,6 +542,8 @@ async def test_cancel_running_pipeline_cancels_task_and_publishes_terminal():
         if e.get("type") == "pipeline_failed" and e.get("status") == "CANCELLED"
     ]
     assert terminal, "expected a pipeline_failed(CANCELLED) terminal event on the bus"
+    assert terminal[-1]["code"] == "cancelled"
+    assert terminal[-1]["error"] == "analysis cancelled"
 
 
 def test_cancel_when_nothing_running_returns_false(memory_root, client):
@@ -1059,3 +1061,35 @@ def test_repairs_allow_expand_false_still_matches_covered_rule(memory_root, clie
     assert body["pipeline_kind"] == "none"
     assert body["repair_id"]  # ticket gardé : c'est un diagnostic normal
     m_expand.assert_not_called()
+
+
+def test_route_errors_carry_stable_code_next_to_detail(memory_root):
+    """Pack/repair route errors keep the English `detail` and add a stable
+    `code` (+ `params`) the UI translates by."""
+    with TestClient(app) as c:
+        r = c.get("/pipeline/repairs/does-not-exist-000")
+        assert r.status_code == 404
+        body = r.json()
+        assert body["detail"] == "No repair 'does-not-exist-000'"
+        assert body["code"] == "repair_not_found"
+        assert body["params"] == {"repair_id": "does-not-exist-000"}
+
+        r = c.put(
+            "/pipeline/packs/demo-pi/sources/not-a-kind",
+            json={"filename": "x.pdf"},
+        )
+        assert r.status_code == 422
+        body = r.json()
+        assert body["code"] == "unknown_kind"
+        assert body["params"]["kind"] == "not-a-kind"
+        assert body["detail"].startswith("unknown kind='not-a-kind'")
+
+        # Validation failure on repair creation: `detail` stays the pydantic
+        # error list, the code is added alongside.
+        r = c.post(
+            "/pipeline/repairs",
+            data={"device_label": "X Board", "symptom": "dead board", "device_kind": "toaster"},
+        )
+        assert r.status_code == 422
+        assert r.json()["code"] == "invalid_repair_request"
+        assert isinstance(r.json()["detail"], list)

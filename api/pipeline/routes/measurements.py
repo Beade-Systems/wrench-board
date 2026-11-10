@@ -13,6 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from api.config import get_settings
+from api.errors import CodedHTTPException
 from api.pipeline.models import MeasurementCreate
 from api.pipeline.orchestrator import _slugify
 from api.pipeline.routes._helpers import _validate_repair_id
@@ -46,7 +47,12 @@ async def post_measurement(
     if not (Path(settings.memory_root) / slug).is_dir():
         # Writing would mkdir memory/{slug}/ and surface a phantom pack in
         # GET /pipeline/packs — an unknown device is a 404, not a new pack.
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
     result = _mb_record_measurement(
         device_slug=slug,
         repair_id=safe_repair_id,

@@ -19,6 +19,19 @@ from typing import Literal
 
 Source = Literal["manual", "capture"]
 
+
+class MacroUploadError(ValueError):
+    """A rejected macro upload, carrying a stable `code` for the UI.
+
+    Still a ``ValueError`` (existing callers catch that); ``str(exc)`` stays
+    the English sentence, ``code`` / ``params`` let the frontend localise it.
+    """
+
+    def __init__(self, code: str, message: str, params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 _EXT_FROM_MIME: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -46,7 +59,9 @@ def persist_macro(
         raise ValueError(f"source must be 'manual' or 'capture', got {source!r}")
     ext = _EXT_FROM_MIME.get(mime.lower())
     if ext is None:
-        raise ValueError(f"unsupported mime: {mime!r}")
+        raise MacroUploadError(
+            "upload_unsupported_mime", f"unsupported mime: {mime!r}", {"mime": mime}
+        )
     macros_dir = memory_root / slug / "repairs" / repair_id / "macros"
     macros_dir.mkdir(parents=True, exist_ok=True)
     ts = int(time.time())

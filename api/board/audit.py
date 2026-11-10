@@ -9,10 +9,14 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from pydantic import BaseModel, Field
 
+from api.errors import CodedHTTPException
 from api.workbench_settings import local_access, router
+
+# Seconds one file may take before its parser worker is stopped.
+_FILE_TIMEOUT = 60
 
 _lock = threading.Lock()
 _cancel = threading.Event()
@@ -47,20 +51,31 @@ def _run(root, limit, max_bytes):
                     if path.stat().st_size > max_bytes:
                         result = {
                             "status": "too_large",
-                            "message": "Upload-Größenlimit überschritten",
+                            "message": "Upload size limit exceeded",
+                            "code": "upload_limit_exceeded",
+                            "params": {"max_mb": round(max_bytes / 1048576)},
                         }
                     else:
                         process = subprocess.run(
                             [sys.executable, "-m", "api.board.audit_worker", str(path)],
                             capture_output=True,
-                            timeout=60,
+                            timeout=_FILE_TIMEOUT,
                         )
                         if process.returncode:
-                            result = {"status": "error", "message": "Parser-Prozess fehlgeschlagen"}
+                            result = {
+                                "status": "error",
+                                "message": "Parser process failed",
+                                "code": "parser_process_failed",
+                            }
                         else:
                             result = json.loads(process.stdout.decode().splitlines()[-1])
                 except subprocess.TimeoutExpired:
-                    result = {"status": "timeout", "message": "Zeitlimit von 60 Sekunden erreicht"}
+                    result = {
+                        "status": "timeout",
+                        "message": f"Time limit of {_FILE_TIMEOUT} seconds reached",
+                        "code": "timeout",
+                        "params": {"seconds": _FILE_TIMEOUT},
+                    }
                 except Exception as exc:
                     result = {"status": "error", "message": str(exc)[:500]}
                 result.update(
@@ -87,10 +102,14 @@ def start_audit(request: AuditRequest):
     root = _source(None)
     target = (root / request.folder).resolve()
     if not target.is_relative_to(root) or not target.is_dir():
-        raise HTTPException(422, "Prüfordner muss innerhalb der aktiven Sammlung liegen.")
+        raise CodedHTTPException(
+            422,
+            "audit_folder_outside",
+            "The folder to check must be inside the active collection.",
+        )
     with _lock:
         if _job["state"] == "running":
-            raise HTTPException(409, "Ein Prüflauf läuft bereits.")
+            raise CodedHTTPException(409, "audit_already_running", "A check is already running.")
         _results.clear()
         _cancel.clear()
         _job.clear()
@@ -112,7 +131,13 @@ def status():
 @router.post("/audit/cancel", dependencies=[Depends(local_access)])
 def cancel():
     _cancel.set()
-    return {"message": "Prüfung stoppt nach der aktuellen Datei (maximal 60 Sekunden)."}
+    return {
+        "message": (
+            f"The check stops after the current file (at most {_FILE_TIMEOUT} seconds)."
+        ),
+        "code": "stopping",
+        "params": {"seconds": _FILE_TIMEOUT},
+    }
 
 
 @router.get("/audit/report", dependencies=[Depends(local_access)])

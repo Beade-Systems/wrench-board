@@ -117,6 +117,46 @@ def test_action_label_verb_derived_from_mechanism():
     assert top == "Replace HIGH"
 
 
+def test_action_nodes_carry_stable_verb_and_target():
+    """Action nodes expose a verb code + target next to the English label so
+    the UI can compose the caption in its own language."""
+    from api.pipeline.graph_transform import (
+        _VERB_LABELS,
+        _derive_action_parts,
+        pack_to_graph_payload,
+    )
+
+    assert _derive_action_parts({
+        "id": "r1",
+        "likely_causes": [
+            {"refdes": "U2", "probability": 0.8, "mechanism": "shorted to GND internally"}
+        ],
+    }) == ("hunt_short", "U2")
+    assert _derive_action_parts({
+        "id": "r2",
+        "likely_causes": [{"refdes": "X7", "probability": 0.5, "mechanism": "weird issue"}],
+    }) == ("repair", "X7")
+    assert _derive_action_parts({"id": "r3", "likely_causes": []}) == ("investigate", "r3")
+
+    payload = pack_to_graph_payload(
+        registry={"components": [], "signals": []},
+        knowledge_graph={"nodes": [], "edges": []},
+        rules={"rules": [
+            {"id": "r1", "symptoms": ["no power"], "confidence": 0.7, "likely_causes": [
+                {"refdes": "U2", "probability": 0.8, "mechanism": "cold joint"}]},
+            {"id": "r2", "symptoms": ["no power"], "confidence": 0.5, "likely_causes": []},
+        ]},
+        dictionary={"entries": []},
+    )
+    actions = {n["id"]: n for n in payload["nodes"] if n["type"] == "action"}
+    assert (actions["act:r1"]["verb"], actions["act:r1"]["target"]) == ("reflow", "U2")
+    assert actions["act:r1"]["label"] == "Reflow U2"  # English label unchanged
+    assert (actions["act:r2"]["verb"], actions["act:r2"]["target"]) == ("investigate", "r2")
+    assert actions["act:r2"]["label"] == "Investigate — r2"
+    for n in actions.values():
+        assert n["verb"] == "investigate" or n["verb"] in _VERB_LABELS
+
+
 def test_every_node_has_subsystem_field():
     payload = pack_to_graph_payload(
         registry=_load("registry.json"),

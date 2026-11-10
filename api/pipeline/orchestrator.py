@@ -272,7 +272,8 @@ async def generate_knowledge_pack(
       - phase_started/finished → {phase: device_kind|scout|registry|writers|audit, elapsed_s?}
       - pipeline_paused       → {reason: needs_kind_confirmation, device_slug, ...}
       - pipeline_finished     → {status, revise_rounds_used, consistency_score}
-      - pipeline_failed       → {status, error} (REJECTED or unexpected exception)
+      - pipeline_failed       → {status, error, code[, params, brief]} (REJECTED or
+                                unexpected exception; `code` is the stable reason)
 
     The callback is awaited between phases but errors inside it are swallowed
     with a warning — UI delivery must never crash the pipeline.
@@ -854,6 +855,10 @@ async def generate_knowledge_pack(
                     "type": "pipeline_failed",
                     "status": "REJECTED",
                     "error": verdict.revision_brief or "auditor rejected the pack",
+                    # Stable reason for UI localisation; `brief` is the
+                    # auditor's own (model-written) text, shown verbatim.
+                    "code": "auditor_rejected",
+                    "brief": verdict.revision_brief or "",
                 })
                 raise RuntimeError(
                     f"Pipeline failed: auditor rejected the pack. "
@@ -960,6 +965,14 @@ async def generate_knowledge_pack(
                     "type": "pipeline_failed",
                     "status": "REJECTED",
                     "error": verdict.revision_brief,
+                    "code": "revision_unrecoverable",
+                    "params": {
+                        "rounds": rounds_used,
+                        "reason": "regression" if regression else "rounds_exhausted",
+                        "score": round(score, 2),
+                        "floor": round(floor, 2),
+                    },
+                    "brief": b_verdict.revision_brief or "",
                 })
                 raise RuntimeError(
                     f"Pipeline failed: unrecoverable after {rounds_used} revise round(s). "
@@ -1127,7 +1140,12 @@ async def generate_knowledge_pack(
         raise
     except Exception as exc:  # pragma: no cover — defensive wrapper
         logger.exception("[Pipeline] Unexpected failure")
-        await emit({"type": "pipeline_failed", "status": "ERROR", "error": str(exc)})
+        await emit({
+            "type": "pipeline_failed",
+            "status": "ERROR",
+            "error": str(exc),
+            "code": "unexpected_error",
+        })
         raise
     finally:
         # Any exit that didn't reach mark_complete/mark_paused above (REJECTED

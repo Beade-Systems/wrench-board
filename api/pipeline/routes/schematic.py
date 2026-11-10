@@ -20,11 +20,12 @@ import time
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 import api.pipeline as _pkg  # noqa: PLC0415 — module-attribute lookups for patchability
+from api.errors import CodedHTTPException
 from api.pipeline import live_graph
 from api.pipeline.models import (
     HypothesizeRequest,
@@ -74,16 +75,21 @@ def _resolve_pdf_path(pdf_path: str) -> Path:
         Path(_pkg.get_settings().memory_root).resolve(),
     )
     if not any(p.is_relative_to(root) for root in allowed_roots):
-        raise HTTPException(
-            status_code=403,
-            detail="pdf_path must live under board_assets/ or the memory root",
+        raise CodedHTTPException(
+            403,
+            "pdf_path_forbidden",
+            "pdf_path must live under board_assets/ or the memory root",
         )
     if not p.exists():
-        raise HTTPException(status_code=404, detail=f"PDF not found: {pdf_path}")
+        raise CodedHTTPException(
+            404, "pdf_not_found", f"PDF not found: {pdf_path}", {"pdf_path": pdf_path}
+        )
     if p.suffix.lower() != ".pdf":
-        raise HTTPException(
-            status_code=400,
-            detail=f"pdf_path must be a .pdf file (got suffix {p.suffix!r}).",
+        raise CodedHTTPException(
+            400,
+            "pdf_bad_suffix",
+            f"pdf_path must be a .pdf file (got suffix {p.suffix!r}).",
+            {"suffix": p.suffix},
         )
     return p
 
@@ -284,15 +290,19 @@ async def get_pack_schematic_pages(
     memory_root = Path(settings.memory_root)
     pages_dir = await _ensure_pages_rendered(slug, memory_root, x_owner_ref)
     if pages_dir is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic PDF on disk for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic_pdf",
+            f"No schematic PDF on disk for device_slug={slug!r}",
+            {"slug": slug},
         )
     pngs = _list_page_pngs(pages_dir)
     if not pngs:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Rendered no pages for device_slug={slug!r}",
+        raise CodedHTTPException(
+            500,
+            "no_pages_rendered",
+            f"Rendered no pages for device_slug={slug!r}",
+            {"slug": slug},
         )
     pages: list[dict] = []
     for png in pngs:
@@ -331,9 +341,11 @@ async def get_pack_schematic_page_png(
     memory_root = Path(settings.memory_root)
     pages_dir = await _ensure_pages_rendered(slug, memory_root, x_owner_ref)
     if pages_dir is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic PDF on disk for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic_pdf",
+            f"No schematic PDF on disk for device_slug={slug!r}",
+            {"slug": slug},
         )
     # pdftoppm pads to max(2, len(str(page_count))) digits — scan rather than
     # guess, so we don't have to know the total page count here.
@@ -345,9 +357,11 @@ async def get_pack_schematic_page_png(
     for path in candidates:
         if path.exists():
             return FileResponse(path, media_type="image/png")
-    raise HTTPException(
-        status_code=404,
-        detail=f"Page {page_n} not found for device_slug={slug!r}",
+    raise CodedHTTPException(
+        404,
+        "page_not_found",
+        f"Page {page_n} not found for device_slug={slug!r}",
+        {"page": page_n, "slug": slug},
     )
 
 
@@ -375,20 +389,26 @@ def get_pack_schematic(
     slug = _slugify(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404, "no_pack", f"No pack for device_slug={slug!r}", {"slug": slug}
+        )
     base = live_graph.resolve_graph_dir(pack_dir, x_owner_ref)   # graphe = moat partagé (fallback canonique)
     graph_path = base / "electrical_graph.json" if base is not None else None
     if graph_path is None or not graph_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
     try:
         payload = json.loads(graph_path.read_text())
     except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Malformed electrical_graph.json for {slug!r}: {exc}",
+        raise CodedHTTPException(
+            422,
+            "malformed_graph",
+            f"Malformed electrical_graph.json for {slug!r}: {exc}",
+            {"slug": slug},
         ) from exc
 
     # Opt-in overlay: Opus-refined boot sequence lives in its own file so we
@@ -436,9 +456,10 @@ def _require_api_key() -> None:
     the client is told "started" for work that can never happen.
     """
     if not _pkg.get_settings().anthropic_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail={"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
+        raise CodedHTTPException(
+            503,
+            "missing_api_key",
+            {"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
         )
 
 
@@ -491,11 +512,15 @@ async def post_analyze_boot(device_slug: str) -> dict:
     slug = _slugify(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404, "no_pack", f"No pack for device_slug={slug!r}", {"slug": slug}
+        )
     if not (pack_dir / "electrical_graph.json").exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
     _require_api_key()
     logger.info("[API] /packs/%s/schematic/analyze-boot · queued", slug)
@@ -550,11 +575,15 @@ async def post_classify_nets(device_slug: str) -> dict:
     slug = _slugify(device_slug)
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404, "no_pack", f"No pack for device_slug={slug!r}", {"slug": slug}
+        )
     if not (pack_dir / "electrical_graph.json").exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
     _require_api_key()
     logger.info("[API] /packs/%s/schematic/classify-nets · queued", slug)
@@ -580,16 +609,20 @@ def get_pack_schematic_boot(
     slug = _slugify(device_slug)
     graph_path = live_graph.resolve_graph_path(Path(settings.memory_root) / slug, x_owner_ref)
     if graph_path is None or not graph_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
     try:
         graph = json.loads(graph_path.read_text())
     except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Malformed electrical_graph.json for {slug!r}: {exc}",
+        raise CodedHTTPException(
+            422,
+            "malformed_graph",
+            f"Malformed electrical_graph.json for {slug!r}: {exc}",
+            {"slug": slug},
         ) from exc
     return {
         "device_slug": graph.get("device_slug", slug),
@@ -616,16 +649,20 @@ def get_schematic_passives(
     slug = _slugify(device_slug)
     graph_path = live_graph.resolve_graph_path(Path(settings.memory_root) / slug, x_owner_ref)
     if graph_path is None or not graph_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
     try:
         graph = json.loads(graph_path.read_text())
     except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Malformed electrical_graph.json for {slug!r}: {exc}",
+        raise CodedHTTPException(
+            422,
+            "malformed_graph",
+            f"Malformed electrical_graph.json for {slug!r}: {exc}",
+            {"slug": slug},
         ) from exc
 
     components = graph.get("components", {})
@@ -663,17 +700,21 @@ def post_simulate(
     base = live_graph.resolve_graph_dir(Path(settings.memory_root) / slug, x_owner_ref)   # graphe = moat partagé (fallback canonique)
     graph_path = base / "electrical_graph.json" if base is not None else None
     if graph_path is None or not graph_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"No schematic ingested yet for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "no_schematic",
+            f"No schematic ingested yet for device_slug={slug!r}",
+            {"slug": slug},
         )
 
     try:
         electrical = ElectricalGraph.model_validate_json(graph_path.read_text())
     except (OSError, ValidationError) as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Malformed electrical_graph for {slug!r}: {exc}",
+        raise CodedHTTPException(
+            422,
+            "malformed_graph",
+            f"Malformed electrical_graph for {slug!r}: {exc}",
+            {"slug": slug},
         ) from exc
 
     invalid = [
@@ -682,17 +723,21 @@ def post_simulate(
         if r not in electrical.components
     ]
     if invalid:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown refdes: {invalid}",
+        raise CodedHTTPException(
+            400,
+            "unknown_refdes",
+            f"Unknown refdes: {invalid}",
+            {"refdes": ", ".join(invalid)},
         )
     invalid_rails = [
         o.label for o in request.rail_overrides if o.label not in electrical.power_rails
     ]
     if invalid_rails:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown rails: {invalid_rails}",
+        raise CodedHTTPException(
+            400,
+            "unknown_rail",
+            f"Unknown rails: {invalid_rails}",
+            {"rails": ", ".join(invalid_rails)},
         )
 
     analyzed: AnalyzedBootSequence | None = None
@@ -744,9 +789,21 @@ async def post_hypothesize(
     if not result.get("found"):
         reason = result.get("reason", "unknown")
         if reason == "no_schematic_graph":
-            raise HTTPException(status_code=404, detail=f"No schematic for {slug!r}")
-        if reason in ("unknown_refdes", "unknown_rail"):
-            raise HTTPException(status_code=400, detail=result)
-        raise HTTPException(status_code=422, detail=result)
+            raise CodedHTTPException(
+                404, "no_schematic", f"No schematic for {slug!r}", {"slug": slug}
+            )
+        # `detail` stays the tool's structured result (existing contract);
+        # `code` + flat `params` ride next to it for the UI.
+        if reason == "unknown_refdes":
+            raise CodedHTTPException(
+                400, reason, result, {"refdes": ", ".join(result.get("invalid_refdes", []))}
+            )
+        if reason == "unknown_rail":
+            raise CodedHTTPException(
+                400, reason, result, {"rails": ", ".join(result.get("invalid_rails", []))}
+            )
+        raise CodedHTTPException(
+            422, str(reason), result, {"slug": slug, "detail": str(result.get("detail", ""))}
+        )
     result.pop("found", None)
     return result

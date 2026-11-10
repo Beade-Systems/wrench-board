@@ -11,7 +11,7 @@ import asyncio
 from contextlib import contextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, File, Header, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Header, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,7 @@ from api.board.imports import import_into_library
 from api.board.library_store import LibraryBoardNotFound, LibraryStore
 from api.board.parser.base import _REGISTRY
 from api.config import get_settings
+from api.errors import CodedHTTPException
 
 router = APIRouter(prefix="/api/library", tags=["pcb-library"])
 
@@ -33,7 +34,7 @@ def _not_found():
     try:
         yield
     except LibraryBoardNotFound as error:
-        raise HTTPException(404, "PCB nicht gefunden.") from error
+        raise CodedHTTPException(404, "board_not_found", "Board not found.") from error
 
 
 class BoardUpdate(BaseModel):
@@ -109,7 +110,7 @@ def update_board(
     if "title" in changes:
         changes["title"] = changes["title"].strip()
         if not changes["title"]:
-            raise HTTPException(422, "Der Name darf nicht leer sein.")
+            raise CodedHTTPException(422, "title_empty", "The name must not be empty.")
     with _not_found():
         return _store(owner).update(board_id, changes)
 

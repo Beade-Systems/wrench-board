@@ -267,9 +267,10 @@ async def _run_agent_turn(
                 await ws.send_json({
                     "type": "stream_error",
                     "error": "api_error",
+                    "code": "api_error",
                     "message": (
-                        "Le service du modèle a renvoyé une erreur — "
-                        "réessayez dans un instant."
+                        "The model service returned an error. "
+                        "Try again in a moment."
                     ),
                 })
             except Exception:  # noqa: BLE001 — best-effort UI hint
@@ -289,10 +290,12 @@ async def _run_agent_turn(
                     await ws.send_json({
                         "type": "stream_retry",
                         "attempt": stall_retries,
-                        "message": (
-                            "Le flux du modèle s'est interrompu — "
-                            "nouvelle tentative…"
-                        ),
+                        "code": "stream_retry",
+                        "params": {
+                            "attempt": stall_retries,
+                            "max": _STREAM_STALL_MAX_RETRIES,
+                        },
+                        "message": "The model stream stalled. Retrying…",
                     })
                 except Exception:  # noqa: BLE001 — best-effort UI hint
                     pass
@@ -306,10 +309,12 @@ async def _run_agent_turn(
                 await ws.send_json({
                     "type": "stream_error",
                     "error": "stream_timeout",
+                    "code": "stream_timeout",
+                    "params": {"seconds": round(stream_timeout)},
                     "message": (
-                        f"Le flux du modèle est resté inactif "
-                        f"{stream_timeout:.0f}s — la session a peut-être "
-                        "été perdue."
+                        f"The model stream stayed silent for "
+                        f"{stream_timeout:.0f}s. The session may have "
+                        "been lost."
                     ),
                 })
             except Exception:  # noqa: BLE001 — best-effort UI hint
@@ -628,7 +633,7 @@ async def run_diagnostic_session_direct(
         await ws.send_json({
             "type": "error",
             "code": "missing_api_key",
-            "text": "ANTHROPIC_API_KEY absente — configure-la dans .env puis relance le serveur.",
+            "text": "ANTHROPIC_API_KEY is missing. Set it in .env and restart the server.",
         })
         await ws.close()
         return
@@ -974,7 +979,8 @@ async def run_diagnostic_session_direct(
                     )
                 else:
                     await ws.send_json({"type": "error", "code": "protocol_result_rejected",
-                                         "text": res.get("reason", "unknown")})
+                                         "text": res.get("reason", "unknown"),
+                                         "params": {"reason": res.get("reason", "unknown")}})
                 continue
 
             # Tech pressed Abandon on the running quest panel — mark the
@@ -1045,6 +1051,7 @@ async def run_diagnostic_session_direct(
                         "type": "error",
                         "code": "protocol_abandon_rejected",
                         "text": res.get("reason", "unknown"),
+                        "params": {"reason": res.get("reason", "unknown")},
                     })
                 continue
 

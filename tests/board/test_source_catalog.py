@@ -419,3 +419,18 @@ def test_older_catalog_schema_is_rebuilt(client, linked, memory_root):
     with contextlib.closing(sqlite3.connect(cache / "catalog.sqlite3")) as connection:
         indexes = {row[0] for row in connection.execute("SELECT name FROM sqlite_master")}
     assert {"files_directory", "files_board_number"} <= indexes
+
+
+def test_catalog_errors_carry_stable_codes(client, source):
+    assert client.get("/api/library/source/files/unknown/documents").json() == {
+        "detail": "File not found.",
+        "code": "file_not_found",
+    }
+    assert client.get("/api/library/source/folders", params={"path": "Nope"}).json()["code"] == (
+        "folder_not_found"
+    )
+    pdf = client.get("/api/library/source/files", params={"kind": "pdf"}).json()["items"][0]
+    refused = client.post(f"/api/library/source/files/{pdf['id']}/open")
+    assert (refused.status_code, refused.json()["code"]) == (415, "not_a_boardview")
+    gateway = client.get("/api/library/source/files", headers={"X-Owner-Ref": "tenant"})
+    assert (gateway.status_code, gateway.json()["code"]) == (404, "local_collection_unavailable")

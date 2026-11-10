@@ -12,6 +12,8 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from api.errors import CodedHTTPException
+
 _LOCK = threading.RLock()
 router = APIRouter(prefix="/api/workbench/settings", tags=["settings"])
 SECRET_ENV = {
@@ -53,14 +55,20 @@ def local_access(request: Request):
     from api.config import get_settings
 
     if request.headers.get("x-owner-ref") is not None or get_settings().engine_service_token:
-        raise HTTPException(404, "Einstellungen sind nur im eigenständigen Workbench verfügbar.")
+        raise CodedHTTPException(
+            404,
+            "settings_standalone_only",
+            "Settings are only available in the standalone workbench.",
+        )
     # All calls require a non-simple header. Cross-site forms cannot change
     # credentials or expose directories; CORS does not authorize this endpoint.
     if request.headers.get("x-workbench-settings") != "1":
-        raise HTTPException(403, "Bitte die Einstellungsseite verwenden.")
+        raise CodedHTTPException(403, "settings_page_required", "Please use the settings page.")
     origin = request.headers.get("origin")
     if origin and origin.rstrip("/") != str(request.base_url).rstrip("/"):
-        raise HTTPException(403, "Einstellungen nur vom selben Ursprung aufrufen.")
+        raise CodedHTTPException(
+            403, "settings_same_origin", "Settings can only be called from the same origin."
+        )
 
 
 class Preferences(BaseModel):
@@ -93,7 +101,9 @@ def normalize_fz(value: str) -> str:
             return struct.pack("<44I", *(int(w, 0) for w in words)).hex()
     except (ValueError, struct.error):
         pass
-    raise HTTPException(422, "FZ-Schlüssel: 44 Zahlen oder 352 Hex-Zeichen erforderlich.")
+    raise CodedHTTPException(
+        422, "fz_key_format", "FZ key: 44 numbers or 352 hex characters required."
+    )
 
 
 @router.get("", dependencies=[Depends(local_access)])
@@ -122,12 +132,16 @@ def save(update: Preferences):
     for entry in update.folders:
         path = Path(entry).expanduser().resolve()
         if not path.is_dir() or not os.access(path, os.R_OK | os.X_OK):
-            raise HTTPException(422, f"Ordner nicht lesbar: {entry}")
+            raise CodedHTTPException(
+                422, "folder_unreadable", f"Folder not readable: {entry}", {"folder": entry}
+            )
         if str(path) not in folders:
             folders.append(str(path))
     active = str(Path(update.active_folder).expanduser().resolve()) if update.active_folder else ""
     if active and active not in folders:
-        raise HTTPException(422, "Aktive Sammlung muss ein verknüpfter Ordner sein.")
+        raise CodedHTTPException(
+            422, "active_folder_not_linked", "The active collection must be a linked folder."
+        )
     changes = update.model_dump(exclude_none=True)
     changes.pop("active_folder")
     changes.update(folders=folders, pcb_library_source_root=active)
@@ -138,7 +152,9 @@ def save(update: Preferences):
             if len(bytes.fromhex(changes["xzz_key"])) != 8:
                 raise ValueError()
         except ValueError:
-            raise HTTPException(422, "XZZ-Schlüssel: 16 Hex-Zeichen erforderlich.") from None
+            raise CodedHTTPException(
+                422, "xzz_key_format", "XZZ key: 16 hex characters required."
+            ) from None
     with _LOCK:
         values = read_preferences(settings)
         values.update(changes)
@@ -168,7 +184,9 @@ def directories(path: str = ""):
     try:
         entries = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
     except OSError:
-        raise HTTPException(422, "Ordner kann nicht gelesen werden.") from None
+        raise CodedHTTPException(
+            422, "directory_unreadable", "The folder cannot be read."
+        ) from None
     return {
         "path": str(root),
         "parent": str(root.parent),
@@ -193,7 +211,9 @@ def fetch_fz_key():
             return {"key": key}
         except (httpx.HTTPError, HTTPException):
             continue
-    raise HTTPException(502, "Schlüsselquelle nicht erreichbar. Bitte manuell einfügen.")
+    raise CodedHTTPException(
+        502, "fz_key_source_unreachable", "Key source not reachable. Please paste the key manually."
+    )
 
 
 @router.get("/formats", dependencies=[Depends(local_access)])

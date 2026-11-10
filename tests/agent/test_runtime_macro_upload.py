@@ -76,11 +76,14 @@ async def test_upload_macro_rejects_oversized_payload(tmp_path: Path):
     client.beta.files.upload = AsyncMock()
     client.beta.sessions.events.send = AsyncMock()
 
-    with pytest.raises(ValueError, match="too large"):
+    with pytest.raises(ValueError, match="too large") as excinfo:
         await _handle_client_upload_macro(
             client=client, session=session, memory_root=tmp_path,
             slug="iphone-x", repair_id="R1", ma_session_id="sesn_xyz", frame=frame,
         )
+    # Stable machine code + params for the UI's localised message.
+    assert excinfo.value.code == "upload_too_large"
+    assert excinfo.value.params == {"size_mb": 10.0, "max_mb": 5.0}
     client.beta.files.upload.assert_not_awaited()
     client.beta.sessions.events.send.assert_not_awaited()
 
@@ -98,8 +101,31 @@ async def test_upload_macro_rejects_invalid_base64(tmp_path: Path):
     client.beta.files.upload = AsyncMock()
     client.beta.sessions.events.send = AsyncMock()
 
-    with pytest.raises(ValueError, match="invalid base64"):
+    with pytest.raises(ValueError, match="invalid base64") as excinfo:
         await _handle_client_upload_macro(
             client=client, session=session, memory_root=tmp_path,
             slug="iphone-x", repair_id="R1", ma_session_id="sesn_xyz", frame=frame,
         )
+    assert excinfo.value.code == "upload_invalid_base64"
+
+
+@pytest.mark.asyncio
+async def test_upload_macro_rejects_unsupported_mime_with_code(tmp_path: Path):
+    session = SessionState()
+    frame = {
+        "type": "client.upload_macro",
+        "base64": base64.b64encode(b"GIF89a").decode("ascii"),
+        "mime": "image/gif",
+        "filename": "anim.gif",
+    }
+    client = MagicMock()
+    client.beta.files.upload = AsyncMock()
+    client.beta.sessions.events.send = AsyncMock()
+
+    with pytest.raises(ValueError, match="unsupported mime") as excinfo:
+        await _handle_client_upload_macro(
+            client=client, session=session, memory_root=tmp_path,
+            slug="iphone-x", repair_id="R1", ma_session_id="sesn_xyz", frame=frame,
+        )
+    assert excinfo.value.code == "upload_unsupported_mime"
+    assert excinfo.value.params == {"mime": "image/gif"}

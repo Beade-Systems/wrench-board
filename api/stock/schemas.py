@@ -101,3 +101,7 @@ class StockSearchResult(BaseModel):
 
     exact_matches: list[StockSearchMatch] = Field(default_factory=list)
     empty_reason: str | None = None
+    # Stable machine code for `empty_reason` ("no_donors" | "no_match") — the UI
+    # translates by code; `empty_reason` stays the English sentence.
+    empty_reason_code: str | None = None
+    empty_reason_params: dict[str, str | int | float] = Field(default_factory=dict)

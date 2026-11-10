@@ -111,6 +111,8 @@ async def _forward_ws_to_session(
                 await ws.send_json({
                     "type": "server.upload_macro_error",
                     "reason": str(exc),
+                    "code": getattr(exc, "code", "upload_rejected"),
+                    "params": getattr(exc, "params", {}),
                 })
             continue
 
@@ -201,7 +203,8 @@ async def _forward_ws_to_session(
                 )
             else:
                 await ws.send_json({"type": "error", "code": "protocol_result_rejected",
-                                     "text": res.get("reason", "unknown")})
+                                     "text": res.get("reason", "unknown"),
+                                     "params": {"reason": res.get("reason", "unknown")}})
             continue
 
         # Tech pressed Abandon on the running quest panel — mark the protocol
@@ -267,6 +270,7 @@ async def _forward_ws_to_session(
                     "type": "error",
                     "code": "protocol_abandon_rejected",
                     "text": res.get("reason", "unknown"),
+                    "params": {"reason": res.get("reason", "unknown")},
                 })
             continue
 
@@ -557,6 +561,8 @@ async def _forward_session_to_ws(
                         "type": "stream_error",
                         "session_id": session_id,
                         "error": "reconnect_exhausted",
+                        "code": "reconnect_exhausted",
+                        "params": {"attempts": max_reconnects},
                         "message": (
                             f"Stream dropped and {max_reconnects} reconnect "
                             "attempts failed — session may be lost."
@@ -1246,4 +1252,11 @@ async def _forward_session_to_ws(
                     request_id,
                     raw,
                 )
-                await ws.send_json({"type": "error", "text": msg or "session error"})
+                frame = {
+                    "type": "error",
+                    "code": "session_error",
+                    "text": msg or "session error",
+                }
+                if msg:
+                    frame["detail"] = msg
+                await ws.send_json(frame)

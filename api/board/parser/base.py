@@ -10,7 +10,16 @@ from api.board.model import Board
 
 
 class BoardParserError(Exception):
-    """Base class for parser errors."""
+    """Base class for parser errors.
+
+    `code` / `params` are optional: a stable snake_case identifier the UI
+    translates, next to the English message that stays the fallback.
+    """
+
+    def __init__(self, *args, code: str | None = None, params: dict | None = None):
+        super().__init__(*args)
+        self.code = code
+        self.params = params or {}
 
 
 class UnsupportedFormatError(BoardParserError):
@@ -179,6 +188,12 @@ def parser_for(path: Path) -> BoardParser:
     cls = _REGISTRY.get(ext)
     if cls is None:
         if not ext:
-            raise UnsupportedFormatError(f"file has no extension: {path.name!r}")
-        raise UnsupportedFormatError(f"no parser registered for extension {ext!r}")
+            raise UnsupportedFormatError(
+                f"file has no extension: {path.name!r}", code="no_extension"
+            )
+        raise UnsupportedFormatError(
+            f"no parser registered for extension {ext!r}",
+            code="unsupported_extension",
+            params={"extension": ext},
+        )
     return cls()

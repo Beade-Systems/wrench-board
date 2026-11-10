@@ -28,6 +28,7 @@ from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 import api.pipeline as _pkg  # noqa: PLC0415 — module-attribute lookups for patchability
+from api.errors import CodedHTTPException
 from api.pipeline import events, live_graph, sources
 from api.pipeline.models import (
     DeleteSourceResponse,
@@ -87,10 +88,19 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
     head = await file.read(1 << 20)  # 1 MiB
     if not head:
         await file.close()
-        raise HTTPException(status_code=400, detail="empty upload")
+        raise CodedHTTPException(
+            400,
+            "empty_upload",
+            "empty upload",
+        )
     if kind in _PDF_KINDS and not head.lstrip().startswith(b"%PDF"):
         await file.close()
-        raise HTTPException(status_code=415, detail=f"{kind} upload is not a PDF")
+        raise CodedHTTPException(
+            415,
+            "not_a_pdf",
+            f"{kind} upload is not a PDF",
+            {"kind": kind},
+        )
 
     uploads_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -107,9 +117,11 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
                 if total > _MAX_UPLOAD_BYTES:
                     fh.close()  # close before unlink (cross-platform safe; matches the original endpoint)
                     target.unlink(missing_ok=True)
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB cap",
+                    raise CodedHTTPException(
+                        413,
+                        "upload_too_large",
+                        f"upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB cap",
+                        {"max_mb": _MAX_UPLOAD_BYTES // (1024 * 1024)},
                     )
                 fh.write(chunk)
                 chunk = await file.read(1 << 20)
@@ -117,7 +129,12 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
         raise
     except OSError as exc:
         target.unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"could not persist upload: {exc}") from exc
+        raise CodedHTTPException(
+            500,
+            "upload_persist_failed",
+            f"could not persist upload: {exc}",
+            {"error": str(exc)},
+        ) from exc
     finally:
         await file.close()
     return target, total
@@ -147,9 +164,11 @@ async def post_pack_document(
     """
     slug = _validate_slug(device_slug)
     if kind not in _UPLOAD_KINDS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown kind={kind!r} — allowed: {sorted(_UPLOAD_KINDS)}",
+        raise CodedHTTPException(
+            422,
+            "unknown_kind",
+            f"unknown kind={kind!r} — allowed: {sorted(_UPLOAD_KINDS)}",
+            {"kind": kind, "allowed": ", ".join(sorted(_UPLOAD_KINDS))},
         )
 
     settings = _pkg.get_settings()
@@ -310,7 +329,12 @@ async def get_pack_sources(device_slug: str) -> SourcesResponse:
     settings = _pkg.get_settings()
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     pins = sources.read_active(pack_dir)
     out_kinds: dict[str, SourceKindEntry] = {}
@@ -575,27 +599,38 @@ async def switch_pack_source(
     """
     slug = _validate_slug(device_slug)
     if kind not in sources.KNOWN_KINDS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown kind={kind!r} — allowed: {list(sources.KNOWN_KINDS)}",
+        raise CodedHTTPException(
+            422,
+            "unknown_kind",
+            f"unknown kind={kind!r} — allowed: {list(sources.KNOWN_KINDS)}",
+            {"kind": kind, "allowed": ", ".join(sources.KNOWN_KINDS)},
         )
 
     settings = _pkg.get_settings()
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     target = pack_dir / "uploads" / payload.filename
     if not target.exists() or not target.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"upload {payload.filename!r} not found in {slug!r}/uploads",
+        raise CodedHTTPException(
+            404,
+            "upload_not_found",
+            f"upload {payload.filename!r} not found in {slug!r}/uploads",
+            {"filename": payload.filename, "slug": slug},
         )
     # Defense in depth: filename must contain the kind marker.
     if f"-{kind}-" not in payload.filename:
-        raise HTTPException(
-            status_code=422,
-            detail=f"filename does not match kind={kind!r}",
+        raise CodedHTTPException(
+            422,
+            "filename_kind_mismatch",
+            f"filename does not match kind={kind!r}",
+            {"kind": kind},
         )
 
     # Pin write. Managé (owner set) → per-owner pointer ; pour schematic le
@@ -625,7 +660,12 @@ async def switch_pack_source(
     try:
         status, eta, pages = _apply_schematic_pin(slug, pack_dir, payload.filename, owner_ref=x_owner_ref)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"could not apply pin: {exc}") from exc
+        raise CodedHTTPException(
+            500,
+            "pin_failed",
+            f"could not apply pin: {exc}",
+            {"error": str(exc)},
+        ) from exc
 
     if status == "cached":
         return SwitchSourceResponse(
@@ -669,26 +709,37 @@ async def delete_pack_source_version(
     """
     slug = _validate_slug(device_slug)
     if kind not in sources.KNOWN_KINDS:
-        raise HTTPException(
-            status_code=422,
-            detail=f"unknown kind={kind!r} — allowed: {list(sources.KNOWN_KINDS)}",
+        raise CodedHTTPException(
+            422,
+            "unknown_kind",
+            f"unknown kind={kind!r} — allowed: {list(sources.KNOWN_KINDS)}",
+            {"kind": kind, "allowed": ", ".join(sources.KNOWN_KINDS)},
         )
     if f"-{kind}-" not in filename:
-        raise HTTPException(
-            status_code=422,
-            detail=f"filename does not match kind={kind!r}",
+        raise CodedHTTPException(
+            422,
+            "filename_kind_mismatch",
+            f"filename does not match kind={kind!r}",
+            {"kind": kind},
         )
 
     settings = _pkg.get_settings()
     pack_dir = Path(settings.memory_root) / slug
     if not pack_dir.exists():
-        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
+        raise CodedHTTPException(
+            404,
+            "pack_not_found",
+            f"No pack for device_slug={slug!r}",
+            {"slug": slug},
+        )
 
     target = pack_dir / "uploads" / filename
     if not target.exists() or not target.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"upload {filename!r} not found in {slug!r}/uploads",
+        raise CodedHTTPException(
+            404,
+            "upload_not_found",
+            f"upload {filename!r} not found in {slug!r}/uploads",
+            {"filename": filename, "slug": slug},
         )
 
     sidecar = pack_dir / "uploads" / f"{filename}.description.txt"
@@ -697,7 +748,12 @@ async def delete_pack_source_version(
         if sidecar.exists():
             sidecar.unlink()
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"could not delete upload: {exc}") from exc
+        raise CodedHTTPException(
+            500,
+            "upload_delete_failed",
+            f"could not delete upload: {exc}",
+            {"error": str(exc)},
+        ) from exc
 
     # Managé (owner set) — la suppression d'une version n'est pas le vecteur de
     # fuite (le clobber racine l'est) ; on garde simple : si le fichier supprimé
@@ -788,7 +844,12 @@ async def delete_pack_source_version(
     try:
         status, eta, pages = _apply_schematic_pin(slug, pack_dir, new_active)
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"could not apply pin: {exc}") from exc
+        raise CodedHTTPException(
+            500,
+            "pin_failed",
+            f"could not apply pin: {exc}",
+            {"error": str(exc)},
+        ) from exc
 
     if status == "cached":
         return DeleteSourceResponse(
@@ -844,9 +905,11 @@ async def get_pack_boardview(device_slug: str) -> FileResponse:
     pack_dir = Path(settings.memory_root) / slug
     path = _find_boardview(slug, pack_dir)
     if path is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No boardview on disk for device_slug={slug!r}",
+        raise CodedHTTPException(
+            404,
+            "boardview_not_found",
+            f"No boardview on disk for device_slug={slug!r}",
+            {"slug": slug},
         )
     media_type = _BOARDVIEW_MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")
     return FileResponse(
@@ -881,7 +944,9 @@ async def get_pack_schematic_pdf(device_slug: str) -> FileResponse:
                 media_type="application/pdf",
                 headers={"Content-Disposition": f'inline; filename="{slug}.pdf"'},
             )
-    raise HTTPException(
-        status_code=404,
-        detail=f"No schematic PDF on disk for device_slug={slug!r}",
+    raise CodedHTTPException(
+        404,
+        "schematic_pdf_not_found",
+        f"No schematic PDF on disk for device_slug={slug!r}",
+        {"slug": slug},
     )

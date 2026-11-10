@@ -83,7 +83,7 @@ async def run_diagnostic_session_managed(
         await ws.send_json({
             "type": "error",
             "code": "missing_api_key",
-            "text": "ANTHROPIC_API_KEY absente — configure-la dans .env puis relance le serveur.",
+            "text": "ANTHROPIC_API_KEY is missing. Set it in .env and restart the server.",
         })
         await ws.close()
         return
@@ -93,7 +93,12 @@ async def run_diagnostic_session_managed(
         agent_info = _rm.get_agent(ids, tier)
     except RuntimeError as exc:
         await ws.accept()
-        await ws.send_json({"type": "error", "text": str(exc)})
+        await ws.send_json({
+            "type": "error",
+            "code": "managed_agents_not_configured",
+            "text": str(exc),
+            "detail": str(exc),
+        })
         await ws.close()
         return
 
@@ -501,7 +506,12 @@ async def run_diagnostic_session_managed(
         except Exception as exc:  # noqa: BLE001
             logger.exception("[Diag-MA] session create failed for device=%s", device_slug)
             await ws.accept()
-            await ws.send_json({"type": "error", "text": f"session create failed: {exc}"})
+            await ws.send_json({
+                "type": "error",
+                "code": "session_create_failed",
+                "text": f"session create failed: {exc}",
+                "detail": str(exc),
+            })
             await ws.close()
             # Release the single-WS guard claimed up-stream so the next
             # tab open isn't permablocked by a transient session.create

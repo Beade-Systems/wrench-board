@@ -86,6 +86,7 @@ def test_no_donors_returns_empty_reason(tmp_path, monkeypatch):
     monkeypatch.setattr("api.stock.search._memory_root", lambda: tmp_path / "memory")
     res = stock_search(StockSearchQuery(type="capacitor", value_canonical="0.1uF"))
     assert res.empty_reason == "no donors in stock"
+    assert res.empty_reason_code == "no_donors"
 
 
 def test_exact_match_decoupling(two_donors):
@@ -143,6 +144,7 @@ def test_ic_wrong_mpn_no_match(two_donors):
     ))
     assert res.exact_matches == []
     assert res.empty_reason == "no matching parts available"
+    assert res.empty_reason_code == "no_match"
 
 
 def test_value_mismatch_returns_empty(two_donors):
@@ -152,6 +154,7 @@ def test_value_mismatch_returns_empty(two_donors):
     ))
     assert res.exact_matches == []
     assert res.empty_reason == "no matching parts available"
+    assert res.empty_reason_code == "no_match"
 
 
 def test_donor_without_parts_index_silently_skipped(two_donors, tmp_path):

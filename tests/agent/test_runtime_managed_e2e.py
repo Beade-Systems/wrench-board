@@ -188,6 +188,8 @@ async def test_persistent_transport_failure_exhausts_reconnects(
     )
     err = error_frames[0]
     assert err["error"] == "reconnect_exhausted"
+    assert err["code"] == "reconnect_exhausted"
+    assert isinstance(err["params"]["attempts"], int)
     assert err["session_id"] == "sesn_test"
 
 

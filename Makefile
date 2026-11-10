@@ -24,7 +24,7 @@ help:
 	@echo "  make test      Run pytest (fast subset, skips slow benchmarks) — live output, --durations=10"
 	@echo "  make test-all  Run all pytest tests (incl. slow accuracy benchmarks)"
 	@echo "  make test-fast Run pytest with -x --ff (stop at first fail, failures-first next time)"
-	@echo "  make lint      Run ruff check (api/ tests/)"
+	@echo "  make lint      Run ruff check (api/ tests/ scripts/)"
 	@echo "  make check-web Validate web/ ESM imports resolve + named imports exist (no-build guard)"
 	@echo "  make format    Run ruff format"
 	@echo "  make clean     Remove caches (keeps .venv)"
@@ -101,7 +101,7 @@ eval-all:
 	$(PY) scripts/eval_all.py
 
 lint:
-	$(RUFF) check api/ tests/
+	$(RUFF) check api/ tests/ scripts/
 
 # No-build frontend guard. The web/ UI ships as raw ES modules served
 # byte-for-byte (no bundler — see CLAUDE.md), so a broken import path or a

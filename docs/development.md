@@ -127,3 +127,60 @@ zuerst den Bibliothekseintrag entfernen.
 `venv`, dem konfigurierten `VENV` und `.git`; persistente Bibliotheksdaten bleiben
 unberührt. Der SQLite-Katalog unter `memory/_pcb_catalog` lässt sich bei
 **gestoppter Anwendung** entfernen und wird anschließend neu erstellt.
+
+## Einrichtung über die Oberfläche
+
+Unter **Bibliothek → Einstellungen** (`/settings.html`) können Nutzer:
+
+- mehrere vorhandene Ordner verknüpfen und die aktive Sammlung wählen;
+- serverseitige Ordner durchsuchen (bei Docker zuvor als Volume einbinden);
+- FZ-Schlüssel ausdrücklich von GitHub laden oder manuell einfügen;
+- den XZZ-Standardschlüssel überschreiben sowie KI-Schlüssel und Modelle ändern;
+- einen begrenzten oder vollständigen Import-Prüflauf starten, stoppen und als JSON herunterladen.
+
+Gespeicherte Werte liegen in `MEMORY_ROOT/_workbench_settings.json` mit Dateirechten
+0600. Die Oberfläche gibt gespeicherte Schlüssel nicht zurück. Diese Datei enthält
+Geheimnisse und gehört wie `.env` nicht ins Repository. UI-Werte haben Vorrang vor
+`.env`; ein leeres Schlüsselfeld beim Speichern behält den bisherigen Wert, die
+explizite Entfernen-Checkbox löscht ihn. Einstellungen gelten für neue Aufrufe ohne
+Neustart; laufende Diagnose-Sitzungen können alte Clients behalten. Die API ist im
+Cloud-Gateway-Modus und bei `X-Owner-Ref` gesperrt und verlangt einen eigenen Header
+sowie denselben Origin. Sie ist für die bestehende eigenständige Workbench gedacht.
+
+Der Prüflauf verarbeitet Dateien einzeln in separaten Prozessen mit 60 Sekunden
+Zeitlimit und dem konfigurierten Upload-Größenlimit. Originale bleiben unverändert.
+Status und Bericht bleiben im Arbeitsspeicher des Servers; vor einem Neustart den
+Bericht herunterladen. Es läuft höchstens ein Prüflauf pro Serverprozess. Stoppen
+wirkt nach der aktuellen Datei. Die Einstellungsseite zeigt die letzten 20 Ergebnisse,
+der Bericht enthält alle Ergebnisse des aktuellen Laufs.
+
+### Zusätzliche CAD-Formate
+
+Altium `.PcbDoc`, CircuitMaker `.CMPcbDoc`, CircuitStudio `.CSPcbDoc` sowie XML-EAGLE
+`.brd` verwenden die Importer des installierten KiCad über `KICAD_PYTHON`.
+Allegro-Binärdateien werden anhand ihres Headers erkannt und mit dem mitgelieferten
+BoardRipper-Parser verarbeitet. Dafür wird Node.js ab Version 18 benötigt; KiCad
+ist für Allegro nicht erforderlich. `WRENCH_BOARD_NODE` kann einen alternativen
+Node-Pfad festlegen. Das Docker-Image installiert Node automatisch. Herkunft,
+AGPL-/GPL-Lizenzhinweise und Build-Anleitung stehen in
+`api/board/parser/_boardripper/NOTICE.md`. Allegro 15 ist experimentell; Hinweise
+auf unvollständige Daten werden im Viewer angezeigt. Geschätzte Bauteilpositionen
+werden mit gestrichelter gelber Kontur gekennzeichnet. `/settings.html` zeigt die tatsächlich verfügbaren Importer.
+Die Importer laufen mit Zeitlimit außerhalb des API-Prozesses. Der gemeinsame
+Extraktor liefert die bereits für KiCad unterstützten Board-Daten; dies ist keine
+Zusicherung, dass sämtliche herstellerspezifischen CAD-Objekte übernommen werden.
+
+Starke Inhaltssignaturen erkennen umbenannte KiCad-, EAGLE-, XZZ-, einfache FZ- und
+BRD-Dateien. Verschlüsselte FZ-Dateien ohne erkennbare Signatur benötigen weiterhin
+eine passende Endung. Bekannte ASCII-Dialekte behalten ihre eigene Zuordnung.
+
+### Offline-Bibliothek
+
+Im geöffneten Board **Offline speichern** wählen. `/offline.html` zeigt die explizit
+gespeicherten Kopien auch ohne Backend. IndexedDB speichert die Board-Daten lokal;
+ein Service Worker hält nur die öffentlichen Viewer-Dateien vor, keine API-Antworten
+oder Schlüssel. HTTPS oder localhost ist erforderlich. Browser-Speicherkontingente
+und das Löschen von Website-Daten können Offline-Kopien entfernen. Neue Originaldateien,
+PDFs und KI-Diagnosen sind nicht Teil dieses Offline-Modus. Kopien lassen sich einzeln
+löschen. Bei Änderungen am Offline-Assetbestand die Cache-Version in
+`web/offline-sw.js` erhöhen und die Import-Abhängigkeiten in `ASSETS` aktualisieren.

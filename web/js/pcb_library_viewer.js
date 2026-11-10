@@ -475,11 +475,14 @@ export class LibraryViewer {
       ctx.globalAlpha = net && !chosen ? .45 : 1;
       ctx.fillStyle = chosen ? '#538b5a99' : fills?.[index] ?? (part.layer === 2 ? '#25414d99' : '#27473999');
       ctx.strokeStyle = chosen ? '#c6f8a1' : strokes?.[index] ?? (part.layer === 2 ? '#6a9eb0' : '#6b9e7b');
+      if (part.placement_inferred) ctx.strokeStyle = '#e9b45e';
+      ctx.setLineDash(part.placement_inferred ? [4 / scale, 3 / scale] : []);
       ctx.lineWidth = (chosen ? 2 : .8) / scale;
       ctx.fillRect(a.x, a.y, Math.max(b.x - a.x, 1 / scale), Math.max(b.y - a.y, 1 / scale));
       if (part.body_lines?.length) part.body_lines.forEach(line => this._segment(line.a, line.b));
       else ctx.strokeRect(a.x, a.y, Math.max(b.x - a.x, 1 / scale), Math.max(b.y - a.y, 1 / scale));
     }
+    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
 

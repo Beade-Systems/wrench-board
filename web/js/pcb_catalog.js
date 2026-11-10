@@ -73,9 +73,10 @@ export class CatalogBrowser {
 
   renderInfo() {
     const info = this.info;
+    $('source-tab').textContent = info.name || 'Verknüpfte Sammlung';
     $('source-description').textContent = info.available
       ? `${count(info.total)} Dateien aus ${info.name}. Suche dein Modell und öffne die passende Datei.`
-      : 'Der Ordner xzz_downloads ist nicht verfügbar. Deine importierten Platinen findest du hier.';
+      : 'Keine Sammlung verfügbar. Verknüpfe einen Ordner in den Einstellungen. Deine Importe findest du hier.';
     $('source-tab').disabled = !info.available;
     $('source-refresh').hidden = !info.available || this.mode !== 'source';
     $('source-stats').replaceChildren();

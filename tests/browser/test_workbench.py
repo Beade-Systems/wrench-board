@@ -126,7 +126,7 @@ def test_upload_contract_and_error_handling(server):
         )
         assert (
             client.post(
-                "/api/board/parse", files={"file": ("board.xyz", FIXTURE.read_bytes())}
+                "/api/board/parse", files={"file": ("board.xyz", b"unrecognized content")}
             ).status_code
             == 415
         )
@@ -444,3 +444,27 @@ def test_catalog_browses_the_folder_tree(page, server):
     # A folder without files of the chosen kind disappears from the tree.
     page.locator("#source-kind").select_option("pdf")
     expect(page.locator("#folder-tree .tree-label")).to_have_count(0)
+
+
+def test_settings_and_offline_saved_board(page, server):
+    page.set_viewport_size({'width':390,'height':844})
+    page.goto(server + "/settings.html")
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.wait_for_function("document.querySelector('#model-main').value.length > 0")
+    page.locator('#browse').click()
+    page.locator('#directory-dialog').wait_for(state='visible')
+    page.locator('#directory-pick').click()
+    page.locator('button[type=submit]').click()
+    page.wait_for_function("document.querySelector('#status').textContent.includes('Gespeichert')")
+    page.goto(server + '/library.html')
+    page.locator('#file-input').set_input_files(str(FIXTURE))
+    page.wait_for_function("document.querySelector('#board-title').textContent.includes('bilayer_minimal')")
+    page.locator('#offline-save').click()
+    page.wait_for_function("document.querySelector('#notification').textContent.includes('Offline gespeichert')")
+    page.context.set_offline(True)
+    page.goto(server + '/offline.html')
+    page.wait_for_function("document.querySelector('#boards').options.length > 0")
+    assert 'Bauteile' in page.locator('#offline-status').inner_text()
+    page.locator('#side').select_option('1')
+    page.locator('#fit').click()
+    page.context.set_offline(False)

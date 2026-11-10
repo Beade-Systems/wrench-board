@@ -1,3 +1,4 @@
+import { saveOffline } from './offline_store.js';
 import { LibraryViewer } from './pcb_library_viewer.js';
 import { CatalogBrowser } from './pcb_catalog.js';
 import { BoardTabs } from './pcb_board_tabs.js';
@@ -39,6 +40,7 @@ async function request(path, options = {}) {
       if (typeof detail === 'string') message = detail;
       else if (detail?.detail === 'file-too-large') message = `Die Datei ist zu groß. Maximal ${Math.round(detail.max_bytes / 1048576)} MB sind erlaubt.`;
       else if (detail?.detail === 'empty-file') message = 'Die Datei ist leer.';
+      else if (detail?.detail === 'fz-key-missing') message = 'Der FZ-Schlüssel fehlt. Öffne Einstellungen → Boardview-Schlüssel, lade den Schlüssel und speichere die Einstellungen.';
       else if (detail?.detail === 'unsupported-format') message = 'Dieses Dateiformat wird nicht unterstützt.';
       else if (detail?.message?.includes('pcbnew not available')) message = 'Für native KiCad-Dateien muss KiCad mit dem Python-Modul pcbnew auf dem Server installiert sein. Alternativ einen Boardview-Export importieren.';
       else if (detail?.message) message = detail.message;
@@ -199,6 +201,8 @@ function showBoard(tab) {
   const { id, board, metadata } = tab;
   revealWorkspace(id);
   state.board = board;
+  $('import-notes').textContent = (board.parser_notes || []).join(' · ');
+  $('import-notes').hidden = !board.parser_notes?.length;
   updateMetadata(metadata);
   enableControls(true);
   $('parts-count').textContent = number(metadata.parts_count);
@@ -261,6 +265,7 @@ function findOnBoard(token) {
 
 function clearBoard() {
   state.active = null;state.board = null;
+  $('import-notes').hidden = true;
   worklist.clear();compare.hide();schematic.setBoard(null);
   viewer.load(null);enableControls(false);renderCatalog();renderEntities();renderSelection(null);
   $('board-title').textContent = 'Dein nächster Blick ins Detail.';
@@ -382,6 +387,8 @@ function renderSelection(selection) {
     appendPins(item.pin_refs.map(index => state.board.pins[index]).filter(Boolean), container);
   } else if (selection.kind === 'part') {
     container.append(element('h3', '', item.refdes));
+    if (item.placement_inferred) detail(container, 'Position', 'Aus Leiterbahnen geschätzt – nicht direkt in der Datei gespeichert');
+    detail(container, 'Importhinweis', item.import_note);
     detail(container, 'Wert', item.value);detail(container, 'Gehäuse', item.footprint);
     detail(container, 'Seite', sideName(item.layer));detail(container, 'Pins', number(item.pin_refs.length));
     detail(container, 'Drehung', item.rotation_deg != null ? `${item.rotation_deg}°` : null);
@@ -553,3 +560,11 @@ window.addEventListener('pagehide', event => {
   tabs.destroy();
   viewer.dispose();
 });
+
+$('offline-save').onclick = async () => {
+  if (!state.board) { notify('Bitte zuerst eine Platine öffnen.'); return; }
+  $('offline-save').disabled = true;
+  try { await saveOffline(state.board); notify('Offline gespeichert. Unter Einstellungen → Offline-Bibliothek öffnen.'); }
+  catch(error) { notify(error.message, true); }
+  finally { $('offline-save').disabled = false; }
+};

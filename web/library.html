@@ -16,7 +16,7 @@
   <header class="app-header">
     <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">▦</span><span>Wrench<span class="muted">Board</span></span></a>
     <span class="header-divider"></span><span class="page-label">PCB-Bibliothek</span>
-    <div class="header-actions"><button class="secondary" id="browse-catalog" hidden>← Zum Raster</button><span class="storage-label"><i></i> Lokale Sammlung</span><button class="primary" id="import-button"><span aria-hidden="true">＋</span> PCB importieren</button></div>
+    <div class="header-actions"><a class="secondary" href="/settings.html">Einstellungen</a><button class="secondary" id="browse-catalog" hidden>← Zum Raster</button><span class="storage-label"><i></i> Lokale Sammlung</span><button class="primary" id="import-button"><span aria-hidden="true">＋</span> PCB importieren</button></div>
     <input id="file-input" type="file" multiple hidden>
   </header>
   <main class="catalog-browser" id="catalog-browser">
@@ -48,7 +48,8 @@
 
     <section class="board-area" aria-label="Platinenansicht" id="drop-zone">
       <div id="board-tabs"></div>
-      <div class="board-heading"><div><div class="eyebrow">BOARD EXPLORER</div><h2 id="board-title">Dein nächster Blick ins Detail.</h2><p id="board-subtitle">Wähle eine Platine aus deiner Bibliothek.</p></div><button class="icon-button" id="favorite" aria-label="Als Favorit markieren" aria-pressed="false" disabled>☆</button></div>
+      <div class="board-heading"><div><div class="eyebrow">BOARD EXPLORER</div><h2 id="board-title">Dein nächster Blick ins Detail.</h2><p id="board-subtitle">Wähle eine Platine aus deiner Bibliothek.</p></div><button class="secondary" id="offline-save">Offline speichern</button><button class="icon-button" id="favorite" aria-label="Als Favorit markieren" aria-pressed="false" disabled>☆</button></div>
+      <p id="import-notes" class="import-notes" role="status" hidden></p>
       <div class="viewer-toolbar">
         <div class="segmented" aria-label="Platinenseite"><button data-side="3" class="active" aria-pressed="true" disabled>Beide</button><button data-side="1" aria-pressed="false" disabled>Oberseite</button><button data-side="2" aria-pressed="false" disabled>Unterseite</button></div>
         <div class="view-options"><label><input type="checkbox" id="labels" checked disabled> Labels</label><label><input type="checkbox" id="mirror" disabled> Spiegeln</label><label><input type="checkbox" id="butterfly" disabled> Nebeneinander</label><select id="trace-layer" aria-label="Leiterbahnebene" disabled><option value="">Leiterbahnen aus</option></select><select id="net-walk" aria-label="Nachbarnetze hervorheben" disabled><option value="0">Nachbarnetze aus</option><option value="1">Nachbarnetze: 1 Stufe</option><option value="2">Nachbarnetze: 2 Stufen</option></select><select id="pdf-select" aria-label="Schaltplan öffnen" disabled><option value="">Kein Schaltplan</option></select><button class="text-button" id="pdf-close" hidden>Schaltplan schließen</button></div>

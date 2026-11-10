@@ -23,6 +23,9 @@ import { mountMascot } from './mascot.js';
 import { sendDiagnostic } from './services/diagnosticSocket.js';
 import { sendCapabilities } from './features/repair/diagnostic/filesVision.js';
 import * as Protocol from './protocol.js?v=quest4';
+import { installModalFocusTrap } from './shared/modal_focus.js';
+
+installModalFocusTrap();
 
 // Tracks which device slug the graph has already been mounted for. Guards
 // against a second initGraphWithData() call on re-navigation to #graphe —

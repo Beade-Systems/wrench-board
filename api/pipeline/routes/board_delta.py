@@ -15,6 +15,7 @@ from api.config import get_settings
 from api.pipeline.board_delta.agent import generate_board_delta
 from api.pipeline.board_delta.store import normalize_board_number, read_delta, write_delta
 from api.pipeline.build_metering import report_delta_usage
+from api.pipeline.routes._helpers import _validate_slug
 
 router = APIRouter()
 
@@ -32,7 +33,13 @@ async def create_board_delta(
     ``memory/{slug}/board_deltas/{board}.json``, and fires one
     ``kind='delta'`` metering event (no-op on self-host).
     """
+    _validate_slug(slug)  # becomes memory/{slug}/board_deltas/ — no traversal
     settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail={"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
+        )
     client = AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=settings.anthropic_max_retries)
     delta = await generate_board_delta(
         client=client,
@@ -57,6 +64,7 @@ async def create_board_delta(
 @router.get("/packs/{slug}/board-delta/{board}")
 async def get_board_delta(slug: str, board: str):
     """Return a stored board-delta, or 404 if not yet generated."""
+    _validate_slug(slug)
     settings = get_settings()
     delta = read_delta(
         memory_root=Path(settings.memory_root),

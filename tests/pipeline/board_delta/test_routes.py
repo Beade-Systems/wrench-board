@@ -47,3 +47,26 @@ def test_get_missing_delta_404(memroot):
     client = TestClient(app)
     r = client.get("/pipeline/packs/macbook-air-m1/board-delta/nope")
     assert r.status_code == 404
+
+
+def test_post_rejects_traversal_slug(memroot):
+    r = TestClient(app).post(
+        "/pipeline/packs/%2e%2e/board-delta",
+        data={"device_label": "X", "board_number": "1"},
+    )
+    assert r.status_code in (404, 422)  # 404 when the router normalises the path
+    assert not (memroot.parent / "board_deltas").exists()
+
+
+def test_post_503_without_api_key(memroot):
+    with patch("api.pipeline.routes.board_delta.get_settings") as gs:
+        gs.return_value.anthropic_api_key = ""
+        r = TestClient(app).post(
+            "/pipeline/packs/macbook-air-m1/board-delta",
+            data={"device_label": "X", "board_number": "1"},
+        )
+    assert r.status_code == 503
+
+
+def test_get_rejects_traversal_slug(memroot):
+    assert TestClient(app).get("/pipeline/packs/a..b/board-delta/1").status_code == 422

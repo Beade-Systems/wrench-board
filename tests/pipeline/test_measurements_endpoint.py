@@ -58,3 +58,14 @@ def test_get_measurements_filter_target(tmp_memory: Path, client: TestClient):
     )
     assert len(r.json()["measurements"]) == 1
     assert r.json()["measurements"][0]["target"] == "comp:Q17"
+
+
+def test_post_measurement_unknown_pack_is_404_and_creates_nothing(
+    tmp_memory: Path, client: TestClient
+):
+    r = client.post(
+        "/pipeline/packs/ghost-slug/repairs/ghost/measurements",
+        json={"target": "rail:+5V", "value": 1.0, "unit": "V"},
+    )
+    assert r.status_code == 404
+    assert not (tmp_memory / "ghost-slug").exists()

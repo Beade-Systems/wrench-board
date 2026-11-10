@@ -84,3 +84,13 @@ def test_repairs_route_rejects_traversal_slug(client, tmp_path, monkeypatch):
 def test_board_render_rejects_traversal_slug(client):
     r = client.get("/api/board/render", params={"slug": "../board_assets/mnt-reform-motherboard"})
     assert r.status_code == 422
+
+
+def test_generate_503_without_api_key(client, monkeypatch):
+    from api import config
+
+    monkeypatch.setattr(config, "_settings", None, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    r = client.post("/pipeline/generate", json={"device_label": "Test Device X"})
+    monkeypatch.setattr(config, "_settings", None, raising=False)
+    assert r.status_code == 503

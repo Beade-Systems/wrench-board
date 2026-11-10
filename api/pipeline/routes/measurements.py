@@ -42,8 +42,13 @@ async def post_measurement(
     """
     settings = get_settings()
     safe_repair_id = _validate_repair_id(repair_id)
+    slug = _slugify(device_slug)
+    if not (Path(settings.memory_root) / slug).is_dir():
+        # Writing would mkdir memory/{slug}/ and surface a phantom pack in
+        # GET /pipeline/packs — an unknown device is a 404, not a new pack.
+        raise HTTPException(status_code=404, detail=f"No pack for device_slug={slug!r}")
     result = _mb_record_measurement(
-        device_slug=_slugify(device_slug),
+        device_slug=slug,
         repair_id=safe_repair_id,
         memory_root=Path(settings.memory_root),
         target=body.target,

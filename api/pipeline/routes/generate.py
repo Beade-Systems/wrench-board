@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+from api.config import get_settings
 from api.pipeline.models import GenerateRequest
 from api.pipeline.orchestrator import generate_knowledge_pack
 from api.pipeline.schemas import PipelineResult
@@ -28,6 +29,12 @@ async def generate(request: GenerateRequest) -> PipelineResult:
     and whether the Auditor triggers revise rounds.
     """
     logger.info("[API] /pipeline/generate · device=%r", request.device_label)
+    if not get_settings().anthropic_api_key:
+        # Misconfiguration, not a server crash: 503 like the other Opus routes.
+        raise HTTPException(
+            status_code=503,
+            detail={"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
+        )
     try:
         return await generate_knowledge_pack(request.device_label)
     except RuntimeError as exc:

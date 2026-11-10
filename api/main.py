@@ -18,6 +18,7 @@ from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 from api import __version__
 from api.agent.board_ref import set_board_ref
 from api.agent.macros import macro_path_for
+from api.board import audit  # noqa: F401 — registers audit endpoints
 from api.board.library import router as library_router
 from api.board.router import router as board_router
 from api.board.source_catalog import router as source_catalog_router
@@ -31,6 +32,7 @@ from api.logging_setup import configure_logging
 from api.pipeline import router as pipeline_router
 from api.profile.router import router as profile_router
 from api.stock import stock_router
+from api.workbench_settings import router as settings_router
 from api.ws_security import enforce_ws_origin, enforce_ws_service_token
 
 logger = logging.getLogger("wrench_board.main")
@@ -193,6 +195,7 @@ app.include_router(pipeline_router)
 app.include_router(board_router)
 app.include_router(library_router)
 app.include_router(source_catalog_router)
+app.include_router(settings_router)
 app.include_router(profile_router)
 app.include_router(stock_router)
 

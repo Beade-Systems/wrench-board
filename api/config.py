@@ -507,5 +507,7 @@ def get_settings() -> Settings:
     """Return a process-wide cached Settings instance."""
     global _settings
     if _settings is None:
-        _settings = Settings()
+        from api.workbench_settings import apply_preferences
+
+        _settings = apply_preferences(Settings())
     return _settings

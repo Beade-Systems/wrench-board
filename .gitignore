@@ -223,3 +223,7 @@ tests/fixtures/macro_devboard_synthetic.png
 
 # Draft release notes — pasted into the GitHub Release, not tracked
 RELEASE_NOTES-*.md
+
+# Local UI preferences may contain API and boardview keys.
+_workbench_settings.json
+.settings-*

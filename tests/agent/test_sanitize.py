@@ -237,14 +237,15 @@ def test_handles_adjacent_punctuation() -> None:
         assert unknown == ["U999"], f"failed on {sample!r}"
 
 
-def test_refdes_over_four_digits_is_not_wrapped() -> None:
-    """Known limitation: the regex caps at \\d{1,4}, so a hallucinated U10000
-    slips through. Real boards rarely exceed 4-digit refdes so this is
-    accepted; lock in the behavior so a regex tweak is a deliberate decision."""
+def test_refdes_up_to_five_digits_is_wrapped() -> None:
+    """The regex covers 1-5 digits (large boards reach 5-digit designators),
+    so a hallucinated U10000 is wrapped. Six digits and more stay out of
+    scope: they read as part numbers / values, not designators."""
     board = _board_with_parts([])
     clean, unknown = sanitize_agent_text("check U10000", board)
-    assert clean == "check U10000"
-    assert unknown == []
+    assert clean == "check ⟨?U10000⟩"
+    assert unknown == ["U10000"]
+    assert sanitize_agent_text("R1000000", board)[1] == []
 
 
 def test_comma_separated_list_wraps_each_token() -> None:
@@ -270,3 +271,49 @@ def test_french_prose_context() -> None:
     assert "C1" in clean
     assert "⟨?C1⟩" not in clean
     assert unknown == ["U999"]
+
+
+def test_unit_suffix_of_known_part_is_kept_unknown_is_wrapped() -> None:
+    board = _board_with_parts(["U7"])
+    clean, unknown = sanitize_agent_text("U7A is fine, U999A is not", board)
+    assert "U7A is fine" in clean
+    assert "⟨?U999A⟩" in clean
+    assert unknown == ["U999A"]
+
+
+def test_invisible_and_fullwidth_evasion_is_caught() -> None:
+    board = _board_with_parts(["U7"])
+    _, unknown = sanitize_agent_text("swap U\u200b999 and \uff35\uff19\uff19\uff19", board)
+    assert unknown == ["U999", "U999"]
+
+
+def test_package_and_mpn_names_are_not_wrapped() -> None:
+    board = _board_with_parts(["U7"])
+    text = "an LM358 op-amp in SOT23, a TPS65 PMIC in QFN48"
+    clean, unknown = sanitize_agent_text(text, board)
+    assert clean == text
+    assert unknown == []
+
+
+def test_markdown_link_target_is_left_intact() -> None:
+    board = _board_with_parts(["U7"])
+    clean, unknown = sanitize_agent_text("see [U7](/docs/U999) here", board)
+    assert clean == "see [U7](/docs/U999) here"
+    assert unknown == []
+
+
+async def test_direct_history_replay_is_sanitized() -> None:
+    """messages.jsonl keeps the raw model text; the direct-mode replay must
+    re-wrap unknown refdes on reopen (parity with the managed replay)."""
+    from api.agent.runtime_direct import _replay_history_to_ws
+
+    sent: list[dict] = []
+
+    class _WS:
+        async def send_json(self, payload):
+            sent.append(payload)
+
+    records = [({"role": "assistant", "content": [{"type": "text", "text": "check U999 and U7"}]}, None)]
+    await _replay_history_to_ws(_WS(), records, _board_with_parts(["U7"]))
+    texts = [m["text"] for m in sent if m.get("type") == "message"]
+    assert texts == ["check ⟨?U999⟩ and U7"]

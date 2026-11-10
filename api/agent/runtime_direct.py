@@ -537,6 +537,7 @@ async def _run_agent_turn(
 async def _replay_history_to_ws(
     ws: WebSocket,
     records: list[tuple[dict[str, Any], dict[str, Any] | None]],
+    board: Any = None,
 ) -> None:
     """Stream past events back to the client so its chat panel can reconstruct
     the conversation on a reopen. Only surface user text + assistant text +
@@ -561,11 +562,15 @@ async def _replay_history_to_ws(
             for block in content:
                 btype = block.get("type") if isinstance(block, dict) else None
                 if btype == "text":
+                    # messages.jsonl stores the raw model text; re-run the
+                    # sanitizer so a reopen never shows an unwrapped
+                    # hallucinated refdes (parity with the managed replay).
+                    text, _ = sanitize_agent_text(block.get("text", ""), board)
                     await ws.send_json(
                         {
                             "type": "message",
                             "role": "assistant",
-                            "text": block.get("text", ""),
+                            "text": text,
                             "replay": True,
                         }
                     )
@@ -787,7 +792,7 @@ async def run_diagnostic_session_direct(
             resolved_conv_id,
             len(records),
         )
-        await _replay_history_to_ws(ws, records)
+        await _replay_history_to_ws(ws, records, session.board)
     elif repair_id and resolved_conv_id:
         # Fresh session on a known repair — stash the device identity + the
         # reported symptom as a hidden first user message so the agent has

@@ -13,7 +13,39 @@ import re
 from api.board.model import Board
 from api.board.validator import is_valid_refdes
 
-REFDES_RE = re.compile(r"\b[A-Z]{1,3}\d{1,4}\b")
+# 1-3 letter prefix, 1-5 digits, optional single unit/sub-part suffix letter
+# (`U7A`, `Q1B`). Lowercase is deliberately NOT scanned: `h2`, `mp3`, `x86`…
+# would turn prose into false positives far more often than an agent
+# lowercases a refdes.
+REFDES_RE = re.compile(r"\b[A-Z]{1,3}\d{1,5}[A-Z]?\b")
+
+# Invisible characters an agent (or a prompt-injected document) can use to
+# split a refdes so the regex misses it: zero-width space/joiners, word
+# joiner, BOM. Stripped before scanning — they carry no visible meaning.
+_INVISIBLE_RE = re.compile("[\u200b\u200c\u200d\u2060\ufeff]")
+
+# Fullwidth ASCII (`Ｕ９９９`) renders like a refdes but evades an ASCII
+# regex. Folded to plain ASCII before scanning. Deliberately narrower than
+# NFKC, which would also rewrite superscripts (mm² → mm2) and ligatures.
+_FULLWIDTH_TABLE = {cp: cp - 0xFEE0 for cp in range(0xFF01, 0xFF5F)}
+
+# Spans never scanned: Markdown link targets `](…)`. They are invisible
+# once rendered, so wrapping only breaks the link with no safety gain.
+# Bare URLs ARE still scanned — they are visible text, and safety trumps
+# link fidelity there (see test_wraps_in_url_fragment).
+_SKIP_SPAN_RE = re.compile(r"\]\([^)\s]*\)")
+
+# Package names and IC part-number families that share the refdes shape
+# (`SOT23`, `QFN48`, `LM358`, `TPS65`). Same contract as the protocol
+# blocklist: a real refdes on the board resolves first, this only stops
+# unknown-but-clearly-not-a-refdes tokens from being wrapped.
+_NON_REFDES_RE = re.compile(
+    r"^(?:SOT|SOD|SOP|QFN|DFN|BGA|LGA|TO|SC)\d{2,}[A-Z]?$"
+    # 3-letter MPN families are never refdes prefixes → 2+ digits suffice;
+    # 2-letter ones (LM, TL…) could be, so require a part-number-length run.
+    r"|^(?:TPS|MAX|AMS|ISO)\d{2,}[A-Z]?$"
+    r"|^(?:LM|TL|LT|NE|BQ|TS|AP|RT|SY|MP)\d{3,}[A-Z]?$"
+)
 
 # Device model numbers (Apple `A####` — A2337, A1989, A2338, A2179…) match the
 # refdes shape but are NEVER board components: the agent names them when it
@@ -141,19 +173,33 @@ def sanitize_agent_text(text: str, board: Board | None) -> tuple[str, list[str]]
     if board is None:
         return _validate_donor_ids(text), []
 
+    text = _INVISIBLE_RE.sub("", text).translate(_FULLWIDTH_TABLE)
     unknown: list[str] = []
 
     def _wrap(match: re.Match[str]) -> str:
         token = match.group(0)
         if is_valid_refdes(board, token):
             return token
-        if token in PROTOCOL_BLOCKLIST or _DEVICE_MODEL_RE.match(token):
+        # `U7A` = unit A of a real `U7` (multi-unit op-amps, dual MOSFETs).
+        if token[-1].isalpha() and is_valid_refdes(board, token[:-1]):
+            return token
+        if (
+            token in PROTOCOL_BLOCKLIST
+            or _DEVICE_MODEL_RE.match(token)
+            or _NON_REFDES_RE.match(token)
+        ):
             return token
         unknown.append(token)
         return f"⟨?{token}⟩"
 
-    cleaned = REFDES_RE.sub(_wrap, text)
-    return _validate_donor_ids(cleaned), unknown
+    out: list[str] = []
+    pos = 0
+    for span in _SKIP_SPAN_RE.finditer(text):
+        out.append(REFDES_RE.sub(_wrap, text[pos : span.start()]))
+        out.append(span.group(0))
+        pos = span.end()
+    out.append(REFDES_RE.sub(_wrap, text[pos:]))
+    return _validate_donor_ids("".join(out)), unknown
 
 
 # --------------------------------------------------------------------------- #

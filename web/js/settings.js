@@ -20,6 +20,7 @@ function renderFolders(active = $('active-folder').value) {
   $('active-folder').value = active;
 }
 function show(data) {
+  $('allegro-heap').value = data.allegro_heap_mb;
   folders = data.folders; renderFolders(data.active_folder);
   $('model-main').value = data.anthropic_model_main; $('model-fast').value = data.anthropic_model_fast;
   for (const [id, key] of [['fz','fz_key'],['xzz','xzz_key'],['api','anthropic_api_key']]) {
@@ -30,7 +31,7 @@ function show(data) {
 $('add-folder').onclick = () => { const path = $('folder-path').value.trim(); if (path && !folders.includes(path)) folders.push(path); renderFolders($('active-folder').value || path); };
 $('settings-form').onsubmit = async event => {
   event.preventDefault();
-  const data = { folders, active_folder: $('active-folder').value, anthropic_model_main: $('model-main').value, anthropic_model_fast: $('model-fast').value };
+  const data = { allegro_heap_mb: Number($('allegro-heap').value), folders, active_folder: $('active-folder').value, anthropic_model_main: $('model-main').value, anthropic_model_fast: $('model-fast').value };
   for (const [id,key] of [['fz','fz_key'],['xzz','xzz_key'],['api','anthropic_api_key']]) {
     if ($(`clear-${id}`).checked) data[key] = ''; else if ($(`${id}-key`).value.trim()) data[key] = $(`${id}-key`).value.trim();
   }

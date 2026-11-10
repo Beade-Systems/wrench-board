@@ -468,3 +468,26 @@ def test_settings_and_offline_saved_board(page, server):
     page.locator('#side').select_option('1')
     page.locator('#fit').click()
     page.context.set_offline(False)
+
+
+def test_real_allegro_import_in_library(page, server):
+    """Opt-in real-file check; proprietary sample stays outside the repository."""
+    sample = os.environ.get("WRENCH_BOARD_ALLEGRO_SAMPLE")
+    if not sample or not Path(sample).is_file():
+        pytest.skip("Set WRENCH_BOARD_ALLEGRO_SAMPLE to a local Allegro .brd file")
+    page.goto(server + "/library.html", wait_until="domcontentloaded")
+    page.locator("#file-input").set_input_files(sample)
+    page.wait_for_function(
+        "document.querySelector('#source-format').textContent === 'ALLEGRO'",
+        timeout=90000,
+    )
+    assert int(page.locator("#parts-count").inner_text().replace(".", "")) > 0
+    assert int(page.locator("#pins-count").inner_text().replace(".", "")) > 0
+    page.locator("#fit").click()
+    page.locator('[data-side="1"]').click()
+    page.locator('[data-side="2"]').click()
+    assert page.locator("#board-canvas").is_visible()
+    page.goto(server + "/settings.html")
+    page.wait_for_function(
+        "document.querySelector('#format-status').textContent.includes('Allegro: verfügbar')"
+    )

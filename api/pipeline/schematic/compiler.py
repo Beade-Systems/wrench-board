@@ -1645,10 +1645,13 @@ def _compute_boot_sequence(
             # Cycle — remaining nodes can't be scheduled.
             return phases, involved - placed
 
+        # Only real rails: vision emits `powers` edges into in-line pass
+        # elements too (e.g. connector → fuse), whose dst is a component
+        # refdes — never a rail that can be "stable".
         rails_stable = [
             e.dst
             for e in graph.typed_edges
-            if e.kind == "powers" and e.src in ready
+            if e.kind == "powers" and e.src in ready and e.dst in power_rails
         ]
         phases.append(
             BootPhase(

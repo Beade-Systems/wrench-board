@@ -716,3 +716,54 @@ def test_untraced_source_still_sources_rail():
     inferred producer so the simulator cascade stays intact)."""
     eg = compile_electrical_graph(_alias_page_graph())
     assert eg.power_rails["+5V"].source_refdes == "U9000"
+
+
+# ----------------------------------------------------------------------
+# Boot fallback — rails_stable only ever lists real rails. Vision emits
+# `powers` edges into in-line pass elements (mnt-reform J1→F1, U24→F3);
+# their dst is a component refdes and must not leak into rails_stable.
+# ----------------------------------------------------------------------
+
+
+def _powers_into_fuse_graph() -> SchematicGraph:
+    components = {
+        "J1": ComponentNode(
+            refdes="J1", type="connector", pages=[1],
+            pins=[PagePin(number="1", role="power_out", net_label="VIN")],
+        ),
+        "F1": ComponentNode(
+            refdes="F1", type="fuse", pages=[1],
+            pins=[
+                PagePin(number="1", role="terminal", net_label="VIN"),
+                PagePin(number="2", role="terminal", net_label="VIN_F"),
+            ],
+        ),
+        "U1": ComponentNode(
+            refdes="U1", type="ic", pages=[1],
+            pins=[PagePin(number="1", role="power_in", net_label="VIN_F")],
+        ),
+    }
+    nets = {
+        "VIN": NetNode(label="VIN", is_power=True, pages=[1],
+                       connects=["J1.1", "F1.1"]),
+        "VIN_F": NetNode(label="VIN_F", is_power=True, pages=[1],
+                         connects=["F1.2", "U1.1"]),
+    }
+    edges = [
+        TypedEdge(src="J1", dst="VIN", kind="powers", page=1),
+        TypedEdge(src="J1", dst="F1", kind="powers", page=1),  # vision mistake
+        TypedEdge(src="U1", dst="VIN_F", kind="powered_by", page=1),
+    ]
+    return SchematicGraph(
+        device_slug="powers-fuse", source_pdf="x.pdf", page_count=1,
+        components=components, nets=nets, typed_edges=edges,
+    )
+
+
+def test_boot_rails_stable_excludes_component_refdes():
+    elec = compile_electrical_graph(_powers_into_fuse_graph())
+    assert elec.boot_sequence, "fixture must produce a fallback boot sequence"
+    stable = {r for p in elec.boot_sequence for r in p.rails_stable}
+    assert "F1" not in stable
+    assert "VIN" in stable
+    assert stable <= set(elec.power_rails)

@@ -24,7 +24,7 @@ import { packedOnly, hideUploads, planHints } from '../../../cloud_hints.js';
 
 const KNOWLEDGE_INFO_FLAG = 'wb_knowledge_info_seen';
 import { connectProgress, fetchPendingKind } from '../../../services/pipelineSocket.js';
-import { loadDevices } from '../../../services/deviceCatalog.js';
+import { loadDevices, searchHardware } from '../../../services/deviceCatalog.js';
 import {
   PHASE_ORDER,
   LANDING_DYNAMIC_PHASES,
@@ -327,6 +327,13 @@ export async function launchFromCatalogue({ slug, label, complete, device_kind, 
   if (symptomEl) symptomEl.value = symptom || "";
   if (kindEl) kindEl.value = device_kind || "";
   await submitDiagnostic();
+}
+
+// Called by the catalogue modal when the tech picks a hardware-library row (no
+// knowledge pack yet): same effect as picking it in the suggest dropdown — the
+// label lands in the device input, no slug pinned, focus moves to the symptom.
+export function pickHardwareFromCatalogue(label) {
+  _selectSuggest(label, null, false, false);
 }
 
 function setStatus(msg, kind) {
@@ -1029,53 +1036,105 @@ function _deviceIdLine(d) {
   return parts.join(" · ");
 }
 
+// Hardware-catalogue rows for the current query (async, server-side search) and
+// a sequence guard so a slow response never overwrites a newer query's list.
+let _hardwareMatches = [];
+let _hardwareSeq = 0;
+let _hardwareTimer = null;
+
 function _renderSuggest(query) {
+  _hardwareMatches = [];
+  _paintSuggest(query);
+  // Packs render instantly from the session cache; the hardware catalogue
+  // (boards / schematics indexed by the PCB library) follows, debounced.
+  const seq = ++_hardwareSeq;
+  clearTimeout(_hardwareTimer);
+  if ((query || "").trim().length < 2) return;
+  _hardwareTimer = setTimeout(async () => {
+    const rows = await searchHardware(query);
+    const dev = document.getElementById("landingDevice");
+    if (seq !== _hardwareSeq || document.activeElement !== dev) return;
+    _hardwareMatches = rows;
+    _paintSuggest(query);
+  }, 160);
+}
+
+function _packSuggestHtml(d, i, tFn) {
+  const draftLabel = tFn("landing.suggest.draft");
+  const safeLabel = _escapeHtml(d.label);
+  const safeSub = d.subtitle ? _escapeHtml(d.subtitle) : "";
+  const safeSlug = _escapeHtml(d.slug);
+  const iconClass = d.complete ? "is-complete" : "is-partial";
+  const iconText = d.complete ? "✓" : "•";
+  // Readiness badges (right of line 1): draft marker (incomplete pack), the
+  // graph badge (lit when an electrical graph is compiled), and the device-kind
+  // short code (GPU / LAPTOP / …).
+  const draftBadge = d.complete ? "" : `<span class="landing-suggest-badge is-draft">${_escapeHtml(draftLabel)}</span>`;
+  const graphBadge = `<span class="landing-suggest-badge${d.has_electrical_graph ? " is-on" : ""}" title="${_escapeHtml(tFn("landing.suggest.graph_title"))}">${_escapeHtml(tFn("landing.suggest.graph_label"))}</span>`;
+  const kindBadge = (d.device_kind && d.device_kind !== "unknown")
+    ? `<span class="landing-suggest-badge mono">${_escapeHtml(deviceKindShort(d.device_kind) || d.device_kind)}</span>`
+    : "";
+  const idLine = _escapeHtml(_deviceIdLine(d));
+  const brand = safeSub ? `<span class="landing-suggest-brand">${safeSub}</span>` : "";
+  // data-label = the short model name (e.g. "iPhone 12") that lands in
+  // the input on selection. NOT d.device_label, which is the raw
+  // registry label (e.g. "Apple iPhone 12 logic board") and would
+  // pollute the input with brand + form-factor noise.
+  return `<div class="landing-suggest-item" role="option" `
+    + `data-slug="${safeSlug}" data-label="${safeLabel}" data-index="${i}" `
+    + `data-graph="${d.has_electrical_graph ? "1" : ""}" data-complete="${d.complete ? "1" : ""}">`
+    + `<span class="landing-suggest-icon ${iconClass}" aria-hidden="true">${iconText}</span>`
+    + `<div class="landing-suggest-body">`
+    + `<div class="landing-suggest-line1">`
+    + `<span class="landing-suggest-label">${safeLabel}</span>${brand}`
+    + `<span class="landing-suggest-meta">${draftBadge}${graphBadge}${kindBadge}</span>`
+    + `</div>`
+    + (idLine ? `<div class="landing-suggest-ids">${idLine}</div>` : "")
+    + `</div>`
+    + `</div>`;
+}
+
+// A catalogue row: hardware the library has files for but no knowledge pack
+// yet. No slug is pinned — picking it fills the device label and the pack is
+// built on submit, like any free-typed device.
+function _hardwareSuggestHtml(d, i, tFn) {
+  const safeLabel = _escapeHtml(d.label);
+  const ids = [
+    d.board_number,
+    d.board_count ? tFn("landing.suggest.hw_boards", { count: d.board_count }) : "",
+    d.pdf_count ? tFn("landing.suggest.hw_pdfs", { count: d.pdf_count }) : "",
+  ].filter(Boolean).join(" · ");
+  return `<div class="landing-suggest-item" role="option" `
+    + `data-slug="" data-label="${_escapeHtml(d.pick)}" data-index="${i}" data-graph="" data-complete="">`
+    + `<span class="landing-suggest-icon" aria-hidden="true">·</span>`
+    + `<div class="landing-suggest-body">`
+    + `<div class="landing-suggest-line1">`
+    + `<span class="landing-suggest-label">${safeLabel}</span>`
+    + `<span class="landing-suggest-meta"><span class="landing-suggest-badge mono" title="${_escapeHtml(tFn("landing.suggest.hw_title"))}">${_escapeHtml(tFn("landing.suggest.hw_label"))}</span></span>`
+    + `</div>`
+    + (ids ? `<div class="landing-suggest-ids">${_escapeHtml(ids)}</div>` : "")
+    + `</div>`
+    + `</div>`;
+}
+
+function _paintSuggest(query) {
   const box = document.getElementById("landingSuggest");
   if (!box) return;
   const matches = _matchDevices(query);
-  if (matches.length === 0) {
+  if (matches.length === 0 && _hardwareMatches.length === 0) {
     box.hidden = true;
     box.innerHTML = "";
     _suggestActiveIdx = -1;
     return;
   }
   const tFn = window.t || ((k) => k);
-  const draftLabel = tFn("landing.suggest.draft");
-  box.innerHTML = matches.map((d, i) => {
-    const safeLabel = _escapeHtml(d.label);
-    const safeSub = d.subtitle ? _escapeHtml(d.subtitle) : "";
-    const safeSlug = _escapeHtml(d.slug);
-    const iconClass = d.complete ? "is-complete" : "is-partial";
-    const iconText = d.complete ? "✓" : "•";
-    // Readiness badges (right of line 1): draft marker (incomplete pack), the
-    // graph badge (lit when an electrical graph is compiled), and the device-kind
-    // short code (GPU / LAPTOP / …).
-    const draftBadge = d.complete ? "" : `<span class="landing-suggest-badge is-draft">${_escapeHtml(draftLabel)}</span>`;
-    const graphBadge = `<span class="landing-suggest-badge${d.has_electrical_graph ? " is-on" : ""}" title="${_escapeHtml(tFn("landing.suggest.graph_title"))}">${_escapeHtml(tFn("landing.suggest.graph_label"))}</span>`;
-    const kindBadge = (d.device_kind && d.device_kind !== "unknown")
-      ? `<span class="landing-suggest-badge mono">${_escapeHtml(deviceKindShort(d.device_kind) || d.device_kind)}</span>`
-      : "";
-    const idLine = _escapeHtml(_deviceIdLine(d));
-    const brand = safeSub ? `<span class="landing-suggest-brand">${safeSub}</span>` : "";
-    // data-label = the short model name (e.g. "iPhone 12") that lands in
-    // the input on selection. NOT d.device_label, which is the raw
-    // registry label (e.g. "Apple iPhone 12 logic board") and would
-    // pollute the input with brand + form-factor noise.
-    return `<div class="landing-suggest-item" role="option" `
-      + `data-slug="${safeSlug}" data-label="${safeLabel}" data-index="${i}" `
-      + `data-graph="${d.has_electrical_graph ? "1" : ""}" data-complete="${d.complete ? "1" : ""}">`
-      + `<span class="landing-suggest-icon ${iconClass}" aria-hidden="true">${iconText}</span>`
-      + `<div class="landing-suggest-body">`
-      + `<div class="landing-suggest-line1">`
-      + `<span class="landing-suggest-label">${safeLabel}</span>${brand}`
-      + `<span class="landing-suggest-meta">${draftBadge}${graphBadge}${kindBadge}</span>`
-      + `</div>`
-      + (idLine ? `<div class="landing-suggest-ids">${idLine}</div>` : "")
-      + `</div>`
-      + `</div>`;
-  }).join("");
+  const active = _suggestActiveIdx;
+  box.innerHTML = matches.map((d, i) => _packSuggestHtml(d, i, tFn)).join("")
+    + _hardwareMatches.map((d, i) => _hardwareSuggestHtml(d, matches.length + i, tFn)).join("");
   box.hidden = false;
   _suggestActiveIdx = -1;
+  // Late catalogue rows must not drop a keyboard highlight already on a pack.
+  if (active >= 0 && active < matches.length) _setSuggestActive(active);
 }
 
 // T9a: render the disambiguation candidates into the suggest dropdown using the

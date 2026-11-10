@@ -116,7 +116,11 @@
     "aria": "Device suggestions",
     "draft": "draft",
     "graph_label": "graph",
-    "graph_title": "Electrical graph ready"
+    "graph_title": "Electrical graph ready",
+    "hw_label": "library",
+    "hw_title": "In the hardware library — no knowledge pack yet",
+    "hw_boards": "{count} boardview",
+    "hw_pdfs": "{count} PDF"
   },
   "tools": {
     "stock": "Stock"
@@ -149,6 +153,7 @@
     "present": "yes",
     "absent": "no",
     "button_short": "Browse",
-    "crumb_types": "Types"
+    "crumb_types": "Types",
+    "hw_head": "Hardware library — no knowledge pack yet"
   }
 }

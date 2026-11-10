@@ -70,3 +70,38 @@ export async function loadBoards({ force = false } = {}) {
   _boardsCache = flattenBoards(tree);
   return _boardsCache;
 }
+
+// Hardware catalogue search — the indexed board/schematic source behind the PCB
+// library (GET /api/library/source/devices, one row per brand/model/board#).
+// Unlike the pack taxonomy this is queried server-side per keystroke (tens of
+// thousands of rows). Returns [] when no source is configured or on any error:
+// callers then simply show packs only.
+export async function searchHardware(query, { limit = 6 } = {}) {
+  const q = (query || "").trim();
+  if (q.length < 2) return [];
+  try {
+    const res = await apiGet(`/api/library/source/devices?q=${encodeURIComponent(q)}&limit=${limit}`);
+    return (res.items || []).map((d) => {
+      const brand = (d.brand || "").trim();
+      const model = (d.model || "").trim();
+      // Folder-derived model names sometimes repeat the brand ("Acer Nitro 5").
+      const label = model.toLowerCase().startsWith(brand.toLowerCase())
+        ? model : [brand, model].filter(Boolean).join(" ");
+      const shown = label || d.board_number || "";
+      // The board number is what tells two catalogue rows of one model apart,
+      // so `pick` (the text that lands in the device input) carries it.
+      const bn = d.board_number || "";
+      const pick = bn && !shown.toLowerCase().includes(bn.toLowerCase()) ? `${shown} ${bn}` : shown;
+      return {
+        label: shown,
+        pick,
+        subtitle: brand || null,
+        board_number: d.board_number || null,
+        board_count: d.board_count || 0,
+        pdf_count: d.pdf_count || 0,
+      };
+    }).filter((d) => d.label);
+  } catch {
+    return [];
+  }
+}

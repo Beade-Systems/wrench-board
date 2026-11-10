@@ -4,8 +4,8 @@
 // boards. Launch delegates to launchFromCatalogue (index.js) so all existing
 // gating applies. DOM shell lives in index.html (#landingCatalogueBackdrop).
 
-import { loadBoards } from "../../../services/deviceCatalog.js";
-import { launchFromCatalogue, deviceKindShort } from "./index.js";
+import { loadBoards, searchHardware } from "../../../services/deviceCatalog.js";
+import { launchFromCatalogue, pickHardwareFromCatalogue, deviceKindShort } from "./index.js";
 import { apiGet } from "../../../shared/api.js";
 import { escapeHtml } from "../../../shared/dom.js";
 
@@ -37,8 +37,13 @@ let _step = "type"; // type | brand | board
 let _kind = null;
 let _brand = null;
 let _search = "";
+// Hardware-library rows for the current search (server-side, async). `null`
+// while the request for the current query is still in flight.
+let _hardware = [];
+let _hardwareSeq = 0;
+let _hardwareTimer = null;
 
-const t = (k) => (window.t ? window.t(k) : k);
+const t = (k, params) => (window.t ? window.t(k, params) : k);
 const $ = (id) => document.getElementById(id);
 const _kindLabel = (kind) => deviceKindShort(kind) || deviceKindShort("other") || "OTHER";
 const _brandLabel = (brand) => (brand === NO_BRAND ? "—" : brand);
@@ -50,6 +55,7 @@ export async function openCatalogue() {
   _kind = null;
   _brand = null;
   _search = "";
+  _queueHardwareSearch();
   const searchEl = $("landingCatalogueSearch");
   if (searchEl) searchEl.value = "";
   backdrop.hidden = false;
@@ -190,13 +196,49 @@ function _renderBoards(list) {
   list.innerHTML = _breadcrumbHtml() + cards;
 }
 
+// A hardware-library row: files exist for it but no knowledge pack yet, so it
+// has no fiche — picking it fills the landing device input instead.
+function _hardwareCardHtml(d) {
+  const ids = [
+    d.board_number,
+    d.board_count ? t("landing.suggest.hw_boards", { count: d.board_count }) : "",
+    d.pdf_count ? t("landing.suggest.hw_pdfs", { count: d.pdf_count }) : "",
+  ].filter(Boolean).join(" · ");
+  return `<button type="button" class="landing-catalogue-card" role="listitem" data-hw-pick="${escapeHtml(d.pick)}">`
+    + `<div class="landing-catalogue-card-label">${escapeHtml(d.label)}</div>`
+    + (ids ? `<div class="landing-catalogue-card-id">${escapeHtml(ids)}</div>` : "")
+    + `</button>`;
+}
+
 function _renderSearch(list) {
   const boards = _searchMatches();
   const back = `<nav class="landing-catalogue-breadcrumb"><button type="button" class="landing-catalogue-crumb" data-crumb="clear-search">← ${escapeHtml(t("landing.catalogue.crumb_types"))}</button></nav>`;
-  const cards = boards.length
-    ? `<div class="landing-catalogue-cards">${boards.map(_cardHtml).join("")}</div>`
-    : `<p class="landing-catalogue-empty">${escapeHtml(t("landing.catalogue.empty"))}</p>`;
-  list.innerHTML = back + cards;
+  const packs = boards.length
+    ? `<div class="landing-catalogue-cards">${boards.map(_cardHtml).join("")}</div>` : "";
+  const hardware = _hardware && _hardware.length
+    ? `<h4 class="landing-catalogue-group-head">${escapeHtml(t("landing.catalogue.hw_head"))}</h4>`
+      + `<div class="landing-catalogue-cards">${_hardware.map(_hardwareCardHtml).join("")}</div>` : "";
+  // "No match" only once the library answered — not while it is still loading.
+  const empty = !packs && !hardware && _hardware !== null
+    ? `<p class="landing-catalogue-empty">${escapeHtml(t("landing.catalogue.empty"))}</p>` : "";
+  list.innerHTML = back + packs + hardware + empty;
+}
+
+// Debounced hardware-library lookup for the search box; the sequence guard
+// drops a slow answer to an older query.
+function _queueHardwareSearch() {
+  const seq = ++_hardwareSeq;
+  clearTimeout(_hardwareTimer);
+  const q = _search.trim();
+  if (q.length < 2) { _hardware = []; return; }
+  _hardware = null;
+  _hardwareTimer = setTimeout(async () => {
+    const rows = await searchHardware(q, { limit: 60 });
+    if (seq !== _hardwareSeq) return;
+    _hardware = rows;
+    const fiche = $("landingCatalogueFiche");
+    if (_search.trim() && (!fiche || fiche.hidden)) _render();
+  }, 160);
 }
 
 // --- fiche (unchanged contract) --------------------------------------------
@@ -277,6 +319,7 @@ function _pickBrand(brand) {
 function _onCrumb(step) {
   if (step === "clear-search") {
     _search = "";
+    _queueHardwareSearch();
     const el = $("landingCatalogueSearch");
     if (el) el.value = "";
   } else if (step === "type") {
@@ -296,6 +339,7 @@ export function initCatalogue() {
   });
   $("landingCatalogueSearch")?.addEventListener("input", (ev) => {
     _search = ev.target.value || "";
+    _queueHardwareSearch();
     _render();
   });
   $("landingCatalogueList")?.addEventListener("click", (ev) => {
@@ -305,6 +349,8 @@ export function initCatalogue() {
     if (kindTile) { _pickKind(kindTile.getAttribute("data-tile-kind")); return; }
     const brandTile = ev.target.closest("[data-tile-brand]");
     if (brandTile) { _pickBrand(brandTile.getAttribute("data-tile-brand")); return; }
+    const hw = ev.target.closest("[data-hw-pick]");
+    if (hw) { closeCatalogue(); pickHardwareFromCatalogue(hw.getAttribute("data-hw-pick")); return; }
     const card = ev.target.closest(".landing-catalogue-card");
     if (card) _openFiche(card.getAttribute("data-slug"));
   });

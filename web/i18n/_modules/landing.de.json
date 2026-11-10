@@ -116,7 +116,11 @@
     "aria": "Gerätevorschläge",
     "draft": "Entwurf",
     "graph_label": "Graph",
-    "graph_title": "Elektrischer Graph bereit"
+    "graph_title": "Elektrischer Graph bereit",
+    "hw_label": "Bibliothek",
+    "hw_title": "In der Hardware-Bibliothek – noch kein Wissens-Pack",
+    "hw_boards": "{count} Boardview",
+    "hw_pdfs": "{count} PDF"
   },
   "tools": {
     "stock": "Lager"
@@ -149,6 +153,7 @@
     "present": "ja",
     "absent": "nein",
     "button_short": "Durchsuchen",
-    "crumb_types": "Typen"
+    "crumb_types": "Typen",
+    "hw_head": "Hardware-Bibliothek – noch kein Wissens-Pack"
   }
 }

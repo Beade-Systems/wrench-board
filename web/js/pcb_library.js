@@ -1,4 +1,5 @@
 import { saveOffline } from './offline_store.js';
+import { apiFetch } from './shared/api.js';
 import { LibraryViewer } from './pcb_library_viewer.js';
 import { CatalogBrowser } from './pcb_catalog.js';
 import { BoardTabs } from './pcb_board_tabs.js';
@@ -31,7 +32,7 @@ function notify(message, error = false, persistent = false) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`/api/library${path}`, { cache: 'no-store', ...options });
+  const response = await apiFetch(`/api/library${path}`, { cache: 'no-store', ...options });
   if (!response.ok) {
     let message = `Anfrage fehlgeschlagen (HTTP ${response.status}).`;
     try {

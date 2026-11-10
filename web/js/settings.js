@@ -1,8 +1,9 @@
+import { apiFetch } from './shared/api.js';
 const labels = {idle:'Bereit',running:'Läuft',complete:'Abgeschlossen',cancelled:'Gestoppt',ok:'Erfolgreich',error:'Fehler',key_missing:'Schlüssel fehlt',unsupported:'Nicht unterstützt',incomplete:'Unvollständig',timeout:'Zeitlimit',too_large:'Zu groß'};
 const $ = id => document.getElementById(id);
 let folders = [], directory = '', timer;
 async function api(path = '', options = {}) {
-  const response = await fetch(`/api/workbench/settings${path}`, { ...options, headers: { 'X-Workbench-Settings': '1', 'Content-Type': 'application/json', ...options.headers } });
+  const response = await apiFetch(`/api/workbench/settings${path}`, { ...options, headers: { 'X-Workbench-Settings': '1', 'Content-Type': 'application/json', ...options.headers } });
   const body = await response.json();
   if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Einstellungen konnten nicht verarbeitet werden.');
   return body;

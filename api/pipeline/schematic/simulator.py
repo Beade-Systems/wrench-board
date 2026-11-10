@@ -246,6 +246,11 @@ class SimulationEngine:
             if blocked:
                 break  # halt at first blockage — cascade below is computed post-loop
 
+        # Healthy-boot settle: rails the phase list never scheduled (analyzer
+        # omissions) would otherwise stay "off" on a board that booted fine.
+        if blocked_at is None and states:
+            self._settle_unscheduled_rails(rails, components, signals, phases, states[-1])
+
         # Emit a Φ0 baseline snapshot when no phases ran — keeps `states[-1]`
         # meaningful for callers driving the engine purely via overrides on a
         # graph without a compiled boot_sequence.
@@ -689,6 +694,69 @@ class SimulationEngine:
                 rails[label] = "off"
                 continue
             rails[label] = "stable"
+
+    def _settle_unscheduled_rails(
+        self,
+        rails: dict[str, RailState],
+        components: dict[str, ComponentState],
+        signals: dict[str, SignalState],
+        phases: list[tuple[int, str, list[str], list[str], list[tuple[str, str | None]]]],
+        last_state: BoardState,
+    ) -> None:
+        """Fixpoint pass promoting never-scheduled "off" rails to "stable".
+
+        Runs only after an unblocked phase walk. A rail settles when it is
+        not locked (failure / observation override), its enable is not
+        positively low, and either its source is "on", or its source was
+        never scheduled by any phase and every `power_in` rail of that
+        source is already stable (passive bridges, unscheduled LDOs). A
+        rail whose source is dead, or that is shorted / degraded /
+        overridden, is never touched. Writes through to `last_state` so the
+        final snapshot reflects the settled board.
+        """
+        scheduled = {refdes for phase in phases for refdes in phase[3]}
+        changed = True
+        while changed:
+            changed = False
+            for label, rail in self.electrical.power_rails.items():
+                src = rail.source_refdes
+                if not src or rails.get(label) != "off" or label in self._locked_rails:
+                    continue
+                if src in self.killed or components.get(src) == "dead":
+                    continue
+                if rail.enable_net and signals.get(rail.enable_net) == "low":
+                    continue
+                live = components.get(src) == "on"
+                if not live and src not in scheduled:
+                    ins = self._settle_inputs(src, label)
+                    live = bool(ins) and all(rails.get(n) == "stable" for n in ins)
+                if live:
+                    rails[label] = "stable"
+                    last_state.rails[label] = "stable"
+                    changed = True
+
+    def _settle_inputs(self, src: str, label: str) -> list[str]:
+        """Upstream rails a never-scheduled source needs to drive `label`.
+
+        Its `power_in` rails when it declares any. Otherwise (passives whose
+        pins vision typed as signal_in/out, e.g. a series inductor), every
+        other pin net of the source that is itself a power rail. Empty when
+        nothing upstream is known — such a rail is left "off".
+        """
+        comp = self.electrical.components.get(src)
+        if comp is None:
+            return []
+        ins = [p.net_label for p in comp.pins if p.role == "power_in" and p.net_label]
+        if ins:
+            return ins
+        return sorted({
+            p.net_label
+            for p in comp.pins
+            if p.net_label
+            and p.net_label != label
+            and p.role != "power_out"
+            and p.net_label in self.electrical.power_rails
+        })
 
     def _activate_components(
         self,

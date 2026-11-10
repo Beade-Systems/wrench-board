@@ -71,3 +71,20 @@ def test_number_missing_from_named_footprint_is_unknown(boards):
     assert len(kicad.part_by_refdes("U1").pin_refs) == 204
     assert resolve_pin(kicad, "U1", 201) is None
     assert resolve_pin(kicad, "U1", "SH1").name == "SH1"
+
+
+def test_kicad_and_brd_overlay_in_the_same_y_up_frame(boards):
+    kicad, brd = boards
+    ky = [p.y for p in kicad.outline]
+    by = [p.y for p in brd.outline]
+    assert (min(ky), max(ky)) == (min(by), max(by))
+    for refdes in ("BT1", "U1", "J10"):
+        kp, bp = kicad.part_by_refdes(refdes), brd.part_by_refdes(refdes)
+        k_cy = (kp.bbox[0].y + kp.bbox[1].y) / 2
+        b_cy = (bp.bbox[0].y + bp.bbox[1].y) / 2
+        assert abs(k_cy - b_cy) < 10, f"{refdes}: kicad y {k_cy} vs brd y {b_cy}"
+    # Pin-level: U1 pad N (kicad, by name) sits on brd pin N.
+    for i in (1, 3, 100, 200):
+        k_pin, b_pin = resolve_pin(kicad, "U1", i), resolve_pin(brd, "U1", i)
+        assert abs(k_pin.pos.x - b_pin.pos.x) <= 1
+        assert abs(k_pin.pos.y - b_pin.pos.y) <= 1

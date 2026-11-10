@@ -236,3 +236,33 @@ def test_kicad_parser_emits_source_format_and_file_hash():
     assert board.source_format == "kicad_pcb"
     assert board.file_hash.startswith("sha256:")
     assert len(board.file_hash) == len("sha256:") + 64
+
+
+def test_json_to_board_flips_kicad_y_down_to_model_y_up():
+    from api.board.parser.kicad import _json_to_board
+
+    data = _fake_extract()
+    data["pins"][0]["y"] = 11  # pin near the top edge in KiCad (small y)
+    data["pins"][0]["pad_rotation_deg"] = 225.0
+    board = _json_to_board(data, file_hash="sha256:test", board_id="test")
+    # y' = max outline y (50) − y.
+    assert sorted({p.y for p in board.outline}) == [0, 50]
+    assert (board.pins[0].pos.x, board.pins[0].pos.y) == (11, 39)
+    assert (board.pins[1].pos.x, board.pins[1].pos.y) == (19, 38)
+    lo, hi = board.parts[0].bbox
+    # Renormalised (min, max) after the flip: kicad y 10..14 → 36..40.
+    assert (lo.x, lo.y, hi.x, hi.y) == (10, 36, 20, 40)
+    # Rotation sign is preserved (screen-CCW stays CCW in the Y-up frame).
+    assert board.pins[0].pad_rotation_deg == 225.0
+
+
+def test_json_to_board_flip_without_outline_uses_geometry_max():
+    from api.board.parser.kicad import _json_to_board
+
+    data = _fake_extract()
+    data["outline"] = []
+    board = _json_to_board(data, file_hash="sha256:test", board_id="test")
+    lo, hi = board.parts[0].bbox
+    # ref = max(pin y 12, bbox y 14) = 14
+    assert (lo.y, hi.y) == (0, 4)
+    assert board.pins[0].pos.y == 2

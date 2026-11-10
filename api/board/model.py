@@ -14,6 +14,15 @@ class Layer(IntFlag):
 
 
 class Point(BaseModel):
+    """Board-plane coordinate, in mils.
+
+    Model-wide convention: **Y-up** (OpenBoardView), viewed from the top
+    side — +x right, +y towards the board's top edge. Every parser lands
+    here; Y-down sources (KiCad / pcbnew importers) flip at parse time, so
+    render.py and the viewer never compensate per format. Angles
+    (`rotation_deg`, `pad_rotation_deg`) are CCW-positive in this frame.
+    """
+
     x: float  # mils (1 unit = 0.0254 mm, per OBV convention)
     y: float
     # Float — sub-mil precision is required for XZZ board-to-board
@@ -190,6 +199,8 @@ class Marker(BaseModel):
 
 
 class Board(BaseModel):
+    """A parsed boardview. All geometry is in mils, Y-up (see `Point`)."""
+
     board_id: str
     file_hash: str
     source_format: str

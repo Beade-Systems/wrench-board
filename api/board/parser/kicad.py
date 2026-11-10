@@ -119,8 +119,34 @@ class KicadPcbParser(BoardParser):
         return _json_to_board(data, file_hash=file_hash, board_id=board_id)
 
 
+def _y_flip_ref(data: dict) -> float:
+    """Reference for the Y-down → Y-up flip: the board's top edge.
+
+    KiCad (and every importer routed through pcbnew) is Y-down; the Board
+    model is Y-up (OpenBoardView convention, see api/board/model.py). We map
+    y' = ref − y with ref = max outline Y — the same frame pcbnew2boardview
+    lands the `.brd` export in, so a .kicad_pcb and its .brd overlay. Falls
+    back to the max Y over pins / part bboxes when the outline is empty.
+    """
+    ys = [p["y"] for p in data.get("outline", [])]
+    if not ys:
+        ys = [pr["y"] for pr in data.get("pins", [])]
+        ys += [c["y"] for part in data.get("parts", []) for c in part.get("bbox", [])]
+    return max(ys) if ys else 0.0
+
+
 def _json_to_board(data: dict, *, file_hash: str, board_id: str) -> Board:
-    outline = [Point(x=p["x"], y=p["y"]) for p in data.get("outline", [])]
+    # Y-down (KiCad) → Y-up (Board model). Rotations keep their sign: KiCad
+    # angles are CCW *as seen on screen*; once the Y axis is mirrored, the
+    # Y-up view looks like KiCad's screen and screen-CCW is math-CCW, which
+    # is what the viewer applies (THREE makeRotationZ). Checked on the MNT
+    # Reform C40 (−135°): pad 1→2 vector and rotated pad axis coincide.
+    y_ref = _y_flip_ref(data)
+
+    def _pt(src: dict) -> Point:
+        return Point(x=src["x"], y=y_ref - src["y"])
+
+    outline = [_pt(p) for p in data.get("outline", [])]
 
     nets_src = data.get("nets", [])
     net_names = [n["name"] for n in nets_src]
@@ -141,15 +167,10 @@ def _json_to_board(data: dict, *, file_hash: str, board_id: str) -> Board:
         side = p["side"]
         layer = Layer.TOP if side == 1 else Layer.BOTTOM
 
-        bbox_src = p["bbox"]
-        bbox_lo = Point(
-            x=min(bbox_src[0]["x"], bbox_src[1]["x"]),
-            y=min(bbox_src[0]["y"], bbox_src[1]["y"]),
-        )
-        bbox_hi = Point(
-            x=max(bbox_src[0]["x"], bbox_src[1]["x"]),
-            y=max(bbox_src[0]["y"], bbox_src[1]["y"]),
-        )
+        # Flip, then renormalise — the flip swaps which corner is min Y.
+        c0, c1 = _pt(p["bbox"][0]), _pt(p["bbox"][1])
+        bbox_lo = Point(x=min(c0.x, c1.x), y=min(c0.y, c1.y))
+        bbox_hi = Point(x=max(c0.x, c1.x), y=max(c0.y, c1.y))
 
         parts.append(
             Part(
@@ -184,7 +205,7 @@ def _json_to_board(data: dict, *, file_hash: str, board_id: str) -> Board:
                 Pin(
                     part_refdes=p["refdes"],
                     index=local_idx,
-                    pos=Point(x=pr["x"], y=pr["y"]),
+                    pos=_pt(pr),
                     net=net_name,
                     probe=None,
                     layer=pin_layer,

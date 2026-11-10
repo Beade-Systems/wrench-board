@@ -1,17 +1,19 @@
 /* Board tab strip (.pbt-*) and part comparison panel (.pcv-*).
    Inherits the page tokens when present and falls back to the library palette. */
 .pbt-strip, .pcv {
-  --tabs-bg: var(--bg, #0d1216);
-  --tabs-panel: var(--panel, #141b20);
-  --tabs-raised: var(--raised, #1b242b);
-  --tabs-line: var(--line, #26323a);
-  --tabs-text: var(--text, #e5edef);
-  --tabs-muted: var(--muted, #8a9ba5);
-  --tabs-accent: var(--green, #a8e6bd);
+  --tabs-bg: var(--bg);
+  --tabs-panel: var(--panel);
+  --tabs-raised: var(--panel-2);
+  --tabs-line: var(--border);
+  --tabs-text: var(--text);
+  --tabs-muted: var(--text-2);
+  --tabs-accent: var(--accent);
   --tabs-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  /* Part-compare status categories — a small categorical data palette for
+     the diff table, deliberately local (only this view encodes these states). */
   --st-same: #7f939c;
   --st-renamed: #7fc8e8;
-  --st-rail: #8fdcab;
+  --st-rail: var(--emerald);  /* rail = net/rail semantic family */
   --st-unused: #a795d8;
   --st-different: #f08a78;
   --st-missing: #f2c469;

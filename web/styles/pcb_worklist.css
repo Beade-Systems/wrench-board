@@ -1,28 +1,28 @@
 /* Worklist panel and colour rule editor; relies on the tokens of pcb_library.css. */
 .wl{display:flex;flex-direction:column;gap:9px;min-height:0;font-size:11px}
 .wl-head{display:flex;align-items:baseline;gap:9px}
-.wl-progress{font:10px var(--mono);color:var(--green)}
+.wl-progress{font:10px var(--mono);color:var(--accent)}
 .wl-status{margin-left:auto;font:9px var(--mono);color:var(--muted)}
 .wl-add{display:flex;gap:6px}
 .wl-input{flex:1;padding:7px 8px;font:11px var(--mono)}
 .wl-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .wl-nav .secondary{padding:6px 9px;font-size:10px}
-.wl-nav .text-button{margin-left:auto;padding:4px 0;font-size:10px;color:#e69a9a}
-.wl-nav .text-button:hover{color:#ffc2c2}
+.wl-nav .text-button{margin-left:auto;padding:4px 0;font-size:10px;color:var(--danger)}
+.wl-nav .text-button:hover{color:color-mix(in oklch,var(--danger) 70%,white)}
 .wl-list{list-style:none;margin:0;padding:0;overflow-y:auto;max-height:320px;display:flex;flex-direction:column;gap:2px}
 .wl-empty{color:var(--muted);line-height:1.8;padding:4px 0}
 .wl-row{border:1px solid transparent;border-radius:4px}
 .wl-row:hover{background:var(--raised)}
-.wl-row.current{border-color:#395145;background:#203129}
+.wl-row.current{border-color:color-mix(in oklch,var(--accent) 40%,var(--border));background:color-mix(in oklch,var(--accent) 14%,var(--panel))}
 .wl-main{display:flex;align-items:center;gap:6px;padding:3px 5px}
-.wl-done{margin:0;width:13px;height:13px;flex-shrink:0;accent-color:var(--green)}
+.wl-done{margin:0;width:13px;height:13px;flex-shrink:0;accent-color:var(--accent)}
 .wl-ref{font:11px var(--mono);padding:4px 2px;flex-shrink:0;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wl-ref:hover{color:var(--green)}
+.wl-ref:hover{color:var(--accent)}
 .wl-row.done .wl-ref{color:var(--muted);text-decoration:line-through}
 .wl-preview{flex:1;min-width:0;color:var(--muted);font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wl-icon{width:24px;height:24px;flex-shrink:0;border-radius:3px;color:var(--muted);font-size:13px;line-height:1;padding:0}
-.wl-icon:hover{background:#2b3d35;color:var(--text)}
-.wl-icon.active{color:var(--green)}
+.wl-icon:hover{background:color-mix(in oklch,var(--accent) 18%,var(--panel));color:var(--text)}
+.wl-icon.active{color:var(--accent)}
 .wl-note{display:block;width:calc(100% - 10px);margin:0 5px 6px;padding:7px;font-size:11px;line-height:1.5;resize:vertical}
 
 .cr-section{border-top:1px solid var(--line);padding:11px 0}
@@ -34,6 +34,6 @@
 .cr-pattern{flex:1;padding:5px 7px;font:11px var(--mono)}
 .cr-color{width:30px;height:22px;padding:0;flex-shrink:0;border-radius:3px;cursor:pointer}
 .cr-remove{width:22px;height:22px;flex-shrink:0;border-radius:3px;color:var(--muted);font-size:14px;line-height:1;padding:0}
-.cr-remove:hover{background:var(--raised);color:#e69a9a}
+.cr-remove:hover{background:var(--raised);color:var(--danger)}
 .cr-actions{display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid var(--line);padding-top:11px}
 .cr-actions .primary,.cr-actions .secondary{padding:7px 10px;font-size:11px}

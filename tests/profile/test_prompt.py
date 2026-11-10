@@ -69,6 +69,14 @@ def test_chinese_pref_declares_chinese_reply_language():
     assert "Reply language: English" not in block
 
 
+def test_german_pref_declares_german_reply_language():
+    p = TechnicianProfile.default()
+    p.preferences.language = "de"
+    block = render_technician_block(p)
+    assert "Reply language: German" in block
+    assert "Reply language: English" not in block
+
+
 def test_hindi_pref_declares_hindi_reply_language():
     p = TechnicianProfile.default()
     p.preferences.language = "hi"

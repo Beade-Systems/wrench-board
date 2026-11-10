@@ -117,6 +117,7 @@ def _xzz_to_board(
     raw_names = [_decode(p.name) for p in xzz.parts]
     unique_names = len(set(raw_names))
     placeholder_mode = unique_names <= max(2, len(raw_names) // 50)
+    existing_names = {n.removeprefix("TEST_PAD_") for n in raw_names}
     gn_counters: dict[str, int] = {}
     cat_counters: dict[str, int] = {}
 
@@ -146,6 +147,12 @@ def _xzz_to_board(
         # readable.
         if original_name.startswith("TEST_PAD_"):
             original_name = original_name[len("TEST_PAD_"):]
+        # Some OEM exports prefix every refdes with "%" (`%C303`). It is
+        # an export artefact, not part of the designator: strip it so the
+        # part survives validation and matches the bare `C303` that
+        # schematics and the agent use. A bare sibling keeps its name.
+        if original_name.startswith("%") and original_name[1:] not in existing_names:
+            original_name = original_name[1:]
         if placeholder_mode:
             gn = (xzz_part.group_name or "").strip()
             if gn:
@@ -643,8 +650,13 @@ class XZZParser(BoardParser):
         diagnostics = extract_post_v6_diagnostics(raw)
         markers_abs_mm = extract_type_03_markers(raw)
         type09 = extract_type_09_test_pads(raw)
-        return _xzz_to_board(
+        board = _xzz_to_board(
             xzz, file_hash=file_hash, board_id=board_id,
             diagnostics=diagnostics, markers_abs_mm=markers_abs_mm,
             type09_test_pads=type09,
         )
+        if not board.parts:
+            raise InvalidBoardFile(
+                f"xzz: no usable components found ({len(xzz.parts)} in file)"
+            )
+        return board

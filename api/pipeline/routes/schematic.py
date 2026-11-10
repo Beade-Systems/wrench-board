@@ -57,6 +57,7 @@ def _resolve_pdf_path(pdf_path: str) -> Path:
     Absolute paths are taken verbatim, relative paths are resolved against the
     server's current working directory (where uvicorn was launched — the
     `board_assets/` convention makes `board_assets/foo.pdf` the common shape).
+    The resolved path must sit under `board_assets/` or the memory root.
     Existence and .pdf suffix are enforced before we fire any background task,
     so the caller never has to poll a task that was doomed from the start.
     """
@@ -65,6 +66,18 @@ def _resolve_pdf_path(pdf_path: str) -> Path:
         p = (Path.cwd() / p).resolve()
     else:
         p = p.resolve()
+    # Only ingest from the two places PDFs legitimately live — otherwise any
+    # .pdf on the host (and, with a key, its content via the vision pass)
+    # is reachable by path.
+    allowed_roots = (
+        (Path.cwd() / "board_assets").resolve(),
+        Path(_pkg.get_settings().memory_root).resolve(),
+    )
+    if not any(p.is_relative_to(root) for root in allowed_roots):
+        raise HTTPException(
+            status_code=403,
+            detail="pdf_path must live under board_assets/ or the memory root",
+        )
     if not p.exists():
         raise HTTPException(status_code=404, detail=f"PDF not found: {pdf_path}")
     if p.suffix.lower() != ".pdf":

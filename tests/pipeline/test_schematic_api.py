@@ -548,3 +548,13 @@ def test_classify_nets_regex_fallback_never_overwrites_llm_file(memory_root, cli
         res = client.post(f"/pipeline/packs/{slug}/schematic/classify-nets")
     assert res.status_code == 202
     assert out.read_text() == existing
+
+
+def test_ingest_schematic_rejects_pdf_outside_allowed_roots(memory_root, client, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("elsewhere") / "secret.pdf"
+    outside.write_bytes(b"%PDF-1.4\n")
+    res = client.post(
+        "/pipeline/ingest-schematic",
+        json={"device_slug": "demo", "pdf_path": str(outside)},
+    )
+    assert res.status_code == 403

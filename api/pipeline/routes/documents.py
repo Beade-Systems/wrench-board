@@ -53,6 +53,8 @@ router = APIRouter()
 
 
 _UPLOAD_KINDS = {"schematic_pdf", "boardview", "datasheet", "notes", "other"}
+# Kinds consumed by pdfplumber downstream — must start with the PDF magic.
+_PDF_KINDS = {"schematic_pdf"}
 # Defense in depth — clamp the upload size at a sane ceiling so a 1 GB
 # blob doesn't fill /tmp during a multipart parse. 50 MB is enough for
 # any schematic PDF or datasheet we've seen in the wild.
@@ -79,6 +81,17 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
     post_pack_document). Intended for reuse by create_repair (a later task)
     to stash a schematic attached at repair-creation time.
     """
+    # Validate the head BEFORE touching disk: an empty or non-PDF schematic
+    # would otherwise be auto-pinned as the active source and break the
+    # schematic views (sources says "active", /schematic.pdf 404s).
+    head = await file.read(1 << 20)  # 1 MiB
+    if not head:
+        await file.close()
+        raise HTTPException(status_code=400, detail="empty upload")
+    if kind in _PDF_KINDS and not head.lstrip().startswith(b"%PDF"):
+        await file.close()
+        raise HTTPException(status_code=415, detail=f"{kind} upload is not a PDF")
+
     uploads_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     filename = _safe_filename(file.filename or "upload")
@@ -86,8 +99,8 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
     total = 0
     try:
         with target.open("wb") as fh:
+            chunk = head
             while True:
-                chunk = await file.read(1 << 20)  # 1 MiB
                 if not chunk:
                     break
                 total += len(chunk)
@@ -99,6 +112,7 @@ async def persist_upload(uploads_dir: Path, kind: str, file: UploadFile) -> tupl
                         detail=f"upload exceeds {_MAX_UPLOAD_BYTES // (1024 * 1024)} MiB cap",
                     )
                 fh.write(chunk)
+                chunk = await file.read(1 << 20)
     except HTTPException:
         raise
     except OSError as exc:

@@ -886,7 +886,19 @@ async def create_repair(
     # deliberately do NOT trigger the documents-endpoint auto-pin/background ingest
     # here (it would race the inline-ingest).
     if file is not None and file.filename:
-        await persist_upload(pack_dir / "uploads", "schematic_pdf", file)
+        try:
+            await persist_upload(pack_dir / "uploads", "schematic_pdf", file)
+        except HTTPException as exc:
+            if exc.status_code not in (400, 415):
+                raise
+            # The repair is already registered at this point — an unusable
+            # attachment must not abort it; the build just runs without it.
+            logger.warning(
+                "[API] /pipeline/repairs · ignoring unusable schematic attachment "
+                "for repair=%s: %s",
+                repair_id,
+                exc.detail,
+            )
 
     # Branch 1 — pack missing (or force_rebuild): fire the full pipeline
     # with the symptom threaded to Scout as a priority target.

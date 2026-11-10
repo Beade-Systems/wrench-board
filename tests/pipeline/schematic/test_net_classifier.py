@@ -24,6 +24,7 @@ from api.pipeline.schematic.schemas import (
     ElectricalGraph,
     NetClassification,
     NetNode,
+    PagePin,
     PowerRail,
     SchematicGraph,
     SchematicQualityReport,
@@ -381,3 +382,41 @@ def test_apply_power_rail_classification_tolerates_unknown_nets():
 
     assert promoted == ["+3V3"]
     assert sg.nets["+3V3"].is_power is True
+
+
+# Switch-node guard — a buck converter's switch node is labelled
+# `power_rail` by the classifier but is never a drawable rail (MNT Reform
+# SW1/SW2, which also collide with switch refdes SW1/SW2).
+
+
+def test_apply_power_rail_classification_skips_label_colliding_with_refdes():
+    sg = _minimal_schematic_graph({"SW1": False, "PVIN": False})
+    sg.components["SW1"] = ComponentNode(refdes="SW1", type="switch", pages=[1])
+    cl = _classification({
+        "SW1": ("power_rail", 0.9),
+        "PVIN": ("power_rail", 0.95),
+    })
+
+    assert apply_power_rail_classification(sg, cl) == ["PVIN"]
+    assert sg.nets["SW1"].is_power is False
+
+
+def test_apply_power_rail_classification_skips_switching_voltage_level():
+    sg = _minimal_schematic_graph({"LX1": False})
+    cl = _classification({"LX1": ("power_rail", 0.9)})
+    cl.nets["LX1"].voltage_level = "switching node"
+
+    assert apply_power_rail_classification(sg, cl) == []
+    assert sg.nets["LX1"].is_power is False
+
+
+def test_apply_power_rail_classification_skips_net_with_switch_node_pin():
+    sg = _minimal_schematic_graph({"LX1": False})
+    sg.components["U1"] = ComponentNode(
+        refdes="U1", type="ic", pages=[1],
+        pins=[PagePin(number="3", role="switch_node", net_label="LX1")],
+    )
+    cl = _classification({"LX1": ("power_rail", 0.9)})
+
+    assert apply_power_rail_classification(sg, cl) == []
+    assert sg.nets["LX1"].is_power is False

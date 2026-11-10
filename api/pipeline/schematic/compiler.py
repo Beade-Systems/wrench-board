@@ -240,6 +240,11 @@ def _derive_power_rails(
             continue
         if _is_noise_rail_label(label):
             continue
+        # A rail label that is also a component refdes (switch-node net `SW1`
+        # next to switch `SW1`) would make the refdes ambiguous downstream —
+        # `Observations` rejects a target that is both component and rail.
+        if label in graph.components:
+            continue
         rails[label] = PowerRail(
             label=label,
             voltage_nominal=_parse_voltage_from_label(label),

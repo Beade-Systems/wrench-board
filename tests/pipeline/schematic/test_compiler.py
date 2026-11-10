@@ -767,3 +767,27 @@ def test_boot_rails_stable_excludes_component_refdes():
     assert "F1" not in stable
     assert "VIN" in stable
     assert stable <= set(elec.power_rails)
+
+
+def test_rail_label_colliding_with_component_refdes_is_not_a_rail():
+    """A net already flagged is_power whose label is also a refdes (switch-node
+    net `SW1` beside switch `SW1`) stays out of power_rails — otherwise the
+    target is both a component and a rail and `Observations` rejects it."""
+    components = {
+        "SW1": ComponentNode(refdes="SW1", type="switch", pages=[1]),
+        "U1": ComponentNode(
+            refdes="U1", type="ic", pages=[1],
+            pins=[PagePin(number="1", role="switch_node", net_label="SW1")],
+        ),
+    }
+    nets = {
+        "SW1": NetNode(label="SW1", is_power=True, pages=[1], connects=["U1.1"]),
+        "+5V": NetNode(label="+5V", is_power=True, pages=[1], connects=[]),
+    }
+    graph = SchematicGraph(
+        device_slug="sw-collide", source_pdf="x.pdf", page_count=1,
+        components=components, nets=nets, typed_edges=[],
+    )
+    elec = compile_electrical_graph(graph)
+    assert "SW1" not in elec.power_rails
+    assert "+5V" in elec.power_rails

@@ -404,9 +404,41 @@ def apply_power_rail_classification(
         node = schematic_graph.nets.get(label)
         if node is None or node.is_power:
             continue
+        if _is_switch_node_net(schematic_graph, label, classified):
+            continue
         node.is_power = True
         promoted.append(label)
     return promoted
+
+
+def _is_switch_node_net(
+    schematic_graph: SchematicGraph,
+    label: str,
+    classified: ClassifiedNet,
+) -> bool:
+    """True when a `power_rail` classification must NOT be promoted.
+
+    The classifier labels a buck converter's switch node (`SW1`, `LX`, …)
+    `domain=power_rail` with a "switching node" voltage_level. A switch node
+    is a PWM square wave between the high/low-side FETs and the inductor —
+    not a rail any consumer can draw from. Promoting it also breaks the
+    component/rail namespace when its label equals a component refdes
+    (MNT Reform: net `SW1` and switch `SW1`), which `Observations` rejects.
+
+    Refused when any of:
+      - the label is also a component refdes (namespace collision),
+      - the classifier's voltage_level says "switching",
+      - any pin on the net carries the `switch_node` role.
+    """
+    if label in schematic_graph.components:
+        return True
+    if "switching" in (classified.voltage_level or "").lower():
+        return True
+    for comp in schematic_graph.components.values():
+        for pin in comp.pins:
+            if pin.net_label == label and pin.role == "switch_node":
+                return True
+    return False
 
 
 async def classify_nets(

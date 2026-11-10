@@ -2,13 +2,18 @@
 
 Pure functions. Caller loads the graph and the bench from disk and
 passes them in. The CLI in scripts/eval_simulator.py wires the I/O.
+
+Every simulation runs against `analyzed_boot` when the caller supplies
+one — the same boot the diagnostic runtime uses when
+`boot_sequence_analyzed.json` exists — and against the compiler-fallback
+boot otherwise.
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.pipeline.schematic.schemas import ElectricalGraph
+from api.pipeline.schematic.schemas import AnalyzedBootSequence, ElectricalGraph
 from api.pipeline.schematic.simulator import Failure, SimulationEngine
 
 # Per-spec weighting — kept as constants so future re-weighting is one diff.
@@ -21,6 +26,9 @@ class ScenarioResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scenario_id: str
+    # Reciprocal rank of the scenario's own cause when inverted from the
+    # symptoms its forward simulation produces (same ranker as self_mrr).
+    # Diagnostic only — not part of the scalar score.
     self_mrr_contribution: float = 0.0
     cascade_recall: float | None = None
 
@@ -35,7 +43,12 @@ class Scorecard(BaseModel):
     per_scenario: list[ScenarioResult] = Field(default_factory=list)
 
 
-def compute_self_mrr(graph: ElectricalGraph, *, max_per_kind: int = DEFAULT_MAX_PER_KIND) -> float:
+def compute_self_mrr(
+    graph: ElectricalGraph,
+    *,
+    max_per_kind: int = DEFAULT_MAX_PER_KIND,
+    analyzed_boot: AnalyzedBootSequence | None = None,
+) -> float:
     """For every (refdes, mode) pair sampled from the graph, forward-simulate
     then check whether the cause is recoverable from the resulting state.
     Returns mean reciprocal rank ∈ [0, 1]. Returns 0.0 on empty graphs.
@@ -58,9 +71,11 @@ def compute_self_mrr(graph: ElectricalGraph, *, max_per_kind: int = DEFAULT_MAX_
 
     rrs: list[float] = []
     for refdes, mode in candidates:
-        timeline = SimulationEngine(graph, failures=[_make_failure(refdes, mode)]).run()
+        timeline = SimulationEngine(
+            graph, analyzed_boot=analyzed_boot, failures=[_make_failure(refdes, mode)]
+        ).run()
         symptoms = _symptoms_from_timeline(timeline)
-        ranked = _rank_candidates_for_symptoms(graph, symptoms)
+        ranked = _rank_candidates_for_symptoms(graph, symptoms, analyzed_boot=analyzed_boot)
         rank = next(
             (i + 1 for i, (r, m) in enumerate(ranked) if r == refdes and m == mode),
             None,
@@ -71,12 +86,23 @@ def compute_self_mrr(graph: ElectricalGraph, *, max_per_kind: int = DEFAULT_MAX_
 
 
 def compute_cascade_recall(
-    graph: ElectricalGraph, scenarios: list[dict]
+    graph: ElectricalGraph,
+    scenarios: list[dict],
+    *,
+    analyzed_boot: AnalyzedBootSequence | None = None,
 ) -> tuple[float, list[ScenarioResult]]:
     """For each scenario in the bench, forward-simulate the cause and compare
     predicted dead rails / components to the expected set. Recall is averaged
     across rails+components for that scenario; the macro-mean is returned.
-    Returns 0.0 with an empty breakdown when scenarios is empty."""
+    Returns 0.0 with an empty breakdown when scenarios is empty.
+
+    The expected component set is the oracle's list UNION every component
+    with a `power_in` pin on an oracle-expected dead rail (see
+    `_implied_dead_consumers`). Oracle entries are short by design — they
+    name the headline casualties — so without this closure recall saturated
+    and a simulator that dropped most of a dead rail's consumers scored the
+    same as one that kept them. The closure is derived from the graph only;
+    the frozen oracle file is never rewritten."""
     if not scenarios:
         return 0.0, []
 
@@ -92,10 +118,11 @@ def compute_cascade_recall(
         cause = s["cause"]
         expected_rails = set(s.get("expected_dead_rails") or [])
         expected_comps = set(s.get("expected_dead_components") or [])
+        expected_comps |= _implied_dead_consumers(graph, expected_rails)
         f_kwargs = {k: v for k, v in cause.items() if k != "refdes" and k != "mode"}
+        failure = Failure(refdes=cause["refdes"], mode=cause["mode"], **f_kwargs)
         timeline = SimulationEngine(
-            graph,
-            failures=[Failure(refdes=cause["refdes"], mode=cause["mode"], **f_kwargs)],
+            graph, analyzed_boot=analyzed_boot, failures=[failure]
         ).run()
         predicted_rails = set(timeline.cascade_dead_rails)
         predicted_comps = set(timeline.cascade_dead_components)
@@ -119,6 +146,7 @@ def compute_cascade_recall(
         breakdown.append(
             ScenarioResult(
                 scenario_id=s["id"],
+                self_mrr_contribution=_scenario_self_rr(graph, failure, timeline, analyzed_boot),
                 cascade_recall=recall,
             )
         )
@@ -126,10 +154,17 @@ def compute_cascade_recall(
     return (sum(recalls) / len(recalls)), breakdown
 
 
-def compute_score(graph: ElectricalGraph, scenarios: list[dict]) -> Scorecard:
+def compute_score(
+    graph: ElectricalGraph,
+    scenarios: list[dict],
+    *,
+    analyzed_boot: AnalyzedBootSequence | None = None,
+) -> Scorecard:
     """Weighted scalar: WEIGHT_SELF_MRR × self_mrr + WEIGHT_CASCADE_RECALL × cascade_recall."""
-    self_mrr = compute_self_mrr(graph)
-    cascade_recall, breakdown = compute_cascade_recall(graph, scenarios)
+    self_mrr = compute_self_mrr(graph, analyzed_boot=analyzed_boot)
+    cascade_recall, breakdown = compute_cascade_recall(
+        graph, scenarios, analyzed_boot=analyzed_boot
+    )
     score = WEIGHT_SELF_MRR * self_mrr + WEIGHT_CASCADE_RECALL * cascade_recall
     return Scorecard(
         score=score,
@@ -295,9 +330,53 @@ def _symptoms_from_timeline(timeline) -> dict:
     }
 
 
-def _rank_candidates_for_symptoms(graph: ElectricalGraph, symptoms: dict) -> list[tuple[str, str]]:
+def _implied_dead_consumers(graph: ElectricalGraph, dead_rails: set[str]) -> set[str]:
+    """Components with at least one `power_in` pin on a dead rail.
+
+    One hop only, and only from rails the oracle itself declares dead — a
+    component cannot run with a dead supply input, so these deaths are
+    implied by the oracle + topology, not invented by the evaluator."""
+    if not dead_rails:
+        return set()
+    return {
+        refdes
+        for refdes, comp in graph.components.items()
+        if any(p.role == "power_in" and p.net_label in dead_rails for p in comp.pins)
+    }
+
+
+def _scenario_self_rr(
+    graph: ElectricalGraph,
+    failure: Failure,
+    timeline,
+    analyzed_boot: AnalyzedBootSequence | None,
+) -> float:
+    """Reciprocal rank of a scenario's cause among the self_mrr candidates,
+    inverted from the symptoms of its own forward simulation.
+
+    The cause itself is always a candidate (with its exact failure
+    parameters), even when its (refdes, mode) is outside the sampled
+    `_MODES_FOR_KIND` set — otherwise e.g. a `shorted` cap could never
+    rank."""
+    symptoms = _symptoms_from_timeline(timeline)
+    ranked = _rank_candidates_for_symptoms(
+        graph, symptoms, analyzed_boot=analyzed_boot, extra=failure
+    )
+    key = (failure.refdes, failure.mode)
+    rank = next((i + 1 for i, pair in enumerate(ranked) if pair == key), None)
+    return 1.0 / rank if rank else 0.0
+
+
+def _rank_candidates_for_symptoms(
+    graph: ElectricalGraph,
+    symptoms: dict,
+    *,
+    analyzed_boot: AnalyzedBootSequence | None = None,
+    extra: Failure | None = None,
+) -> list[tuple[str, str]]:
     """Brute-force inverse — try every (refdes, mode), score by overlap of
-    predicted vs observed symptoms, return ranked descending."""
+    predicted vs observed symptoms, return ranked descending. `extra`
+    adds (or replaces) one candidate simulated with its exact parameters."""
     pairs: list[tuple[str, str]] = []
     for refdes in sorted(graph.components):
         kind = graph.components[refdes].kind or "ic"
@@ -305,6 +384,8 @@ def _rank_candidates_for_symptoms(graph: ElectricalGraph, symptoms: dict) -> lis
             if not _is_pertinent(graph, refdes, kind, mode):
                 continue
             pairs.append((refdes, mode))
+    if extra is not None and (extra.refdes, extra.mode) not in pairs:
+        pairs.append((extra.refdes, extra.mode))
 
     obs_dead_rails = set(symptoms.get("dead_rails") or [])
     obs_dead_comps = set(symptoms.get("dead_components") or [])
@@ -313,7 +394,12 @@ def _rank_candidates_for_symptoms(graph: ElectricalGraph, symptoms: dict) -> lis
     scored: list[tuple[float, tuple[str, str]]] = []
     for refdes, mode in pairs:
         try:
-            tl = SimulationEngine(graph, failures=[_make_failure(refdes, mode)]).run()
+            failure = (
+                extra
+                if extra is not None and (refdes, mode) == (extra.refdes, extra.mode)
+                else _make_failure(refdes, mode)
+            )
+            tl = SimulationEngine(graph, analyzed_boot=analyzed_boot, failures=[failure]).run()
         except Exception:
             continue
         last = tl.states[-1] if tl.states else None

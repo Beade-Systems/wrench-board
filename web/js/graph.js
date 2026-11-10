@@ -319,6 +319,8 @@ function fitToScreen(){
   const k = Math.min(W()/w, H()/h, 1.3);
   const tx = W()/2 - k*(minX + (maxX-minX)/2);
   const ty = H()/2 - k*(minY + (maxY-minY)/2);
+  // Hidden SVG (W/H = 0) or nodes not yet positioned → NaN / zero scale.
+  if (![k, tx, ty].every(Number.isFinite) || k <= 0) return;
   svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
 }
 

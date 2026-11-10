@@ -38,12 +38,19 @@ export function openInfoModal(topic, { onClose } = {}) {
   document.body.appendChild(host);
 
   let closed = false;
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); close(); }
+  };
   const close = () => {
     if (closed) return;
     closed = true;
+    document.removeEventListener("keydown", onKey, true);
     host.remove();
     onClose?.();
   };
+  // Capture phase so Escape closes this dialog first, not a modal beneath it.
+  document.addEventListener("keydown", onKey, true);
+  host.querySelector("#obInfoCta").focus();
   host.querySelector("#obInfoClose").addEventListener("click", close);
   host.querySelector("#obInfoCta").addEventListener("click", close);
   host.querySelector(".ob-backdrop").addEventListener("click", (e) => {

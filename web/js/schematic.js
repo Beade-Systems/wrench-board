@@ -3134,9 +3134,13 @@ function fitToBounds(model) {
   const bw = maxX - minX, bh = maxY - minY;
   const availW = W - FIT_PAD * 2;
   const availH = H - FIT_TOP_INSET - FIT_PAD;
-  const scale = Math.min(availW / bw, availH / bh, 1.4);
+  // Degenerate input (hidden canvas, empty / non-finite bounds) would yield a
+  // NaN or negative scale and poison the zoom state — skip the fit instead.
+  if (availW <= 0 || availH <= 0 || ![minX, minY, maxX, maxY].every(Number.isFinite)) return;
+  const scale = Math.min(availW / Math.max(bw, 1), availH / Math.max(bh, 1), 1.4);
   const tx = FIT_PAD + (availW - bw * scale) / 2 - minX * scale;
   const ty = FIT_TOP_INSET + (availH - bh * scale) / 2 - minY * scale;
+  if (![scale, tx, ty].every(Number.isFinite) || scale <= 0) return;
   d3.select("#schGraph").transition().duration(400).call(STATE.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
 }
 

@@ -146,9 +146,14 @@ let pendingConvParam = null;
 let _reconnectT = null;
 let _reconnectAttempts = 0;
 const _RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
-function _clearReconnect() {
+function _clearReconnect({ resetAttempts = true } = {}) {
   if (_reconnectT) { clearTimeout(_reconnectT); _reconnectT = null; }
-  _reconnectAttempts = 0;
+  if (resetAttempts) _reconnectAttempts = 0;
+}
+// Close codes that mean "the server refused this session" (policy violation /
+// app-level 4xxx). Redialing can't fix those — stop instead of hammering.
+function _isFatalClose(code) {
+  return code === 1008 || (code >= 4000 && code < 5000);
 }
 import { ICON_CHECK } from './icons.js';
 
@@ -193,10 +198,11 @@ function interruptAgent() {
   }
 }
 
-function connect() {
+function connect({ isRetry = false } = {}) {
   // Any fresh dial supersedes a queued reconnect (tier/conv switch, route
-  // change all funnel through here).
-  _clearReconnect();
+  // change all funnel through here). A retry keeps its attempt count so the
+  // backoff actually escalates and eventually gives up.
+  _clearReconnect({ resetAttempts: !isRetry });
   const slug = currentDeviceSlug();
   if (!slug) {
     console.warn("[llm] connect() called without ?device= in the URL — aborting.");
@@ -246,8 +252,9 @@ function connect() {
       { tier: currentTier, repairId, conv },
       {
         onOpen: () => {
-          // A clean open clears any pending reconnect: we're live again.
-          _clearReconnect();
+          // Don't reset the attempt counter here: a server that accepts then
+          // immediately closes would otherwise retry forever. The counter is
+          // reset on the first real frame (see the message listener below).
           statusTone("connected", t('chat.status.connected', { slug, tier: currentTier }));
           setSendEnabled(true);
           // Files+Vision : announce camera availability so the backend gates
@@ -262,7 +269,15 @@ function connect() {
           // Reconnect only if THIS is still the live socket (a voluntary close
           // reassigned/nulled `ws` first) — see scheduleReconnect for the rest
           // of the guards (panel open + same route).
-          if (ev && ev.target === ws) scheduleReconnect();
+          if (ev && ev.target === ws) {
+            if (_isFatalClose(ev.code)) {
+              _clearReconnect();
+              statusTone("error", t('chat.status.error_socket'));
+              logSys(t('chat.send.connect_failed', { error: ev.reason || `code ${ev.code}` }), true);
+            } else {
+              scheduleReconnect();
+            }
+          }
         },
         onError: () => {
           statusTone("error", t('chat.status.error_socket'));
@@ -278,6 +293,8 @@ function connect() {
   }
 
   ws.addEventListener("message", ev => {
+    // First frame from the server = the session is genuinely live.
+    if (_reconnectAttempts) _clearReconnect();
     let payload;
     try { payload = JSON.parse(ev.data); }
     catch { payload = { type: "message", role: "assistant", text: ev.data }; }
@@ -311,7 +328,7 @@ function scheduleReconnect() {
     // currentConvId, so capture it here first.
     pendingConvParam = currentConvId || null;
     ws = null;
-    connect();
+    connect({ isRetry: true });
   }, delay);
 }
 

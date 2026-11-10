@@ -1,7 +1,7 @@
 {
   "empty": {
     "title": "Kein Graph geladen",
-    "body": "Starte die Erstellungs-Pipeline für ein Gerät: Der Graph wird aus dem resultierenden Wissenspaket aufgebaut."
+    "body": "Starte die Pipeline für ein Gerät: Der Graph wird aus dem erzeugten Wissenspaket aufgebaut."
   },
   "legend": {
     "types_heading": "Typen",
@@ -15,18 +15,19 @@
     "type_action_desc": "mögliche Reparatur",
     "relations_heading": "Beziehungen",
     "rel_causes": "verursacht",
-    "rel_causes_desc": "kausale Verbindung",
+    "rel_causes_desc": "Ursache-Wirkung",
     "rel_powers": "versorgt",
-    "rel_powers_desc": "Stromfluss",
+    "rel_powers_desc": "Versorgungspfad",
     "rel_connected": "verbunden mit",
     "rel_connected_desc": "Bus / Masse",
     "rel_resolves": "behebt",
     "rel_resolves_desc": "Korrekturmaßnahme"
   },
   "controls": {
-    "zoom_in": "Vergrößern",
-    "zoom_out": "Verkleinern",
-    "fit": "Einpassen"
+    "zoom_in": "Hineinzoomen",
+    "zoom_out": "Herauszoomen",
+    "fit": "Einpassen",
+    "zoom_readout": "Zoom {k}×"
   },
   "inspector": {
     "close": "Inspektor schließen",
@@ -42,13 +43,29 @@
     "rules_field": "Regeln",
     "conf_high": "Hohe Konfidenz: durch mehrere Quellen belegt.",
     "conf_low": "Niedrige Konfidenz: einzelne Quelle oder indirekte Ableitung.",
-    "conf_medium": "Mittlere Konfidenz: teilweise abgeglichen."
+    "conf_medium": "Mittlere Konfidenz: nur teilweise durch Quellen gestützt.",
+    "meta": {
+      "package": "Gehäuse",
+      "role": "Funktion",
+      "nominal": "Sollwert",
+      "rule_id": "Regel",
+      "count": "Anzahl"
+    }
   },
   "tooltip": {
     "conf_pct": "Konf. {pct}%"
   },
   "subsystem": {
-    "fallback_label": "SONSTIGE"
+    "fallback_label": "SONSTIGE",
+    "power": "STROMVERSORGUNG",
+    "charge": "LADEN",
+    "display": "DISPLAY",
+    "usb": "USB",
+    "audio": "AUDIO",
+    "cpu-mem": "CPU / SPEICHER",
+    "io": "I/O",
+    "rf": "HF / FUNK",
+    "unknown": "SONSTIGE"
   },
   "type_label": {
     "component": "Bauteil",
@@ -64,5 +81,15 @@
   },
   "stats": {
     "summary": "{n} Knoten · {e} Kanten"
+  },
+  "action_verb": {
+    "jumper": "{target} brücken",
+    "reball": "{target} reballen",
+    "reflow": "{target} reflowen",
+    "lift": "{target} auslöten",
+    "replace": "{target} ersetzen",
+    "hunt_short": "Kurzschluss an {target} suchen",
+    "repair": "{target} reparieren",
+    "investigate": "Untersuchen — {target}"
   }
 }

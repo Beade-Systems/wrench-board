@@ -39,7 +39,7 @@
       "label": "Rail",
       "open_in_schematic": "Im Schaltplan öffnen",
       "source": "Quelle: {refdes}",
-      "no_peers": "kein weiteres Bauteil gelistet",
+      "no_peers": "kein weiteres Bauteil aufgeführt",
       "no_power_role": "Keine Versorgungsfunktion erkannt",
       "more_pins_on_net": "+{n} weitere Pins an {net}"
     },
@@ -47,7 +47,7 @@
       "pins": "Pins ({n})",
       "powered_by": "Versorgt von",
       "powers": "Versorgt",
-      "decouples": "Blockt ab ({n})",
+      "decouples": "Entkoppelt ({n})",
       "more": "+{n}",
       "more_others": "({n} weitere)"
     },
@@ -85,7 +85,7 @@
     "side_bottom": "Unterseite",
     "annot_title": "Bestückungsdruck ein-/ausblenden",
     "fit_title": "An Ansicht anpassen",
-    "minimap_title": "Minimap der Schaltplan-Beziehungen bei Klick"
+    "minimap_title": "Schaltplan-Beziehungen per Klick in der Minimap anzeigen"
   },
   "badge": {
     "summary": "{parts} Bauteile · {pins} Pins"

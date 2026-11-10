@@ -117,7 +117,7 @@
     "knowledge": {
       "title": "Wissen hinzufügen",
       "intro": "Gib dem Gerät seine eigenen Quellen, damit der Agent mit der echten Platine arbeiten kann und nicht nur mit Allgemeinwissen.",
-      "p1": "Schaltplan-PDF: wird Seite für Seite zu einem elektrischen Graphen verarbeitet. Schaltet den Simulator, mb_hypothesize und die Ursachenanalyse auf Ebene der Spannungsschienen frei.",
+      "p1": "Schaltplan-PDF: wird Seite für Seite zu einem elektrischen Graphen verarbeitet. Schaltet den Simulator, mb_hypothesize und die Ursachenanalyse auf Rail-Ebene frei.",
       "p2": "Boardview (.brd / .kicad_pcb / .fz): schaltet Hervorhebung auf Pad-Ebene, Netzverfolgung und Bauteilfokus auf der 3D-Platine frei.",
       "p3": "Auch ohne sie hilft der Agent weiter, kann aber Ursache und Wirkung auf genau dieser Platine nicht nachvollziehen. Füg hinzu, was du hast, auch wenn es nur eins davon ist."
     },
@@ -145,7 +145,7 @@
   "coach": {
     "skip": "Tour überspringen",
     "done": "Verstanden",
-    "session": "Du bist jetzt in einer Reparatur: einer dauerhaften Sitzung, die du jederzeit verlassen und wieder aufnehmen kannst. Ich habe dieses Gerät gerade analysiert: Schaltplan, Bauteile, Spannungsschienen, alles gespeichert.",
+    "session": "Du bist jetzt in einer Reparatur: einer dauerhaften Sitzung, die du jederzeit verlassen und wieder aufnehmen kannst. Ich habe dieses Gerät gerade analysiert: Schaltplan, Bauteile, Rails, alles gespeichert.",
     "cap": "Das kann ich auf dieser Platine gerade leisten. Je mehr du mir gibst (einen Schaltplan, eine Boardview), desto höher steigt der Wert und desto mehr Tools werden freigeschaltet.",
     "cards": "Die Gerätedaten, die ich gesammelt habe. Du kannst sie ergänzen (um einen Schaltplan oder eine Boardview), um tiefer einzusteigen.",
     "pcb": "Platinenansicht: deine echte Platine. Markiere ein Bauteil, und ich hebe seine Pads, sein Netz und sein Umfeld hervor.",

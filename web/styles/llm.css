@@ -129,6 +129,7 @@ body.llm-open .stub{right:420px}
   overflow-wrap:anywhere;
 }
 .llm-log .sys.err{color:oklch(0.72 0.20 25)}
+.llm-log .sys .sys-detail{opacity:.7}
 
 /* --- input --- */
 /* Buttons overlay the bottom-right corner of the textarea for a fused

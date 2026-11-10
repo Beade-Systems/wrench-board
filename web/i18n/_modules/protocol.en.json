@@ -9,7 +9,22 @@
     "default": "(untitled)"
   },
   "history": {
-    "summary": "history"
+    "summary": "history",
+    "action": {
+      "proposed": "proposed",
+      "step_completed": "step completed",
+      "step_skipped": "step skipped",
+      "step_failed": "step failed",
+      "step_inserted": "step inserted",
+      "step_replaced": "step replaced",
+      "step_reordered": "steps reordered",
+      "replaced_protocol": "protocol replaced",
+      "completed": "completed",
+      "abandoned": "abandoned"
+    },
+    "reason": {
+      "tech_dismiss": "dismissed by the technician"
+    }
   },
   "toggle": {
     "collapse": "Collapse",
@@ -30,6 +45,18 @@
       "no": "no",
       "done": "done",
       "empty": "n/a"
+    },
+    "type": {
+      "numeric": "numeric",
+      "boolean": "yes / no",
+      "observation": "observation",
+      "ack": "confirm"
+    },
+    "outcome": {
+      "pass": "pass",
+      "fail": "fail",
+      "skipped": "skipped",
+      "neutral": "neutral"
     }
   },
   "abandon": {
@@ -58,6 +85,20 @@
     "reject_reason_placeholder": "Why reject this protocol? The agent will take it into account.",
     "hint": "The agent is waiting for your decision before pushing the protocol.",
     "reject": "Reject",
-    "accept": "Accept"
+    "accept": "Accept",
+    "step_count_one": "{n} step"
+  },
+  "reject_reason": {
+    "no_active_protocol": "no protocol is running",
+    "protocol_not_active": "the protocol is no longer running",
+    "unknown_step_id": "this step is not part of the protocol",
+    "step_not_active": "this step is not the active one",
+    "value_must_be_numeric": "the value must be a number",
+    "value_must_be_boolean": "the answer must be yes or no",
+    "value_must_be_text": "an observation text is required",
+    "no_target_for_numeric": "the step has no measuring point",
+    "no_target_for_boolean": "the step has no measuring point",
+    "unknown_step_type": "unknown step type",
+    "unknown": "unknown reason"
   }
 }

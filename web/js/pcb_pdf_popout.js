@@ -1,6 +1,14 @@
 // Detached PDF window: hosts a PdfView and talks to its PdfPanel over wb-pdf.
 import { PDF_CHANNEL, POPOUT_DOCK_ICON, PdfView } from './pcb_pdf_panel.js';
 
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+
 const session = new URLSearchParams(window.location.search).get('s');
 const root = document.getElementById('pdf-root');
 const channel = new BroadcastChannel(PDF_CHANNEL);
@@ -10,6 +18,12 @@ function post(type, payload = {}) {
 }
 
 let stateTimer = 0;
+let docTitle = '';
+
+function renderTitle() {
+  const schematic = tr('library.pdf.window_title', 'Schematic');
+  document.title = docTitle ? `${docTitle} · ${schematic}` : `${schematic} · Wrench Board`;
+}
 
 function closeWindow() {
   post('closed');
@@ -24,7 +38,7 @@ const view = new PdfView(root, {
     clearTimeout(stateTimer);
     stateTimer = setTimeout(() => post('state', state), 200);
   },
-  detach: { icon: POPOUT_DOCK_ICON, label: 'Wieder andocken', onClick: closeWindow },
+  detach: { icon: POPOUT_DOCK_ICON, label: () => tr('library.pdf.dock_again', 'Dock again'), onClick: closeWindow },
 });
 
 async function reply(id, work) {
@@ -36,7 +50,8 @@ channel.onmessage = ({ data: msg }) => {
   if (!msg || msg.session !== session) return;
   switch (msg.type) {
     case 'open':
-      document.title = msg.title ? `${msg.title} · Schaltplan` : 'Schaltplan';
+      docTitle = msg.title || '';
+      renderTitle();
       reply(msg.id, view.open({ url: msg.url, title: msg.title, page: msg.page, term: msg.term }));
       break;
     case 'search':
@@ -59,6 +74,8 @@ channel.onmessage = ({ data: msg }) => {
   }
 };
 
+window.i18n?.onReady?.(renderTitle);
+window.i18n?.onChange?.(renderTitle);
 window.addEventListener('pagehide', () => post('closed'));
 post('ready');
 view.root.focus({ preventScroll: true });

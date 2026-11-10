@@ -32,5 +32,8 @@
     "memory_loaded_approved": "Wissensspeicher geladen · Prüfung BESTANDEN",
     "memory_building_missing": "Wissensspeicher wird erstellt, fehlt: {missing}",
     "open_repair_to_view_graph": "Öffne eine Reparatur aus dem Journal, um ihren Graphen anzusehen."
+  },
+  "session": {
+    "repair_title": "Reparatur {id}"
   }
 }

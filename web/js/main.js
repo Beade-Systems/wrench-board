@@ -5,6 +5,7 @@
 
 import { currentSection, navigate, wireRouter, currentSession, leaveSession, syncContextFromUrl, parseRoute, migrateLegacyUrl, repairHash } from './router.js';
 import { getDeviceSlug, getRepairId } from './shared/context.js';
+import { apiSend } from './shared/api.js';
 import { mountRepairVue } from './features/repair/workspace.js';
 import { initHome, hideRepairDashboard } from './features/repair/diagnostic/dashboard.js';
 import { loadGraphFromBackend, setEmptyState, initGraphWithData } from './graph.js';
@@ -86,23 +87,59 @@ if (!window.Boardview) {
   };
 }
 
+// Reconcile the UI locale with the language stored in the technician profile.
+//
+// The profile schema defaults `preferences.language` to English, so a stored
+// "en" cannot be told apart from "never chosen". Rules:
+//   - a language picked on this device (i18n.hasExplicitChoice) always wins;
+//   - otherwise a non-default profile language is a real choice made on another
+//     device and is adopted here;
+//   - a default-valued profile language never overrides the locale resolved
+//     from the browser. The profile is aligned to the UI instead, so the agent
+//     (which reads its reply language from the profile) answers in the language
+//     the technician actually sees. Any other profile value is left alone: it
+//     may be a reply language that has no UI translation.
+// A profile without a name has never been saved and is left untouched, and a
+// one-off `?lang=` override is never written back.
+const PROFILE_DEFAULT_LANGUAGE = "en";
+async function reconcileProfileLanguage(env) {
+  const i18n = window.i18n;
+  const profile = env?.profile;
+  if (!i18n || !profile?.identity?.name) return;
+  const prefs = profile.preferences || {};
+  const pref = prefs.language;
+  const ui = i18n.locale;
+  if (!pref || pref === ui) return;
+  if (pref !== PROFILE_DEFAULT_LANGUAGE) {
+    if (!i18n.hasExplicitChoice && i18n.SUPPORTED.includes(pref)) {
+      await i18n.setLocale(pref, { explicit: false });
+    }
+    return;
+  }
+  if (new URLSearchParams(window.location.search).has("lang")) return;
+  try {
+    await apiSend("/profile/preferences", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...prefs, language: ui }),
+    });
+  } catch (err) {
+    console.warn("[i18n] profile language sync failed", err);
+  }
+}
+
 /* ---------- INIT ---------- */
 (async function bootstrap() {
   // Wait for i18n dictionaries before any module renders dynamic strings.
   if (window.i18n && window.i18n.ready) await window.i18n.ready;
-  // Profile is the source of truth for the user's language AND the one-shot
-  // onboarding flags (cross-device). localStorage is just a paint-hint / pre-gate
-  // cache. Kick the single /profile hydration off here so it overlaps the init
-  // below; it's awaited further down (before routing) so the synchronous
-  // onboarding gates see server truth, not an empty localStorage on a new device.
-  const _profileHydrated = hydrateOnboardingState().then((env) => {
-    // A profile without a name has never been saved: its language is only the
-    // schema default, so it must not override the browser-detected locale.
-    const pref = env?.profile?.identity?.name ? env.profile.preferences?.language : null;
-    if (pref && pref !== window.i18n.locale && window.i18n.SUPPORTED.includes(pref)) {
-      return window.i18n.setLocale(pref);
-    }
-  }).catch(() => {});
+  // The profile carries the one-shot onboarding flags (cross-device) and the
+  // technician's language. Kick the single /profile hydration off here so it
+  // overlaps the init below; it's awaited further down (before routing) so the
+  // synchronous onboarding gates see server truth, not an empty localStorage on
+  // a new device.
+  const _profileHydrated = hydrateOnboardingState()
+    .then((env) => reconcileProfileLanguage(env))
+    .catch(() => {});
   mountMascot(document.getElementById("brandMascot"), { size: "xs", state: "idle" });
   // Hosted edition: the cloud front-door injects window.__wbPlanHints. Flip the
   // wordmark to "WrenchBoardCloud" (the "Cloud" suffix + perched cloud reveal

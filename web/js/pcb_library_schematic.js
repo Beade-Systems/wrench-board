@@ -3,6 +3,13 @@
 import { PdfPanel } from './pcb_pdf_panel.js';
 
 const $ = id => document.getElementById(id);
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
 const fileUrl = doc => `/api/library/source/files/${encodeURIComponent(doc.id)}/download?inline=true`;
 
 export class SchematicDock {
@@ -29,16 +36,19 @@ export class SchematicDock {
     this.boardId = id;
     const picked = id ? this._picked.get(id) : null;
     this.docs = [];
-    this._fill('Schaltplan wird gesucht …');
+    this._fill('searching');
     if (picked) this._show(picked); else this._hideDock();
-    if (!id) { this._fill('Kein Schaltplan');return; }
+    if (!id) { this._fill('none');return; }
     this.ready = this._documentsFor(id, filename).then(docs => {
       if (generation !== this._generation) return docs;
       this.docs = docs;
-      this._fill(docs.length ? `Schaltplan wählen (${docs.length})` : 'Kein Schaltplan');
+      this._fill(docs.length ? 'choose' : 'none');
       return docs;
     });
   }
+
+  /** Rewrites the picker's placeholder after dictionaries load or the locale switches. */
+  relocalize() { this._fill(this._placeholder ?? 'none'); }
 
   /** Finds `term` in the board's schematic, opening the best match if none is open. */
   async search(term) {
@@ -48,11 +58,11 @@ export class SchematicDock {
     if (!doc) {
       [doc] = await this.ready;
       if (boardId !== this.boardId) return;
-      if (!doc) { this.notify('Für diese Platine ist kein Schaltplan zugeordnet.');return; }
+      if (!doc) { this.notify(tr('library.schematic.none_assigned', 'No schematic is assigned to this board.'));return; }
       await this._pick(doc);
     }
     const result = await this.panel.search(term);
-    if (result && !result.cancelled && !result.hits) this.notify(`„${term}“ kommt im Schaltplan nicht vor.`);
+    if (result && !result.cancelled && !result.hits) this.notify(tr('library.schematic.term_missing', '“{term}” does not appear in the schematic.', { term }));
   }
 
   close() {
@@ -84,9 +94,14 @@ export class SchematicDock {
     return documents;
   }
 
+  /** @param {'searching'|'none'|'choose'} placeholder which first option the picker shows */
   _fill(placeholder) {
+    this._placeholder = placeholder;
+    const text = placeholder === 'searching' ? tr('library.schematic.searching', 'Looking for schematic …')
+      : placeholder === 'choose' ? tr('library.schematic.choose', 'Choose schematic ({count})', { count: this.docs.length })
+      : tr('library.toolbar.schematic_none', 'No schematic');
     const select = $('pdf-select');
-    select.replaceChildren(new Option(placeholder, ''), ...this.docs.map(doc => new Option(doc.name, doc.id)));
+    select.replaceChildren(new Option(text, ''), ...this.docs.map(doc => new Option(doc.name, doc.id)));
     select.disabled = !this.docs.length;
     select.value = this._picked.get(this.boardId)?.id ?? '';
   }

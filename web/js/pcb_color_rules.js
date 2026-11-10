@@ -6,9 +6,27 @@ const STORAGE_KEY = 'wrench-board.pcb-library.color-rules.v1';
 const HEX = /^#[0-9a-f]{6}$/i;
 const COMPONENT_TYPES = ['R', 'C', 'L', 'U', 'Q', 'D', 'J'];
 const COMPONENT_LABELS = {
-  R: 'Widerstände (R)', C: 'Kondensatoren (C)', L: 'Spulen (L)', U: 'ICs (U)',
-  Q: 'Transistoren (Q)', D: 'Dioden (D)', J: 'Steckverbinder (J)',
+  R: 'Resistors (R)', C: 'Capacitors (C)', L: 'Inductors (L)', U: 'ICs (U)',
+  Q: 'Transistors (Q)', D: 'Diodes (D)', J: 'Connectors (J)',
 };
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+
+/** Runs `fn` once dictionaries are loaded and on every locale switch; returns an unsubscribe. */
+function onLocale(fn) {
+  const i18n = window.i18n;
+  if (!i18n) return () => {};
+  let live = true;
+  const run = () => { if (live) fn(); };
+  if (typeof i18n.onReady === 'function') i18n.onReady(run);
+  const off = typeof i18n.onChange === 'function' ? i18n.onChange(run) : null;
+  return () => { live = false; if (typeof off === 'function') off(); };
+}
 const FILL_ALPHA = '99';
 
 export const DEFAULT_RULES = Object.freeze({
@@ -140,6 +158,7 @@ export class ColorRulesEditor {
     this._applied = loadRules();
     this._draft = normalize(this._applied);
     this._preview = createRenderScheduler(() => this.onPreview?.(this.rules()));
+    this._offLocale = onLocale(() => this.render());
     this.render();
   }
 
@@ -153,6 +172,7 @@ export class ColorRulesEditor {
   }
 
   dispose() {
+    this._offLocale();
     this._preview.dispose();
     this.container.replaceChildren();
   }
@@ -161,7 +181,7 @@ export class ColorRulesEditor {
     const input = element('input', 'cr-color');
     input.type = 'color';
     input.value = value;
-    input.setAttribute('aria-label', `Farbe für ${label}`);
+    input.setAttribute('aria-label', tr('pcb.colors.color_for', 'Color for {label}', { label }));
     input.addEventListener('input', () => { onChange(input.value); this._preview.request(); });
     return input;
   }
@@ -177,17 +197,19 @@ export class ColorRulesEditor {
     const pattern = element('input', 'cr-pattern');
     pattern.type = 'text';
     pattern.value = rule.pattern;
-    pattern.placeholder = 'Muster, z. B. PP*';
+    pattern.placeholder = tr('pcb.colors.pattern_placeholder', 'Pattern, e.g. PP*');
     pattern.spellcheck = false;
-    pattern.setAttribute('aria-label', 'Netzmuster');
+    pattern.setAttribute('aria-label', tr('pcb.colors.pattern_aria', 'Net pattern'));
     pattern.addEventListener('input', () => { rule.pattern = pattern.value; this._preview.request(); });
     const remove = button('cr-remove', '×', () => {
       this._draft.nets.splice(this._draft.nets.indexOf(rule), 1);
       this.render();
       this._preview.request();
     });
-    remove.setAttribute('aria-label', `Regel ${rule.pattern || 'ohne Muster'} entfernen`);
-    row.append(pattern, this._colorInput(rule.pattern || 'neue Regel', rule.color, color => { rule.color = color; }), remove);
+    const named = rule.pattern || tr('pcb.colors.no_pattern', 'without pattern');
+    remove.setAttribute('aria-label', tr('pcb.colors.remove_rule', 'Remove rule {pattern}', { pattern: named }));
+    row.append(pattern, this._colorInput(rule.pattern || tr('pcb.colors.new_rule', 'new rule'), rule.color,
+      color => { rule.color = color; }), remove);
     return row;
   }
 
@@ -201,33 +223,33 @@ export class ColorRulesEditor {
 
   render() {
     const draft = this._draft;
-    const add = button('text-button cr-add', 'Regel hinzufügen', () => {
+    const add = button('text-button cr-add', tr('pcb.colors.add_rule', 'Add rule'), () => {
       draft.nets.push({ pattern: '', color: '#a8e6bd' });
       this.render();
       this.container.querySelector('.cr-section .cr-row:last-of-type .cr-pattern')?.focus();
     });
-    const nets = this._section('Netze', [...draft.nets.map(rule => this._netRow(rule)), add],
-      'Die erste passende Regel gilt. * steht für beliebige Zeichen.');
-    const components = this._section('Bauteiltypen', COMPONENT_TYPES.map(prefix => this._colorRow(
-      COMPONENT_LABELS[prefix], draft.components[prefix] ?? DEFAULT_RULES.components[prefix],
+    const nets = this._section(tr('pcb.colors.nets', 'Nets'), [...draft.nets.map(rule => this._netRow(rule)), add],
+      tr('pcb.colors.nets_hint', 'The first matching rule wins. * matches any characters.'));
+    const components = this._section(tr('pcb.colors.component_types', 'Component types'), COMPONENT_TYPES.map(prefix => this._colorRow(
+      tr(`pcb.colors.type.${prefix}`, COMPONENT_LABELS[prefix]), draft.components[prefix] ?? DEFAULT_RULES.components[prefix],
       color => { draft.components[prefix] = color; })));
-    const sides = this._section('Platinenseiten', [
-      this._colorRow('Oberseite', draft.sides.top, color => { draft.sides.top = color; }),
-      this._colorRow('Unterseite', draft.sides.bottom, color => { draft.sides.bottom = color; }),
+    const sides = this._section(tr('pcb.colors.sides', 'Board sides'), [
+      this._colorRow(tr('pcb.colors.side_top', 'Top side'), draft.sides.top, color => { draft.sides.top = color; }),
+      this._colorRow(tr('pcb.colors.side_bottom', 'Bottom side'), draft.sides.bottom, color => { draft.sides.bottom = color; }),
     ]);
     const actions = element('div', 'cr-actions');
     actions.append(
-      button('primary', 'Anwenden', () => {
+      button('primary', tr('pcb.colors.apply', 'Apply'), () => {
         this._applied = this.rules();
         saveRules(this._applied);
         this.onApply?.(this.rules());
       }),
-      button('secondary', 'Verwerfen', () => {
+      button('secondary', tr('pcb.colors.discard', 'Discard'), () => {
         this._draft = normalize(this._applied);
         this.render();
         this._preview.request();
       }),
-      button('secondary', 'Standardfarben', () => {
+      button('secondary', tr('pcb.colors.defaults', 'Default colors'), () => {
         this._draft = normalize(DEFAULT_RULES);
         this.render();
         this._preview.request();

@@ -16,5 +16,9 @@
     "label": "Schematic (optional, for a sharper pack)",
     "cta": "Attach a schematic PDF",
     "already_ingested": "Schematic already ingested ✓ (no need to attach)"
+  },
+  "dashboard": {
+    "pages_suffix": " · {n} pages",
+    "na": "n/a"
   }
 }

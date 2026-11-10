@@ -1,15 +1,30 @@
 {
   "aria": {
-    "step_pin": "Schrittmarkierung",
+    "step_pin": "Markierung des aktiven Schritts",
     "panel": "Prüfablauf",
     "toggle": "Ein-/Ausklappen",
-    "abandon": "Prüfablauf aufgeben"
+    "abandon": "Prüfablauf abbrechen"
   },
   "title": {
     "default": "(ohne Titel)"
   },
   "history": {
-    "summary": "Verlauf"
+    "summary": "Verlauf",
+    "action": {
+      "proposed": "vorgeschlagen",
+      "step_completed": "Schritt abgeschlossen",
+      "step_skipped": "Schritt übersprungen",
+      "step_failed": "Schritt fehlgeschlagen",
+      "step_inserted": "Schritt eingefügt",
+      "step_replaced": "Schritt ersetzt",
+      "step_reordered": "Schritte neu geordnet",
+      "replaced_protocol": "Prüfablauf ersetzt",
+      "completed": "abgeschlossen",
+      "abandoned": "abgebrochen"
+    },
+    "reason": {
+      "tech_dismiss": "vom Techniker verworfen"
+    }
   },
   "toggle": {
     "collapse": "Einklappen",
@@ -30,22 +45,34 @@
       "no": "nein",
       "done": "erledigt",
       "empty": "k. A."
+    },
+    "type": {
+      "numeric": "Messwert",
+      "boolean": "Ja / Nein",
+      "observation": "Beobachtung",
+      "ack": "Bestätigung"
+    },
+    "outcome": {
+      "pass": "bestanden",
+      "fail": "nicht bestanden",
+      "skipped": "übersprungen",
+      "neutral": "neutral"
     }
   },
   "abandon": {
-    "confirm": "Laufenden Prüfablauf aufgeben?",
+    "confirm": "Laufenden Prüfablauf abbrechen?",
     "modal": {
-      "badge": "Prüfablauf aufgeben",
-      "title": "Laufenden Prüfablauf aufgeben?",
-      "body": "Der Agent wird benachrichtigt und der Prüfablauf als aufgegeben markiert. Bereits erfasste Schrittergebnisse bleiben im Reparaturverlauf erhalten.",
+      "badge": "Prüfablauf abbrechen",
+      "title": "Laufenden Prüfablauf abbrechen?",
+      "body": "Der Agent wird benachrichtigt und der Prüfablauf als abgebrochen markiert. Bereits erfasste Schrittergebnisse bleiben im Reparaturverlauf erhalten.",
       "reason_label": "Grund (optional, wird dem Agenten mitgeteilt)",
-      "reason_placeholder": "Warum aufgeben? (falsche Hypothese, Sackgasse, Kunde gegangen…)",
-      "cancel": "Abbrechen",
-      "confirm": "Ja, aufgeben"
+      "reason_placeholder": "Warum abbrechen? (falsche Hypothese, Sackgasse, Kunde abgesprungen…)",
+      "cancel": "Zurück",
+      "confirm": "Ja, abbrechen"
     }
   },
   "system_event": {
-    "abandoned": "Prüfablauf aufgegeben",
+    "abandoned": "Prüfablauf abgebrochen",
     "completed": "Prüfablauf abgeschlossen"
   },
   "confirm": {
@@ -58,6 +85,20 @@
     "reject_reason_placeholder": "Warum lehnst du diesen Prüfablauf ab? Der Agent berücksichtigt das.",
     "hint": "Der Agent wartet auf deine Entscheidung, bevor er den Prüfablauf startet.",
     "reject": "Ablehnen",
-    "accept": "Annehmen"
+    "accept": "Annehmen",
+    "step_count_one": "{n} Schritt"
+  },
+  "reject_reason": {
+    "no_active_protocol": "es läuft kein Prüfablauf",
+    "protocol_not_active": "der Prüfablauf läuft nicht mehr",
+    "unknown_step_id": "dieser Schritt gehört nicht zum Prüfablauf",
+    "step_not_active": "dieser Schritt ist gerade nicht aktiv",
+    "value_must_be_numeric": "der Wert muss eine Zahl sein",
+    "value_must_be_boolean": "die Antwort muss Ja oder Nein sein",
+    "value_must_be_text": "es fehlt ein Beobachtungstext",
+    "no_target_for_numeric": "der Schritt hat keinen Messpunkt",
+    "no_target_for_boolean": "der Schritt hat keinen Messpunkt",
+    "unknown_step_type": "unbekannter Schritttyp",
+    "unknown": "unbekannter Grund"
   }
 }

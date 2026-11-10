@@ -13,9 +13,21 @@ import { store } from '../../../store.js';
 import { getDeviceSlug, getRepairId } from '../../../shared/context.js';
 import { escapeHtml, relativeTime as relativeTimeFr } from '../../../shared/dom.js';
 import { apiFetch, apiGet } from '../../../shared/api.js';
+import { localizeError } from '../../../shared/errors.js';
 import { openInfoModal } from '../../../info_modal.js';
 import { maybeShowFirstDiagCoaching } from './coaching.js';
 import { hideUploads } from '../../../cloud_hints.js';
+
+// Human text for a failed pack/document Response: translated by the backend's
+// stable `code` (pipeline.error.*), falling back to its English `detail`.
+// Empty string when the body carries neither, so callers keep their own hint.
+async function errorDetail(res) {
+  let body = null;
+  try { body = await res.json(); } catch (_) { /* non-JSON error body */ }
+  if (!body || typeof body !== "object") return "";
+  const message = typeof body.detail === "string" ? body.detail : "";
+  return localizeError("pipeline.error", { body, message }, "");
+}
 
 export async function loadTaxonomy() {
   try {
@@ -845,8 +857,7 @@ async function switchSource(slug, rid, kind, version) {
       },
     );
     if (!res.ok) {
-      let detail = "";
-      try { detail = (await res.json()).detail || ""; } catch (_) { /* noop */ }
+      const detail = await errorDetail(res);
       showToast("warn",
         t("home.toast.switch_failed_title"),
         t("home.toast.switch_failed_sub", {
@@ -862,7 +873,7 @@ async function switchSource(slug, rid, kind, version) {
         t("home.toast.version_cached_title"),
         t("home.toast.version_cached_sub", { name: version.original_name }));
     } else if (body.status === "rebuilding") {
-      const pages = body.page_count ? ` · ${body.page_count} pages` : "";
+      const pages = body.page_count ? t("repair.dashboard.pages_suffix", { n: body.page_count }) : "";
       const eta = body.eta_seconds ? ` · ~${formatRemaining(body.eta_seconds)}` : "";
       showToast("info",
         t("home.toast.rebuilding_title"),
@@ -915,8 +926,7 @@ async function deleteVersion(slug, rid, kind, version) {
       { method: "DELETE" },
     );
     if (!res.ok) {
-      let detail = "";
-      try { detail = (await res.json()).detail || ""; } catch (_) { /* noop */ }
+      const detail = await errorDetail(res);
       showToast("warn",
         t("home.toast.delete_failed_title"),
         t("home.toast.delete_failed_sub", {
@@ -928,7 +938,7 @@ async function deleteVersion(slug, rid, kind, version) {
     }
     const body = await res.json();
     if (body.status === "switched_rebuilding") {
-      const pages = body.page_count ? ` · ${body.page_count} pages` : "";
+      const pages = body.page_count ? t("repair.dashboard.pages_suffix", { n: body.page_count }) : "";
       const eta = body.eta_seconds ? ` · ~${formatRemaining(body.eta_seconds)}` : "";
       showToast("info",
         t("home.toast.version_deleted_rebuilding_title"),
@@ -1088,8 +1098,7 @@ async function handleUpload(slug, rid, file, kind) {
       body: fd,
     });
     if (!res.ok) {
-      let detail = "";
-      try { detail = (await res.json()).detail || ""; } catch (_) { /* noop */ }
+      const detail = await errorDetail(res);
       showToast("warn",
         t("home.toast.import_failed"),
         t("home.toast.switch_failed_sub", {
@@ -1312,18 +1321,24 @@ function renderDashboardConvs(conversations, rid) {
       const fallbackTitle = t("home.dashboard.convs.untitled", { id: c.id.slice(0, 6) });
       const title = escapeHtml((c.title || fallbackTitle).slice(0, 80));
       const ago = c.last_turn_at ? relativeTimeFr(c.last_turn_at) : "…";
-      const cost = typeof c.cost_usd === "number" ? `$${c.cost_usd.toFixed(3)}` : "n/a";
+      const cost = typeof c.cost_usd === "number" ? `$${c.cost_usd.toFixed(3)}` : t("repair.dashboard.na");
       const meta = t("home.dashboard.convs.turns_meta", {
         turns: c.turns || 0,
         cost,
         ago,
       });
 
+      // Translated tier name; raw id when the dictionary has no entry.
+      const tierLabel = (id) => {
+        const key = `chat.tier.${id}`;
+        const val = t(key);
+        return val === key ? String(id).toUpperCase() : val;
+      };
       const open = document.createElement("button");
       open.type = "button";
       open.className = "rd-conv-open";
       open.innerHTML =
-        `<span class="rd-conv-tier t-${tier}">${tier.toUpperCase()}</span>` +
+        `<span class="rd-conv-tier t-${tier}">${escapeHtml(tierLabel(tier))}</span>` +
         `<span class="rd-conv-title">${title}</span>` +
         `<span class="rd-conv-meta">${escapeHtml(meta)}</span>`;
       open.addEventListener("click", () => {

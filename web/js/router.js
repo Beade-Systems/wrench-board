@@ -209,10 +209,10 @@ function updateChrome(section, deviceSlug, pack) {
       if (ridEl) {
         if (sessionMeta && sessionMeta.created_at) {
           ridEl.textContent = formatRepairDate(sessionMeta.created_at);
-          ridEl.title = `Repair ${activeSession.repair}`;
+          ridEl.title = t("router.session.repair_title", { id: activeSession.repair });
         } else {
           ridEl.textContent = activeSession.repair.slice(0, 8);
-          ridEl.title = `Repair ${activeSession.repair}`;
+          ridEl.title = t("router.session.repair_title", { id: activeSession.repair });
         }
       }
     } else {

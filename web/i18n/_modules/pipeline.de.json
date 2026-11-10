@@ -15,7 +15,7 @@
     },
     "writers": {
       "label": "Writers",
-      "sub": "Graph · Regeln · Wörterbuch"
+      "sub": "Graph · Regeln · Glossar"
     },
     "audit": {
       "label": "Auditor",
@@ -33,18 +33,19 @@
   "step": {
     "time_placeholder": "...",
     "in_progress": "läuft…",
-    "failed": "fehlgeschlagen"
+    "failed": "fehlgeschlagen",
+    "elapsed_min": "{m} min {s} s"
   },
   "status": {
     "waiting": "Warte auf erste Ereignisse…",
-    "connecting": "Verbinde mit Pipeline…",
+    "connecting": "Verbindung zur Pipeline wird aufgebaut…",
     "started": "Pipeline gestartet…",
     "queued": "In Warteschlange · Position <b>{position}</b> ({ahead} davor) · startet automatisch, sobald ein Platz frei wird",
     "phase_running": "Phase läuft · <b>{phase}</b>",
     "ready": "Wissensspeicher bereit · Prüfung <b>{status}</b> · Konsistenz <b>{score}</b>",
     "failed": "Pipeline fehlgeschlagen · <b>{status}</b>",
-    "lost_connection": "Verbindung zum Fortschrittsstream verloren.",
-    "closed_early": "Verbindung wurde vor Ende der Pipeline geschlossen."
+    "lost_connection": "Verbindung zum Fortschritts-Stream verloren.",
+    "closed_early": "Verbindung wurde geschlossen, bevor die Pipeline fertig war."
   },
   "cta": {
     "view_memory_bank": "Wissensspeicher öffnen",
@@ -56,6 +57,71 @@
     "recommended": "empfohlen",
     "confirm": "Bestätigen und fortsetzen",
     "confirmed": "bestätigt",
-    "undeclared": "nicht angegeben"
+    "undeclared": "nicht angegeben",
+    "evidence_label": "Begründung der Erkennung:"
+  },
+  "counts": {
+    "components": "{n} Bauteile",
+    "signals": "{n} Signale",
+    "nodes": "{n} Knoten",
+    "edges": "{n} Kanten",
+    "rules": "{n} Regeln",
+    "entries": "{n} Einträge",
+    "attributions": "{n} Zuordnungen",
+    "pages": "{n} Seiten",
+    "symptoms": "{n} Symptome",
+    "sources": "{n} Quellen"
+  },
+  "audit_status": {
+    "APPROVED": "BESTANDEN",
+    "NEEDS_REVISION": "ÜBERARBEITUNG NÖTIG",
+    "REJECTED": "ABGELEHNT",
+    "ERROR": "FEHLER",
+    "APPROVED_WITH_WARNINGS": "MIT WARNUNGEN BESTANDEN",
+    "CANCELLED": "ABGEBROCHEN"
+  },
+  "common": {
+    "na": "k. A."
+  },
+  "error": {
+    "pack_not_found": "Kein Wissenspaket für {slug}",
+    "invalid_slug": "Ungültige Gerätekennung {slug}",
+    "invalid_repair_id": "Ungültige Reparatur-ID",
+    "invalid_repair_request": "Ungültige Eingabe — prüf Gerät und Symptom",
+    "missing_api_key": "Auf dem Server ist kein API-Schlüssel hinterlegt (ANTHROPIC_API_KEY)",
+    "pipeline_failed": "Pipeline fehlgeschlagen: {error}",
+    "expand_failed": "Wissenserweiterung fehlgeschlagen: {error}",
+    "board_delta_not_found": "Kein Platinen-Delta für {board}",
+    "empty_upload": "Die hochgeladene Datei ist leer",
+    "not_a_pdf": "Die hochgeladene Datei ist kein PDF",
+    "upload_too_large": "Datei zu groß — maximal {max_mb} MiB",
+    "upload_persist_failed": "Upload konnte nicht gespeichert werden: {error}",
+    "unknown_kind": "Unbekannter Dokumenttyp {kind} — erlaubt: {allowed}",
+    "upload_not_found": "Datei {filename} für {slug} nicht gefunden",
+    "filename_kind_mismatch": "Der Dateiname passt nicht zum Dokumenttyp {kind}",
+    "pin_failed": "Version konnte nicht aktiviert werden: {error}",
+    "upload_delete_failed": "Datei konnte nicht gelöscht werden: {error}",
+    "boardview_not_found": "Keine Boardview-Datei für {slug} gespeichert",
+    "schematic_pdf_not_found": "Kein Schaltplan-PDF für {slug} gespeichert",
+    "repair_not_found": "Reparatur {repair_id} nicht gefunden",
+    "repair_delete_failed": "Reparatur konnte nicht gelöscht werden: {error}",
+    "conversation_not_found": "Unterhaltung {conv_id} für Reparatur {repair_id} nicht gefunden",
+    "conversation_delete_failed": "Unterhaltung konnte nicht gelöscht werden: {error}",
+    "pack_file_invalid_json": "Die Paketdatei {filename} ist beschädigt (ungültiges JSON)",
+    "pack_incomplete": "Das Wissenspaket für {slug} ist unvollständig: {filename} fehlt",
+    "pending_kind_not_found": "Für {slug} wartet kein Gerätetyp auf Bestätigung",
+    "auditor_rejected": "Der Auditor hat das Wissenspaket abgelehnt",
+    "revision_unrecoverable": "Kein brauchbares Wissenspaket nach {rounds} Überarbeitungsrunde(n) ({reason}) · bester Score {score}, Minimum {floor}",
+    "unexpected_error": "Unerwarteter Fehler beim Aufbau",
+    "cancelled": "Analyse abgebrochen"
+  },
+  "error_reason": {
+    "regression": "Score verschlechtert",
+    "rounds_exhausted": "Runden aufgebraucht"
+  },
+  "error_detail": {
+    "brief_label": "Begründung des Auditors:",
+    "technical_label": "Technisches Detail:",
+    "detail_label": "Detail:"
   }
 }

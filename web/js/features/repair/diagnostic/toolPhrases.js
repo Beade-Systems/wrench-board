@@ -41,6 +41,11 @@ const ICON_STOCK =
   'aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="1.5"/>' +
   '<path d="M3 10h18M8 6v4M16 6v4"/></svg>';
 
+// Parameter-less paraphrase: icon + the `chat.tool.<name>` string.
+function plain(icon, name) {
+  return { icon, phraseHTML: t(`chat.tool.${name}`) };
+}
+
 // Localized paraphrase + family icon for each known tool name. Each entry
 // is a function receiving the tool input object and returning
 // {icon, phraseHTML}. phraseHTML may embed a <span class="refdes"> or
@@ -89,6 +94,33 @@ export const TOOL_PHRASES = {
     icon: ICON_MB,
     phraseHTML: t('chat.tool.mb_schematic_graph'),
   }),
+  mb_record_measurement: (i) => ({
+    icon: ICON_MB,
+    phraseHTML: i?.target
+      ? t('chat.tool.mb_record_measurement_on', { target: escapeHTML(String(i.target)) })
+      : t('chat.tool.mb_record_measurement'),
+  }),
+  mb_list_measurements: () => plain(ICON_MB, 'mb_list_measurements'),
+  mb_compare_measurements: () => plain(ICON_MB, 'mb_compare_measurements'),
+  mb_observations_from_measurements: () => plain(ICON_MB, 'mb_observations_from_measurements'),
+  mb_set_observation: (i) => ({
+    icon: ICON_MB,
+    phraseHTML: i?.target
+      ? t('chat.tool.mb_set_observation_on', { target: escapeHTML(String(i.target)) })
+      : t('chat.tool.mb_set_observation'),
+  }),
+  mb_clear_observations: () => plain(ICON_MB, 'mb_clear_observations'),
+  mb_validate_finding: () => plain(ICON_MB, 'mb_validate_finding'),
+  mb_hypothesize: () => plain(ICON_MB, 'mb_hypothesize'),
+  mb_recall_field_reports: () => plain(ICON_MB, 'mb_recall_field_reports'),
+  mb_search_patterns: () => plain(ICON_MB, 'mb_search_patterns'),
+  mb_search_playbooks: () => plain(ICON_MB, 'mb_search_playbooks'),
+  mb_record_session_log: () => plain(ICON_MB, 'mb_record_session_log'),
+  profile_get: () => plain(ICON_MB, 'profile_get'),
+  profile_check_skills: () => plain(ICON_MB, 'profile_check_skills'),
+  profile_track_skill: () => plain(ICON_MB, 'profile_track_skill'),
+  cam_capture: () => plain(ICON_MB, 'cam_capture'),
+  consult_specialist: () => plain(ICON_MB, 'consult_specialist'),
 
   // --- BV (boardview — action) ---
   bv_highlight: (i) => {
@@ -165,6 +197,11 @@ export const TOOL_PHRASES = {
       phraseHTML: parts.length ? t('chat.tool.bv_scene', { parts: parts.join(", ") }) : t('chat.tool.bv_scene_empty'),
     };
   },
+
+  bv_propose_protocol: () => plain(ICON_BV, 'bv_propose_protocol'),
+  bv_get_protocol: () => plain(ICON_BV, 'bv_get_protocol'),
+  bv_update_protocol: () => plain(ICON_BV, 'bv_update_protocol'),
+  bv_record_step_result: () => plain(ICON_BV, 'bv_record_step_result'),
 
   // --- Stock (donor inventory + part harvest) ---
   stock_search: (i) => {

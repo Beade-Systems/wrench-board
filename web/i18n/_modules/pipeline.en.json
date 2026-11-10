@@ -33,7 +33,8 @@
   "step": {
     "time_placeholder": "...",
     "in_progress": "running…",
-    "failed": "failed"
+    "failed": "failed",
+    "elapsed_min": "{m}m {s}s"
   },
   "status": {
     "waiting": "Waiting for first events…",
@@ -56,6 +57,71 @@
     "recommended": "recommended",
     "confirm": "Confirm and resume",
     "confirmed": "confirmed",
-    "undeclared": "undeclared"
+    "undeclared": "undeclared",
+    "evidence_label": "Classifier's reasoning:"
+  },
+  "counts": {
+    "components": "{n} components",
+    "signals": "{n} signals",
+    "nodes": "{n} nodes",
+    "edges": "{n} edges",
+    "rules": "{n} rules",
+    "entries": "{n} entries",
+    "attributions": "{n} attributions",
+    "pages": "{n} pages",
+    "symptoms": "{n} symptoms",
+    "sources": "{n} sources"
+  },
+  "audit_status": {
+    "APPROVED": "APPROVED",
+    "NEEDS_REVISION": "NEEDS REVISION",
+    "REJECTED": "REJECTED",
+    "ERROR": "ERROR",
+    "APPROVED_WITH_WARNINGS": "APPROVED WITH WARNINGS",
+    "CANCELLED": "CANCELLED"
+  },
+  "common": {
+    "na": "n/a"
+  },
+  "error": {
+    "pack_not_found": "No knowledge pack for {slug}",
+    "invalid_slug": "Invalid device identifier {slug}",
+    "invalid_repair_id": "Invalid repair ID",
+    "invalid_repair_request": "Invalid input — check the device and the symptom",
+    "missing_api_key": "The server has no API key configured (ANTHROPIC_API_KEY)",
+    "pipeline_failed": "Pipeline failed: {error}",
+    "expand_failed": "Knowledge expansion failed: {error}",
+    "board_delta_not_found": "No board delta for {board}",
+    "empty_upload": "The uploaded file is empty",
+    "not_a_pdf": "The uploaded file is not a PDF",
+    "upload_too_large": "File too large — the limit is {max_mb} MiB",
+    "upload_persist_failed": "Could not save the upload: {error}",
+    "unknown_kind": "Unknown document type {kind} — allowed: {allowed}",
+    "upload_not_found": "File {filename} not found for {slug}",
+    "filename_kind_mismatch": "The file name does not match the document type {kind}",
+    "pin_failed": "Could not activate this version: {error}",
+    "upload_delete_failed": "Could not delete the file: {error}",
+    "boardview_not_found": "No boardview file stored for {slug}",
+    "schematic_pdf_not_found": "No schematic PDF stored for {slug}",
+    "repair_not_found": "Repair {repair_id} not found",
+    "repair_delete_failed": "Could not delete the repair: {error}",
+    "conversation_not_found": "Conversation {conv_id} not found for repair {repair_id}",
+    "conversation_delete_failed": "Could not delete the conversation: {error}",
+    "pack_file_invalid_json": "The pack file {filename} is corrupt (invalid JSON)",
+    "pack_incomplete": "The knowledge pack for {slug} is incomplete: {filename} is missing",
+    "pending_kind_not_found": "No device type awaiting confirmation for {slug}",
+    "auditor_rejected": "The auditor rejected the knowledge pack",
+    "revision_unrecoverable": "No acceptable knowledge pack after {rounds} revision round(s) ({reason}) · best score {score}, minimum {floor}",
+    "unexpected_error": "Unexpected error during the build",
+    "cancelled": "Analysis cancelled"
+  },
+  "error_reason": {
+    "regression": "score got worse",
+    "rounds_exhausted": "rounds used up"
+  },
+  "error_detail": {
+    "brief_label": "Auditor's brief:",
+    "technical_label": "Technical detail:",
+    "detail_label": "Detail:"
   }
 }

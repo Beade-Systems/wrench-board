@@ -1,6 +1,14 @@
 import { createRenderScheduler } from './shared/render_scheduler.js';
 import { resolve as resolveColors } from './pcb_color_rules.js';
 
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+
 const LAYOUTS = new Set(['single', 'butterfly']);
 const RECT_PADS = new Set(['rect', 'square', 'roundrect']);
 const TAU = Math.PI * 2;
@@ -574,7 +582,8 @@ export class LibraryViewer {
     ctx.font = '10px "IBM Plex Mono", monospace';ctx.textAlign = 'left';ctx.textBaseline = 'top';ctx.fillStyle = '#94a79f';
     for (const index of [0, 1]) {
       const pane = this._pane(index);
-      ctx.fillText(`${index ? 'Unterseite' : 'Oberseite'}${pane.mirror ? ' · gespiegelt' : ''}`, pane.left + 12, 10);
+      const side = index ? tr('library.viewer.pane_bottom', 'Bottom side') : tr('library.viewer.pane_top', 'Top side');
+      ctx.fillText(pane.mirror ? `${side} · ${tr('library.viewer.pane_mirrored', 'mirrored')}` : side, pane.left + 12, 10);
     }
   }
 

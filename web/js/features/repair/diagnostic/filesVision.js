@@ -16,9 +16,8 @@ import {
   selectedCameraDeviceId,
   selectedCameraLabel,
 } from '../../../camera.js';
-import { escapeHtml as escapeHTML } from '../../../shared/dom.js';
 import { sendDiagnostic, getDiagnosticWS } from '../../../services/diagnosticSocket.js';
-import { logSys } from './chatLog.js';
+import { liveNode, logSysKey } from './chatLog.js';
 
 const t = (key, params) => (window.t ? window.t(key, params) : key);
 const el = (id) => document.getElementById(id);
@@ -43,23 +42,31 @@ export function sendCapabilities() {
 
 // Optimistic image bubble in the chat log. URL is either a blob: URL
 // (Flow A optimistic local render) or a /api/macros/... URL (replay).
-function appendImageBubble(role, srcUrl, captionText) {
+//
+// `caption` is a function returning the localized caption, so the bubble's UI
+// copy (role label, caption, alt) follows a locale switch.
+function appendImageBubble(role, srcUrl, caption) {
   const log = el("llmLog");
   if (!log) return;
   const row = document.createElement("div");
   row.className = `msg ${role} msg-image`;
-  const roleLabel = role === "user" ? t('chat.roles.user') : t('chat.roles.agent');
   const img = document.createElement("img");
   img.src = srcUrl;
-  img.alt = captionText || t('chat.image_bubble.alt');
   img.className = "llm-bubble-img";
-  img.addEventListener("click", () => openImageModal(srcUrl, captionText));
+  img.addEventListener("click", () => openImageModal(srcUrl, caption()));
   const cap = document.createElement("div");
   cap.className = "llm-bubble-caption";
-  cap.textContent = captionText || "";
-  row.innerHTML = `<span class="role">${escapeHTML(roleLabel)}</span>`;
+  row.innerHTML = `<span class="role"></span>`;
   row.appendChild(img);
-  if (captionText) row.appendChild(cap);
+  row.appendChild(cap);
+  liveNode(row, () => {
+    const captionText = caption() || "";
+    row.querySelector(".role").textContent =
+      role === "user" ? t('chat.roles.user') : t('chat.roles.agent');
+    img.alt = captionText || t('chat.image_bubble.alt');
+    cap.textContent = captionText;
+    cap.hidden = !captionText;
+  });
   log.appendChild(row);
   log.scrollTop = log.scrollHeight;
 }
@@ -86,20 +93,20 @@ function openImageModal(srcUrl, captionText) {
 export async function handleMacroUpload(file) {
   if (!file) return;
   if (file.size > MAX_UPLOAD_BYTES) {
-    logSys(t('chat.upload.too_large', { size: (file.size / 1024 / 1024).toFixed(1) }), true);
+    logSysKey('chat.upload.too_large', { size: (file.size / 1024 / 1024).toFixed(1) }, true);
     return;
   }
   if (!["image/png", "image/jpeg"].includes(file.type)) {
-    logSys(t('chat.upload.unsupported', { mime: file.type }), true);
+    logSysKey('chat.upload.unsupported', { mime: file.type }, true);
     return;
   }
   if (!socketOpen()) {
-    logSys(t('chat.upload.socket_closed'), true);
+    logSysKey('chat.upload.socket_closed', null, true);
     return;
   }
   // Optimistic local render — blob URL stays valid for the page lifetime.
   const url = URL.createObjectURL(file);
-  appendImageBubble("user", url, t('chat.image_bubble.macro_caption'));
+  appendImageBubble("user", url, () => t('chat.image_bubble.macro_caption'));
   try {
     const base64 = await blobToBase64(file);
     sendDiagnostic({
@@ -109,7 +116,7 @@ export async function handleMacroUpload(file) {
       filename: file.name || "macro.jpg",
     });
   } catch (err) {
-    logSys(t('chat.upload.failed', { error: err.message || err }), true);
+    logSysKey('chat.upload.failed', { error: err.message || err }, true);
   }
 }
 
@@ -120,14 +127,14 @@ export async function handleCaptureRequest(payload) {
   const { request_id, reason } = payload;
   const deviceId = selectedCameraDeviceId();
   if (!deviceId) {
-    logSys(t('chat.capture.no_camera'), true);
+    logSysKey('chat.capture.no_camera', null, true);
     sendDiagnostic({
       type: "client.capture_response",
       request_id, base64: "", mime: "", device_label: "",
     });
     return;
   }
-  logSys(t('chat.capture.requested', { reason: reason || t('chat.capture.no_reason') }));
+  logSysKey('chat.capture.requested', () => ({ reason: reason || t('chat.capture.no_reason') }));
   try {
     const blob = await captureFrame({
       deviceId, mime: "image/jpeg", quality: 0.92,
@@ -136,7 +143,8 @@ export async function handleCaptureRequest(payload) {
     const base64 = await blobToBase64(blob);
     // Optimistic render so the tech sees what the agent received.
     const url = URL.createObjectURL(blob);
-    appendImageBubble("user", url, t('chat.image_bubble.capture_caption', { label: selectedCameraLabel() }));
+    const camLabel = selectedCameraLabel();
+    appendImageBubble("user", url, () => t('chat.image_bubble.capture_caption', { label: camLabel }));
     sendDiagnostic({
       type: "client.capture_response",
       request_id,
@@ -146,7 +154,7 @@ export async function handleCaptureRequest(payload) {
     });
   } catch (err) {
     console.error("captureFrame failed", err);
-    logSys(t('chat.capture.failed', { error: err.message || err }), true);
+    logSysKey('chat.capture.failed', { error: err.message || err }, true);
     sendDiagnostic({
       type: "client.capture_response",
       request_id, base64: "", mime: "", device_label: "",

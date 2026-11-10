@@ -4,6 +4,10 @@
 // The module is the single owner of these three counters — llm.js drives it
 // through resetCost() / recordTurnCost() and reads formatted values via fmtUsd.
 
+// `t` resolves through the global window.t at CALL time so the readout follows
+// the active locale (llm.js repaints it on locale switch).
+const t = (key, params) => (window.t ? window.t(key, params) : key);
+
 // Session cost accumulator — reset on each (re)connect.
 let sessionCostUsd = 0;
 let sessionTurns = 0;
@@ -27,8 +31,13 @@ export function updateCostTotal() {
     return;
   }
   el2.style.display = "";
-  const deltaPart = lastTurnCostUsd > 0 ? ` · +${fmtUsd(lastTurnCostUsd)} last` : "";
-  el2.textContent = `${fmtUsd(sessionCostUsd)} · ${sessionTurns} turn${sessionTurns > 1 ? "s" : ""}${deltaPart}`;
+  const deltaPart = lastTurnCostUsd > 0
+    ? t('chat.cost.last_delta', { delta: fmtUsd(lastTurnCostUsd) })
+    : "";
+  el2.textContent = t(
+    sessionTurns > 1 ? 'chat.cost.total_many' : 'chat.cost.total_one',
+    { cost: fmtUsd(sessionCostUsd), n: sessionTurns },
+  ) + deltaPart;
   el2.classList.toggle("hot", sessionCostUsd >= 0.50 || lastTurnCostUsd >= 0.10);
 }
 

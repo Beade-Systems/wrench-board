@@ -2,8 +2,18 @@
 import { FolderTree, folderSummary } from './pcb_catalog_folders.js';
 
 const $ = id => document.getElementById(id);
-const count = value => new Intl.NumberFormat('de-DE').format(value);
-const labels = { Computers: 'Computer', Phones: 'Smartphones', 'Game Consoles': 'Konsolen', Drones: 'Drohnen' };
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+const intlTag = () => window.i18n?.intlTag || 'en-US';
+const count = value => new Intl.NumberFormat(intlTag()).format(value);
+// Top-level folders of the stock collection carry English names; others show as they are.
+const CATEGORY_KEYS = { Computers: 'computers', Phones: 'phones', 'Game Consoles': 'game_consoles', Drones: 'drones' };
+const displayLabel = label => (CATEGORY_KEYS[label] ? tr(`library.catalog.category.${CATEGORY_KEYS[label]}`, label) : label);
 const folderHash = path => (path ? `#folder/${path.split('/').map(encodeURIComponent).join('/')}` : '#catalog');
 const MAX_VISIBLE_REVISIONS = 8;
 
@@ -20,7 +30,8 @@ function folderFromHash() {
   if (!match) return '';
   try { return decodeURIComponent(match[1]); } catch { return ''; }
 }
-const kinds = { board: 'Boardview', pdf: 'PDF-Dokument', archive: 'Archiv', other: 'Datei' };
+const KIND_FALLBACK = { board: 'Boardview', pdf: 'PDF document', archive: 'Archive', other: 'File' };
+const kindName = kind => tr(`library.catalog.kind_one.${kind}`, KIND_FALLBACK[kind] || kind);
 const icons = { board: '▦', pdf: '▤', archive: '▣', other: '◇' };
 
 function node(tag, className, text) {
@@ -41,7 +52,7 @@ export class CatalogBrowser {
     this.mode = 'source';this.offset = 0;this.limit = 60;this.total = 0;
     this.folder = folderFromHash();this.listings = new Map();
     this.tree = new FolderTree($('folder-tree'), { list: path => this.listing(path), onSelect: path => this.goTo(path),
-      kind: () => $('source-kind').value, displayName: label => labels[label] || label });
+      kind: () => $('source-kind').value, displayName: displayLabel });
     $('source-search').addEventListener('input', () => {
       clearTimeout(this.searchTimer);
       // Cancel an old response immediately, before the debounce expires.
@@ -73,15 +84,19 @@ export class CatalogBrowser {
 
   renderInfo() {
     const info = this.info;
-    $('source-tab').textContent = info.name || 'Verknüpfte Sammlung';
+    // This module owns these texts from here on; applyDom() must not reset them.
+    for (const id of ['source-tab', 'source-description', 'source-results', 'source-hint', 'source-empty-text', 'source-refresh']) $(id).removeAttribute('data-i18n');
+    $('source-search').removeAttribute('data-i18n-attr');
+    $('source-search').setAttribute('aria-label', tr('library.catalog.search_aria', 'Search the file grid'));
+    $('source-tab').textContent = info.name || tr('library.catalog.source_default', 'Linked collection');
     $('source-description').textContent = info.available
-      ? `${count(info.total)} Dateien aus ${info.name}. Suche dein Modell und öffne die passende Datei.`
-      : 'Keine Sammlung verfügbar. Verknüpfe einen Ordner in den Einstellungen. Deine Importe findest du hier.';
+      ? tr('library.catalog.description', '{count} files from {name}. Search for your model and open the matching file.', { count: count(info.total), name: info.name })
+      : tr('library.catalog.unavailable', 'No collection available. Link a folder in the settings. Your imports are listed here.');
     $('source-tab').disabled = !info.available;
     $('source-refresh').hidden = !info.available || this.mode !== 'source';
     $('source-stats').replaceChildren();
     if (info.available) {
-      for (const [kind, label] of [['board', 'Boardviews'], ['pdf', 'PDFs'], ['archive', 'Archive']]) {
+      for (const [kind, label] of [['board', tr('library.catalog.stat.boards', 'Boardviews')], ['pdf', tr('library.catalog.stat.pdfs', 'PDFs')], ['archive', tr('library.catalog.stat.archives', 'Archives')]]) {
         const item = node('div', 'source-stat');
         item.append(node('strong', '', count(info.kinds[kind] || 0)), node('span', '', label));
         $('source-stats').append(item);
@@ -126,7 +141,7 @@ export class CatalogBrowser {
     const path = $('folder-path');
     path.replaceChildren(...listing.breadcrumbs.flatMap((crumb, index, all) => {
       const last = index === all.length - 1;
-      const item = node(last ? 'span' : 'button', last ? 'folder-crumb current' : 'folder-crumb', labels[crumb.label] || crumb.label);
+      const item = node(last ? 'span' : 'button', last ? 'folder-crumb current' : 'folder-crumb', displayLabel(crumb.label));
       if (last) item.setAttribute('aria-current', 'page');
       else { item.type = 'button';item.addEventListener('click', () => this.goTo(crumb.path)); }
       return index ? [node('span', 'folder-separator', '/'), item] : [item];
@@ -134,14 +149,14 @@ export class CatalogBrowser {
     const grid = $('folder-grid');
     grid.hidden = searching || !listing.folders.length;
     grid.replaceChildren(...(searching ? [] : listing.folders.map(folder => this.folderCard(folder))));
-    $('source-search').placeholder = `In ${labels[listing.label] || listing.label} suchen …`;
+    $('source-search').placeholder = tr('library.catalog.search_in', 'Search in {folder} …', { folder: displayLabel(listing.label) });
   }
 
   folderCard(folder) {
     const card = node('button', 'folder-card');
     card.type = 'button';card.title = folder.name;
     const copy = node('div', 'folder-card-copy');
-    copy.append(node('strong', '', labels[folder.label] || folder.label), node('small', '', folderSummary(folder, count)));
+    copy.append(node('strong', '', displayLabel(folder.label)), node('small', '', folderSummary(folder, count)));
     card.append(node('span', 'folder-card-icon', '▸'), copy);
     card.addEventListener('click', () => this.goTo(folder.path));
     return card;
@@ -159,19 +174,40 @@ export class CatalogBrowser {
     $('source-kind').hidden = mode !== 'source';
     $('source-refresh').hidden = mode !== 'source' || !this.info?.available;
     for (const id of ['folder-tree', 'folder-path', 'folder-grid']) $(id).hidden = mode !== 'source';
-    $('source-hint').textContent = mode === 'source' ? 'Platinen öffnen · PDFs ansehen · Archive herunterladen' : 'Importierte Platinen mit einem Klick öffnen.';
-    if (mode !== 'source') $('source-search').placeholder = 'In meinen Importen suchen …';
+    this.renderModeTexts();
     this.load();
   }
 
+  renderModeTexts() {
+    $('source-hint').removeAttribute('data-i18n');
+    $('source-hint').textContent = this.mode === 'source'
+      ? tr('library.catalog.hint_source', 'Open boards · view PDFs · download archives')
+      : tr('library.catalog.hint_imports', 'Open imported boards with one click.');
+    if (this.mode !== 'source') {
+      $('source-search').removeAttribute('data-i18n-attr');
+      $('source-search').setAttribute('aria-label', tr('library.catalog.search_aria', 'Search the file grid'));
+      $('source-search').placeholder = tr('library.catalog.search_imports', 'Search my imports …');
+    }
+  }
+
+  /** Re-renders every text this browser wrote, after dictionaries load or the locale switches. */
+  relocalize() {
+    if (this.info) this.renderInfo();
+    if (this._failed) { this.renderFailure();return; }
+    if (!this.info) return;
+    this.renderModeTexts();
+    this.listings.clear();this.tree.reset();
+    if (this.mode === 'source') this.load();
+  }
+
   async refreshIndex() {
-    const button = $('source-refresh');button.disabled = true;button.textContent = 'Ordner wird eingelesen …';
+    const button = $('source-refresh');button.disabled = true;button.textContent = tr('library.catalog.rescanning', 'Reading folder …');
     try {
       this.info = await this.request('/source/refresh', { method: 'POST' });
       this.offset = 0;this.listings.clear();this.tree.reset();
-      this.renderInfo();await this.load();this.notify('Dateikatalog aktualisiert.');
+      this.renderInfo();await this.load();this.notify(tr('library.catalog.refreshed', 'File catalog updated.'));
     } catch (error) { this.notify(error.message, true); }
-    finally { button.disabled = false;button.textContent = '↻ Ordner neu einlesen'; }
+    finally { button.disabled = false;button.textContent = tr('library.catalog.rescan', '↻ Rescan folder'); }
   }
 
   page(direction) {
@@ -182,7 +218,9 @@ export class CatalogBrowser {
   async load() {
     this.controller?.abort();this.controller = new AbortController();
     const signal = this.controller.signal;
-    $('source-grid').setAttribute('aria-busy', 'true');$('source-results').textContent = 'Dateien werden gesucht …';
+    this._failed = false;
+    $('source-results').removeAttribute('data-i18n');
+    $('source-grid').setAttribute('aria-busy', 'true');$('source-results').textContent = tr('library.catalog.searching', 'Searching files …');
     $('source-prev').disabled = true;$('source-next').disabled = true;
     try {
       let result, listing = null;
@@ -192,9 +230,9 @@ export class CatalogBrowser {
         const boards = this.getBoards().filter(board => words.every(word => `${board.title} ${board.filename} ${board.notes}`.toLocaleLowerCase().includes(word)));
         const sort = $('source-sort').value;
         boards.sort(sort === 'recent' ? (a, b) => b.imported_at.localeCompare(a.imported_at) : sort === 'size' ? (a, b) => b.size_bytes - a.size_bytes
-          : (a, b) => a.title.localeCompare(b.title, 'de', { numeric: true }));
+          : (a, b) => a.title.localeCompare(b.title, intlTag(), { numeric: true }));
         result = { total: boards.length, items: boards.slice(this.offset, this.offset + this.limit).map(board => ({
-          id: board.id, name: board.title, path: board.filename, category: 'Meine Importe', extension: `.${board.format}`,
+          id: board.id, name: board.title, path: board.filename, category: tr('library.catalog.my_imports', 'My imports'), extension: `.${board.format}`,
           kind: 'board', size_bytes: board.size_bytes, imported: true, favorite: board.favorite,
         })) };
       } else {
@@ -210,22 +248,35 @@ export class CatalogBrowser {
       $('source-grid').replaceChildren(...result.items.map(item => this.card(item)));
       const subfolders = listing && !query ? listing.folders.length : 0;
       $('source-empty').hidden = Boolean(result.items.length || subfolders);
+      $('source-empty-text').removeAttribute('data-i18n');
       $('source-empty-text').textContent = this.mode === 'imports' && !this.getBoards().length
-        ? 'Öffne eine Platine aus xzz_downloads oder importiere eine eigene Datei.'
-        : 'Versuche einen anderen Modellnamen oder ändere die Filter.';
-      const scope = listing && this.folder ? ` in ${labels[listing.label] || listing.label}` : '';
+        ? tr('library.catalog.empty_imports', 'Open a board from the collection or import a file of your own.')
+        : tr('library.catalog.empty_text', 'Try a different model name or change the filters.');
+      const folder = listing && this.folder ? displayLabel(listing.label) : '';
       const fileCount = result.files ?? result.total;
-      const files = `${count(fileCount)} ${fileCount === 1 ? 'Datei' : 'Dateien'}${result.files > result.total ? ` · ${count(result.total)} Boards` : ''}`;
-      $('source-results').textContent = query ? `${files} für „${query}“${scope}`
-        : subfolders ? `${count(subfolders)} Ordner${result.total ? ` · ${files} direkt hier` : ''}` : `${files}${scope}`;
-      $('source-page').textContent = result.total ? `${count(this.offset + 1)}–${count(Math.min(this.offset + this.limit, result.total))} von ${count(result.total)}` : 'Keine Ergebnisse';
+      let files = fileCount === 1 ? tr('library.catalog.files_one', '1 file') : tr('library.catalog.files_other', '{count} files', { count: count(fileCount) });
+      if (result.files > result.total) files += ` · ${tr('library.catalog.boards_count', '{count} boards', { count: count(result.total) })}`;
+      const folders = subfolders === 1 ? tr('library.catalog.folders_one', '1 folder') : tr('library.catalog.folders_other', '{count} folders', { count: count(subfolders) });
+      let summary;
+      if (query) {
+        summary = folder ? tr('library.catalog.results_query_in', '{files} for “{query}” in {folder}', { files, query, folder })
+          : tr('library.catalog.results_query', '{files} for “{query}”', { files, query });
+      } else if (subfolders) {
+        summary = result.total ? tr('library.catalog.results_folders_files', '{folders} · {files} directly here', { folders, files }) : folders;
+      } else {
+        summary = folder ? tr('library.catalog.results_in', '{files} in {folder}', { files, folder }) : files;
+      }
+      $('source-results').textContent = summary;
+      $('source-page').textContent = result.total
+        ? tr('library.catalog.page_range', '{from}–{to} of {total}', { from: count(this.offset + 1), to: count(Math.min(this.offset + this.limit, result.total)), total: count(result.total) })
+        : tr('library.catalog.no_results', 'No results');
       $('source-prev').disabled = this.offset === 0;$('source-next').disabled = this.offset + this.limit >= result.total;
       $('source-pagination').hidden = result.total <= this.limit;
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (this.mode === 'source' && this.folder) {
         // A stale link to a folder that is gone falls back to the top level.
-        this.notify(`Ordner konnte nicht geöffnet werden: ${error.message}`, true);
+        this.notify(tr('library.catalog.folder_open_failed', 'The folder could not be opened: {message}', { message: error.message }), true);
         this.goTo('');
         return;
       }
@@ -288,18 +339,19 @@ export class CatalogBrowser {
     const identity = [...new Set([item.brand, item.model, item.board_number].filter(Boolean))].join(' · ');
     if (identity) copy.append(node('p', 'source-card-identity', identity));
     const footer = node('div', 'source-card-footer');
-    footer.append(node('span', '', `${kinds[item.kind]} · ${fileSize(item.size_bytes)}`),
-      node('span', 'source-card-action', board ? 'Öffnen ↗' : item.kind === 'pdf' ? 'Ansehen ↗' : 'Laden ↓'));
+    footer.append(node('span', '', `${kindName(item.kind)} · ${fileSize(item.size_bytes)}`),
+      node('span', 'source-card-action', board ? tr('library.catalog.action_open', 'Open ↗')
+        : item.kind === 'pdf' ? tr('library.catalog.action_view', 'View ↗') : tr('library.catalog.action_download', 'Download ↓')));
     card.append(visual, copy, footer);
     return card;
   }
 
   async open(item, card) {
-    if (this.opening) { this.notify('Eine Platine wird gerade geöffnet. Bitte kurz warten.');return; }
+    if (this.opening) { this.notify(tr('library.catalog.opening_busy', 'A board is being opened. Please wait a moment.'));return; }
     this.opening = true;card.disabled = true;card.classList.add('opening');
     const action = card.querySelector('.source-card-action');
-    if (action) action.textContent = 'Lädt …';
-    this.notify(`${item.name} wird geöffnet …`, false, true);
+    if (action) action.textContent = tr('library.catalog.action_loading', 'Loading …');
+    this.notify(tr('library.catalog.opening', 'Opening {name} …', { name: item.name }), false, true);
     try {
       let id = item.id;
       if (!item.imported) {
@@ -307,14 +359,20 @@ export class CatalogBrowser {
         id = result.board.id;
       }
       await this.openBoard(id);
-    } catch (error) { this.notify(`Datei konnte nicht geöffnet werden: ${error.message}`, true); }
-    finally { this.opening = false;card.disabled = false;card.classList.remove('opening');if (action) action.textContent = 'Öffnen ↗'; }
+    } catch (error) { this.notify(tr('library.catalog.file_open_failed', 'The file could not be opened: {message}', { message: error.message }), true); }
+    finally { this.opening = false;card.disabled = false;card.classList.remove('opening');if (action) action.textContent = tr('library.catalog.action_open', 'Open ↗'); }
   }
 
   fail(error) {
     $('source-grid').replaceChildren();$('source-grid').setAttribute('aria-busy', 'false');
-    $('source-results').textContent = 'Katalog konnte nicht geladen werden.';
+    this._failed = true;
+    this.renderFailure();
     $('source-page').textContent = '';
     this.notify(error.message, true);
+  }
+
+  renderFailure() {
+    $('source-results').removeAttribute('data-i18n');
+    $('source-results').textContent = tr('library.catalog.load_failed', 'The catalog could not be loaded.');
   }
 }

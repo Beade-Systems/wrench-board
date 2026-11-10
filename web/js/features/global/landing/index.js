@@ -12,6 +12,8 @@
 // "détail" log so the technician watches the agent work in real time.
 
 import { apiFetch } from "../../../shared/api.js";
+import { localizeError } from "../../../shared/errors.js";
+import { auditStatusLabel, describePipelineFailure } from "../../../pipeline_progress.js";
 import { mountMascot, setMascotState } from '../../../mascot.js';
 import { prettifySlug, repairHash, seedSlugForRepair } from '../../../router.js';
 import i18n from '../../../i18n.js';
@@ -231,14 +233,25 @@ async function loadAndRenderSidebar() {
 async function httpError(res) {
   const detail = await res.text().catch(() => "");
   let msg = `HTTP ${res.status} ${detail}`;
+  let body = null;
   try {
     const parsed = JSON.parse(detail);
     const m = parsed?.error?.message
       || parsed?.detail?.message
       || (typeof parsed?.detail === "string" ? parsed.detail : null);
     if (m) msg = m;
+    body = parsed;
   } catch { /* not JSON — keep the raw line */ }
-  return new Error(msg);
+  const err = new Error(msg);
+  // Keep the parsed body so localizeError() can translate by the stable `code`.
+  if (body && typeof body === "object") err.body = body;
+  return err;
+}
+
+// Failure text for a status line: translated by error code when the backend
+// sent one (pipeline.error.*), else the server / network sentence as is.
+function errorText(err) {
+  return localizeError("pipeline.error", err, (err && err.message) || String(err));
 }
 
 async function onDeleteRepairClick(repairId, itemEl, btnEl) {
@@ -254,7 +267,7 @@ async function onDeleteRepairClick(repairId, itemEl, btnEl) {
     if (!res.ok) throw await httpError(res);
   } catch (err) {
     console.error("[landing] delete failed", err);
-    setStatus(t("landing.status.error_delete", { error: err.message || err }), STATUS_ERROR);
+    setStatus(t("landing.status.error_delete", { error: errorText(err) }), STATUS_ERROR);
     btnEl.disabled = false;
     return;
   }
@@ -555,7 +568,7 @@ async function _launchDiagnostic() {
     if (_preflightNotifyOptIn && planHints()) armNotify(rid);
   } catch (err) {
     console.error("[landing] submit failed", err);
-    setStatus(t("landing.status.error_create", { error: err.message || err }), STATUS_ERROR);
+    setStatus(t("landing.status.error_create", { error: errorText(err) }), STATUS_ERROR);
     setLandingMascot("error");
     setSubmitting(false);
   }
@@ -657,6 +670,9 @@ async function confirmPreflight() {
   await _launchDiagnostic();
 }
 
+// Code of the last pipeline_failed event shown for the current subscription.
+let _lastFailCode = null;
+
 function subscribeToProgress(slug, repairId, { autoNav = true } = {}) {
   if (progressConn) { progressConn.close(); progressConn = null; }
   // Remember the active build so confirmLandingKind() can re-subscribe to the
@@ -665,6 +681,7 @@ function subscribeToProgress(slug, repairId, { autoNav = true } = {}) {
   _activeRid = repairId;
   _autoNavOnFinish = autoNav;
 
+  _lastFailCode = null;
   progressConn = connectProgress(slug, {
     onEvent: (data) => handleProgressEvent(data, slug, repairId),
     onError: (ev) => {
@@ -799,7 +816,7 @@ function handleProgressEvent(ev, slug, repairId) {
       break;
     }
     case "pipeline_finished": {
-      setTimelineTitle(t("landing.timeline.title_ready", { status: ev.status || "" }));
+      setTimelineTitle(t("landing.timeline.title_ready", { status: ev.status ? auditStatusLabel(ev.status) : "" }));
       setStatus(t("landing.status.ready"), STATUS_NEUTRAL);
       stopEtaTicker();
       setLandingMascot("success");
@@ -825,8 +842,17 @@ function handleProgressEvent(ev, slug, repairId) {
       }
       break;
     case "pipeline_failed": {
+      // The background wrapper republishes a generic ERROR after the
+      // orchestrator's own coded failure (REJECTED) — keep the specific one.
+      if (_lastFailCode && _lastFailCode !== "unexpected_error" && ev.code === "unexpected_error") break;
+      _lastFailCode = ev.code || null;
       setTimelineTitle(t("landing.timeline.title_failed"));
-      setStatus(t("landing.status.error_pipeline", { error: ev.error || ev.status || t("landing.status.error_unknown") }), STATUS_ERROR);
+      // Fixed sentence translated by the event's code; the auditor's brief /
+      // exception text follows verbatim under a translated caption.
+      const fail = describePipelineFailure(ev);
+      const failText = [fail.headline, fail.raw && fail.headline ? `${t(fail.labelKey)} ${fail.raw}` : fail.raw]
+        .filter(Boolean).join(" · ");
+      setStatus(t("landing.status.error_pipeline", { error: failText || (ev.status ? auditStatusLabel(ev.status) : t("landing.status.error_unknown")) }), STATUS_ERROR);
       const running = document.querySelector(".landing-phase.is-running");
       if (running) {
         running.classList.remove("is-running");
@@ -890,7 +916,7 @@ function renderLandingKindConfirm(ev) {
   panel.innerHTML = `
     <div class="landing-kind-row"><span data-i18n="pipeline.kind.declared">${_escapeHtml(tFn("pipeline.kind.declared"))}</span><b class="mono">${_escapeHtml(_landingKindLabel(ev.user_declared))}</b></div>
     <div class="landing-kind-row"><span data-i18n="pipeline.kind.detected">${_escapeHtml(tFn("pipeline.kind.detected"))}</span><b class="mono">${_escapeHtml(_landingKindLabel(ev.graph_inferred))}${conf !== null ? ` ${conf}%` : ""}</b></div>
-    ${ev.evidence ? `<div class="landing-kind-evidence">${_escapeHtml(ev.evidence)}</div>` : ""}
+    ${ev.evidence ? `<div class="landing-kind-evidence"><span data-i18n="pipeline.kind.evidence_label">${_escapeHtml(tFn("pipeline.kind.evidence_label"))}</span> ${_escapeHtml(ev.evidence)}</div>` : ""}
     <div class="landing-kind-opts">${radios}</div>
     <button type="button" class="landing-kind-confirm" id="landingKindConfirm" data-i18n="pipeline.kind.confirm">${_escapeHtml(tFn("pipeline.kind.confirm"))}</button>`;
 
@@ -1454,4 +1480,18 @@ export function initLanding() {
   renderKnowledgeIndicators();
   initCatalogue();
   initProfileMenu();
+  // [data-i18n] markup is re-translated by i18n.applyDom; everything this
+  // module renders imperatively is redrawn here on a locale switch.
+  i18n.onChange(refreshLandingOnLocaleChange);
+}
+
+function refreshLandingOnLocaleChange() {
+  renderKnowledgeIndicators();   // chip label mirrors the translated <option>
+  renderPreflightSchematic();
+  // The free-plan hint is built once from t(); drop it so it is rebuilt.
+  document.getElementById("landingFreeHint")?.remove();
+  _updateFreeLock();
+  const ov = document.getElementById("landing-overlay");
+  // Sidebar: count, state badges, dates, delete labels.
+  if (ov && !ov.hidden) loadAndRenderSidebar();
 }

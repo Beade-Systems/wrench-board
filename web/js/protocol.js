@@ -187,6 +187,16 @@ function _wireConfirmModal() {
   _confirmWired = true;
 }
 
+// Localized label for a backend enum value (step type, outcome, history
+// action). Falls back to the raw value when no translation exists, so a new
+// backend enum member still renders instead of showing an i18n key.
+function enumLabel(prefix, value) {
+  if (value == null || value === "") return "";
+  const key = `${prefix}.${value}`;
+  const label = window.t ? window.t(key) : key;
+  return label === key ? String(value) : label;
+}
+
 function _renderStep(step, idx) {
   const li = document.createElement("li");
   const num = document.createElement("span");
@@ -200,7 +210,7 @@ function _renderStep(step, idx) {
   if (step.type) {
     const t = document.createElement("span");
     t.className = "step-type";
-    t.textContent = step.type;
+    t.textContent = enumLabel("protocol.step.type", step.type);
     instr.appendChild(t);
   }
   const target = step.target || step.test_point;
@@ -232,7 +242,10 @@ export function showConfirmation(ev) {
   if (rationaleEl) rationaleEl.textContent = decodeEscapes(ev.rationale || "…");
   if (countEl) {
     const n = Number(ev.step_count || (ev.steps || []).length || 0);
-    countEl.textContent = t("protocol.confirm.step_count", { n });
+    // JS owns the count from here — drop the placeholder data-i18n hook so a
+    // locale switch doesn't reset it to "number of steps".
+    countEl.removeAttribute("data-i18n");
+    countEl.textContent = t(n === 1 ? "protocol.confirm.step_count_one" : "protocol.confirm.step_count", { n });
   }
   if (stepsEl) {
     stepsEl.innerHTML = "";
@@ -350,8 +363,9 @@ function numberFromStepId(id) {
 function formatResult(step) {
   const r = step.result;
   if (!r) return "";
-  if (step.type === "numeric") return `${r.value} ${r.unit || step.unit || ""} (${r.outcome})`;
-  if (step.type === "boolean") return `${r.value ? t("protocol.step.result.yes") : t("protocol.step.result.no")} (${r.outcome})`;
+  const outcome = enumLabel("protocol.step.outcome", r.outcome);
+  if (step.type === "numeric") return `${r.value} ${r.unit || step.unit || ""} (${outcome})`;
+  if (step.type === "boolean") return `${r.value ? t("protocol.step.result.yes") : t("protocol.step.result.no")} (${outcome})`;
   if (step.type === "observation") return r.value || t("protocol.step.result.empty");
   if (step.type === "ack") return t("protocol.step.result.done");
   return JSON.stringify(r);
@@ -490,7 +504,7 @@ function renderQuest(proto) {
   }
   root.classList.remove("hidden");
   document.body.classList.add("has-protocol-quest");
-  document.getElementById("protocolTitle").textContent = proto.title;
+  document.getElementById("protocolTitle").textContent = proto.title || t("protocol.title.default");
 
   const total = proto.steps.length;
   const doneCount = proto.steps.filter((s) =>
@@ -508,7 +522,7 @@ function renderQuest(proto) {
   histList.innerHTML = "";
   for (const h of proto.history.slice(-10)) {
     const li = document.createElement("li");
-    li.textContent = `${h.action}${h.step_id ? " · " + h.step_id : ""}${h.reason ? " · " + h.reason : ""}`;
+    li.textContent = `${enumLabel("protocol.history.action", h.action)}${h.step_id ? " · " + h.step_id : ""}${h.reason ? " · " + enumLabel("protocol.history.reason", h.reason) : ""}`;
     histList.appendChild(li);
   }
 }
@@ -541,7 +555,16 @@ subscribe(bindChrome);
 
 // Re-render on locale switch — picks up i18n strings inside dynamically built rows.
 if (window.i18n && window.i18n.onChange) {
-  window.i18n.onChange(() => notify());
+  window.i18n.onChange(() => {
+    notify();
+    // i18n.applyDom() just reset the toggle's title to "Collapse" — restore
+    // "Expand" when the tracker is currently collapsed.
+    const toggle = document.getElementById("protocolToggleBtn");
+    const root = document.getElementById("protocolQuest");
+    if (toggle && root && root.classList.contains("is-collapsed")) {
+      toggle.setAttribute("title", t("protocol.toggle.expand"));
+    }
+  });
 }
 
 let _lastFocusedStepId = null;

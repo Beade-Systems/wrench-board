@@ -277,18 +277,37 @@ function tokenInChunk(text, offset) {
   return best;
 }
 
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+
+/** Runs `fn` once dictionaries are loaded and on every locale switch; returns an unsubscribe. */
+function onLocale(fn) {
+  const i18n = window.i18n;
+  if (!i18n) return () => {};
+  let live = true;
+  const run = () => { if (live) fn(); };
+  if (typeof i18n.onReady === 'function') i18n.onReady(run);
+  const off = typeof i18n.onChange === 'function' ? i18n.onChange(run) : null;
+  return () => { live = false; if (typeof off === 'function') off(); };
+}
+
 function describeLoadError(err) {
   switch (err && err.name) {
     case 'InvalidPDFException':
-      return 'Die Datei ist leer oder keine gültige PDF-Datei.';
+      return tr('library.pdf.error_invalid', 'The file is empty or not a valid PDF.');
     case 'MissingPDFException':
-      return 'Die Datei wurde nicht gefunden.';
+      return tr('library.pdf.error_missing', 'The file was not found.');
     case 'PasswordException':
-      return 'Das PDF ist passwortgeschützt.';
+      return tr('library.pdf.error_password', 'The PDF is password protected.');
     case 'UnexpectedResponseException':
-      return `Der Server hat die Datei nicht geliefert (HTTP ${err.status}).`;
+      return tr('library.pdf.error_http', 'The server did not deliver the file (HTTP {status}).', { status: err.status });
     default:
-      return (err && err.message) || 'Unbekannter Fehler.';
+      return (err && err.message) || tr('library.pdf.error_unknown', 'Unknown error.');
   }
 }
 
@@ -316,7 +335,15 @@ export class PdfView {
     this._buildDom();
     this._bind();
     this.setNight(readPref(NIGHT_KEY), { silent: true });
-    this._showMessage('Kein PDF geöffnet.');
+    this._showMessage(() => tr('library.pdf.none_open', 'No PDF open.'));
+    this._offLocale = onLocale(() => this._relocalize());
+  }
+
+  /** Rewrites the chrome texts after dictionaries load or the locale switches. */
+  _relocalize() {
+    for (const apply of this._localized) apply();
+    if (this._message) this._msgEl.textContent = this._message();
+    if (this._count) this._countEl.textContent = this._count();
   }
 
   get night() {
@@ -353,17 +380,24 @@ export class PdfView {
   _buildDom() {
     const root = el('div', 'pdfp', { tabindex: '0' });
     this.root = root;
+    this._localized = [];
+    // `label()` runs now and again on every locale switch.
+    const localize = (apply) => { this._localized.push(apply); apply(); };
 
     const bar = el('div', 'pdfp-bar');
     this._titleEl = el('div', 'pdfp-title');
     bar.append(this._titleEl);
 
-    const pager = el('label', 'pdfp-group pdfp-pager', { title: 'Seite' });
+    const pager = el('label', 'pdfp-group pdfp-pager');
     this._pageInput = el('input', 'pdfp-page-input', {
       type: 'text',
       inputmode: 'numeric',
-      'aria-label': 'Seite',
       value: '–',
+    });
+    localize(() => {
+      const page = tr('library.pdf.page', 'Page');
+      pager.title = page;
+      this._pageInput.setAttribute('aria-label', page);
     });
     this._pageTotal = el('span', 'pdfp-mono', {});
     this._pageTotal.textContent = '/ –';
@@ -371,29 +405,31 @@ export class PdfView {
     bar.append(pager);
 
     const zoom = el('div', 'pdfp-group');
-    this._zoomOut = this._button(ICONS.minus, 'Verkleinern (−)');
+    this._zoomOut = this._button(ICONS.minus, () => tr('library.pdf.zoom_out', 'Zoom out (−)'));
     this._zoomLabel = el('span', 'pdfp-mono pdfp-zoom');
     this._zoomLabel.textContent = '–';
-    this._zoomIn = this._button(ICONS.plus, 'Vergrößern (+)');
-    this._fitBtn = this._button(ICONS.fit, 'Seitenbreite (0)');
+    this._zoomIn = this._button(ICONS.plus, () => tr('library.pdf.zoom_in', 'Zoom in (+)'));
+    this._fitBtn = this._button(ICONS.fit, () => tr('library.pdf.fit_width', 'Fit page width (0)'));
     zoom.append(this._zoomOut, this._zoomLabel, this._zoomIn, this._fitBtn);
     bar.append(zoom);
 
     const search = el('div', 'pdfp-group pdfp-search');
     this._searchInput = el('input', 'pdfp-search-input', {
       type: 'search',
-      placeholder: 'Im PDF suchen …',
-      'aria-label': 'Im PDF suchen',
       spellcheck: 'false',
     });
+    localize(() => {
+      this._searchInput.placeholder = tr('library.pdf.search_placeholder', 'Search in PDF …');
+      this._searchInput.setAttribute('aria-label', tr('library.pdf.search_aria', 'Search in PDF'));
+    });
     this._countEl = el('span', 'pdfp-mono pdfp-count', { role: 'status' });
-    this._prevBtn = this._button(ICONS.up, 'Vorheriger Treffer (Umschalt+Enter)');
-    this._nextBtn = this._button(ICONS.down, 'Nächster Treffer (Enter)');
+    this._prevBtn = this._button(ICONS.up, () => tr('library.pdf.prev_hit', 'Previous hit (Shift+Enter)'));
+    this._nextBtn = this._button(ICONS.down, () => tr('library.pdf.next_hit', 'Next hit (Enter)'));
     search.append(this._searchInput, this._countEl, this._prevBtn, this._nextBtn);
     bar.append(search);
 
     const tools = el('div', 'pdfp-group');
-    this._nightBtn = this._button(ICONS.moon, 'Nachtmodus');
+    this._nightBtn = this._button(ICONS.moon, () => tr('library.pdf.night_mode', 'Night mode'));
     this._nightBtn.setAttribute('aria-pressed', 'false');
     tools.append(this._nightBtn);
     if (this._opts.detach) {
@@ -403,7 +439,9 @@ export class PdfView {
     bar.append(tools);
 
     this._scroller = el('div', 'pdfp-scroll');
-    this._scroller.title = 'Mausrad: Zoom · Umschalt+Mausrad: Blättern · Ziehen: Verschieben · Klick auf Text: Auf dem Board suchen';
+    localize(() => {
+      this._scroller.title = tr('library.pdf.scroll_hint', 'Mouse wheel: zoom · Shift+wheel: scroll · Drag: pan · Click on text: find on the board');
+    });
     this._pagesEl = el('div', 'pdfp-pages');
     this._scroller.append(this._pagesEl);
 
@@ -416,8 +454,16 @@ export class PdfView {
     this._container.append(root);
   }
 
+  /** @param {string|(() => string)} label a function is re-evaluated on locale switches */
   _button(svg, label) {
-    const b = el('button', 'pdfp-btn', { type: 'button', title: label, 'aria-label': label });
+    const b = el('button', 'pdfp-btn', { type: 'button' });
+    const apply = () => {
+      const text = typeof label === 'function' ? label() : label;
+      b.title = text;
+      b.setAttribute('aria-label', text);
+    };
+    apply();
+    this._localized.push(apply);
     b.innerHTML = svg;
     return b;
   }
@@ -494,7 +540,7 @@ export class PdfView {
     this._searchInput.value = term;
     this._term = '';
     this._setCount('');
-    this._showMessage('PDF wird geladen …');
+    this._showMessage(() => tr('library.pdf.loading', 'Loading PDF …'));
     let settle;
     this._ready = new Promise((resolve) => { settle = resolve; });
     try {
@@ -502,7 +548,7 @@ export class PdfView {
       try {
         runtime = await loadPdfjs();
       } catch (err) {
-        throw new Error(`Die PDF-Bibliothek konnte nicht geladen werden (${err.message || err}).`);
+        throw new Error(tr('library.pdf.error_lib', 'The PDF library could not be loaded ({message}).', { message: err.message || err }));
       }
       if (gen !== this._gen) return { ok: false, cancelled: true };
       this._lib = runtime.lib;
@@ -524,7 +570,8 @@ export class PdfView {
       this._task = task;
       task.onProgress = ({ loaded, total }) => {
         if (gen !== this._gen || this._doc || !total) return;
-        this._showMessage(`PDF wird geladen … ${Math.min(100, Math.round((loaded / total) * 100))} %`);
+        const percent = Math.min(100, Math.round((loaded / total) * 100));
+        this._showMessage(() => tr('library.pdf.loading_percent', 'Loading PDF … {percent} %', { percent }));
       };
       const doc = await task.promise;
       if (gen !== this._gen) return { ok: false, cancelled: true };
@@ -548,8 +595,8 @@ export class PdfView {
     } catch (err) {
       if (gen !== this._gen) return { ok: false, cancelled: true };
       const message = describeLoadError(err);
-      this._showMessage(`PDF konnte nicht geladen werden. ${message}`, true);
-      this._opts.notify?.(`PDF konnte nicht geladen werden: ${message}`);
+      this._showMessage(() => tr('library.pdf.load_failed', 'The PDF could not be loaded. {message}', { message }), true);
+      this._opts.notify?.(tr('library.pdf.load_failed_notify', 'The PDF could not be loaded: {message}', { message }));
       settle(false);
       return { ok: false, error: message };
     }
@@ -561,11 +608,12 @@ export class PdfView {
     this._searchInput.value = '';
     this._term = '';
     this._setCount('');
-    this._showMessage('Kein PDF geöffnet.');
+    this._showMessage(() => tr('library.pdf.none_open', 'No PDF open.'));
   }
 
   dispose() {
     this._teardownDocument();
+    this._offLocale?.();
     this._ac.abort();
     this._resizeObserver.disconnect();
     clearTimeout(this._searchDebounce);
@@ -1132,7 +1180,7 @@ export class PdfView {
     const menu = this._menu;
     menu.replaceChildren();
     const action = el('button', 'pdfp-menu-item', { type: 'button', role: 'menuitem' });
-    action.textContent = 'Auf dem Board suchen';
+    action.textContent = tr('library.pdf.find_on_board', 'Find on the board');
     if (token) {
       const head = el('div', 'pdfp-menu-head pdfp-mono');
       head.textContent = token;
@@ -1143,7 +1191,7 @@ export class PdfView {
       });
     } else {
       action.disabled = true;
-      action.title = 'An dieser Stelle wurde kein Text erkannt.';
+      action.title = tr('library.pdf.no_text_here', 'No text was recognised at this spot.');
     }
     menu.append(action);
     menu.hidden = false;
@@ -1209,7 +1257,7 @@ export class PdfView {
       this._setCount('');
       return { hits: 0, mode: 'none' };
     }
-    this._setCount('Suche …');
+    this._setCount(() => tr('library.pdf.searching', 'Searching …'));
     const loaded = await this._ready;
     if (gen !== this._searchGen) return { hits: 0, mode: 'none', cancelled: true };
     if (!loaded || !this._numPages) {
@@ -1353,17 +1401,21 @@ export class PdfView {
     const total = this._hits.length;
     let text;
     if (!total) {
-      text = scanned < this._numPages ? `Suche … ${scanned}/${this._numPages}` : 'Keine Treffer';
+      const pages = this._numPages;
+      text = scanned < pages ? () => `${tr('library.pdf.searching', 'Searching …')} ${scanned}/${pages}`
+        : () => tr('library.pdf.no_hits', 'No hits');
     } else {
       const position = this._hitIdx >= 0 ? this._hitIdx + 1 : 0;
-      text = `${position} / ${total}${scanned < this._numPages ? '+' : ''}`;
-      if (this._hitMode === 'substring') text += ' · Teil';
+      const base = `${position} / ${total}${scanned < this._numPages ? '+' : ''}`;
+      text = this._hitMode === 'substring' ? () => `${base} · ${tr('library.pdf.partial', 'partial')}` : base;
     }
     this._setCount(text);
   }
 
+  /** @param {string|(() => string)} text a function is re-evaluated on locale switches */
   _setCount(text) {
-    this._countEl.textContent = text;
+    this._count = typeof text === 'function' ? text : null;
+    this._countEl.textContent = this._count ? this._count() : text;
   }
 
   // ---------------------------------------------------------------- settings
@@ -1379,13 +1431,16 @@ export class PdfView {
     }
   }
 
+  /** @param {string|(() => string)} text a function is re-evaluated on locale switches */
   _showMessage(text, isError = false) {
-    this._msgEl.textContent = text;
+    this._message = typeof text === 'function' ? text : () => text;
+    this._msgEl.textContent = this._message();
     this._msgEl.classList.toggle('error', isError);
     this._msgEl.hidden = false;
   }
 
   _hideMessage() {
+    this._message = null;
     this._msgEl.hidden = true;
   }
 }
@@ -1409,7 +1464,7 @@ export class PdfPanel {
     this._view = new PdfView(this._host, {
       onTermClick: (token) => this._onTermClick?.(token),
       notify: (text) => this._notify?.(text),
-      detach: { icon: ICONS.popout, label: 'In eigenem Fenster öffnen', onClick: () => this.popout() },
+      detach: { icon: ICONS.popout, label: () => tr('library.pdf.popout', 'Open in separate window'), onClick: () => this.popout() },
     });
     this._note = this._buildPoppedNote();
     this._host.append(this._note);
@@ -1493,6 +1548,7 @@ export class PdfPanel {
     this._disposed = true;
     this._closeWindowForUnload();
     this._teardownLink();
+    this._offLocale?.();
     this._ac.abort();
     this._view.dispose();
     this._host.remove();
@@ -1502,7 +1558,7 @@ export class PdfPanel {
 
   _openWindow() {
     if (typeof BroadcastChannel !== 'function') {
-      this._notify?.('Separate Fenster werden von diesem Browser nicht unterstützt.');
+      this._notify?.(tr('library.pdf.popout_unsupported', 'This browser does not support separate windows.'));
       return false;
     }
     const url = new URL('../pdf_popout.html', import.meta.url);
@@ -1515,7 +1571,7 @@ export class PdfPanel {
     }
     if (!win) {
       writePref(POPPED_KEY, false);
-      this._notify?.('Das Popup wurde blockiert. Das PDF bleibt angedockt.');
+      this._notify?.(tr('library.pdf.popup_blocked', 'The pop-up was blocked. The PDF stays docked.'));
       return false;
     }
     this._win = win;
@@ -1532,7 +1588,7 @@ export class PdfPanel {
     }, 800);
     this._readyTimer = setTimeout(() => {
       if (this._peerReady) return;
-      this._notify?.('Das separate Fenster antwortet nicht. Das PDF wird wieder angedockt.');
+      this._notify?.(tr('library.pdf.popout_unresponsive', 'The separate window is not responding. The PDF is docked again.'));
       this.dock();
     }, POPOUT_READY_TIMEOUT_MS);
     return true;
@@ -1637,9 +1693,15 @@ export class PdfPanel {
   _buildPoppedNote() {
     const note = el('div', 'pdfp-popped', { hidden: '' });
     const text = el('p');
-    text.textContent = 'Das PDF ist in einem eigenen Fenster geöffnet.';
     const button = el('button', 'pdfp-popped-btn', { type: 'button' });
-    button.innerHTML = `${ICONS.dock}<span>Wieder andocken</span>`;
+    button.innerHTML = `${ICONS.dock}<span></span>`;
+    const label = button.querySelector('span');
+    const apply = () => {
+      text.textContent = tr('library.pdf.popped_note', 'The PDF is open in its own window.');
+      label.textContent = tr('library.pdf.dock_again', 'Dock again');
+    };
+    apply();
+    this._offLocale = onLocale(apply);
     button.addEventListener('click', () => this.dock());
     note.append(text, button);
     return note;

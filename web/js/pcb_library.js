@@ -1,5 +1,6 @@
 import { saveOffline } from './offline_store.js';
 import { apiFetch } from './shared/api.js';
+import { boardNotes, describeResponseError, noteText } from './pcb_library_errors.js';
 import { LibraryViewer } from './pcb_library_viewer.js';
 import { CatalogBrowser } from './pcb_catalog.js';
 import { BoardTabs } from './pcb_board_tabs.js';
@@ -11,7 +12,37 @@ import { adjacentNets } from './pcb_net_walk.js';
 import { matchesNet, matchesPart, parseQuery } from './pcb_entity_query.js';
 
 const $ = id => document.getElementById(id);
-const number = value => new Intl.NumberFormat('de-DE').format(value);
+
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+const intlTag = () => window.i18n?.intlTag || 'en-US';
+const number = value => new Intl.NumberFormat(intlTag()).format(value);
+
+// Texts that follow the page state. `live` re-evaluates them after a locale
+// switch; dropping `data-i18n` keeps applyDom() from restoring the static default.
+const liveTexts = new Map();
+function live(id, text) {
+  $(id).removeAttribute('data-i18n');
+  liveTexts.set(id, text);
+  $(id).textContent = text();
+}
+
+/** Translates the first text node of `[data-i18n-node]` elements, leaving child elements alone. */
+function applyTextNodes() {
+  document.querySelectorAll('[data-i18n-node]').forEach(host => {
+    const key = host.getAttribute('data-i18n-node');
+    const target = [...host.childNodes].find(child => child.nodeType === Node.TEXT_NODE && child.nodeValue.trim());
+    const text = tr(key, '');
+    if (!target || !text) return;
+    const [, lead, tail] = target.nodeValue.match(/^(\s*)[\s\S]*?(\s*)$/);
+    target.nodeValue = `${lead}${text}${tail}`;
+  });
+}
 const state = { boards: [], active: null, board: null, favorites: false, tab: 'parts', panel: 'parts', limit: 250, busy: false };
 let notificationTimer;
 let opening;
@@ -34,25 +65,15 @@ function notify(message, error = false, persistent = false) {
 async function request(path, options = {}) {
   const response = await apiFetch(`/api/library${path}`, { cache: 'no-store', ...options });
   if (!response.ok) {
-    let message = `Anfrage fehlgeschlagen (HTTP ${response.status}).`;
-    try {
-      const error = await response.json();
-      const detail = error.detail;
-      if (typeof detail === 'string') message = detail;
-      else if (detail?.detail === 'file-too-large') message = `Die Datei ist zu groß. Maximal ${Math.round(detail.max_bytes / 1048576)} MB sind erlaubt.`;
-      else if (detail?.detail === 'empty-file') message = 'Die Datei ist leer.';
-      else if (detail?.detail === 'fz-key-missing') message = 'Der FZ-Schlüssel fehlt. Öffne Einstellungen → Boardview-Schlüssel, lade den Schlüssel und speichere die Einstellungen.';
-      else if (detail?.detail === 'unsupported-format') message = 'Dieses Dateiformat wird nicht unterstützt.';
-      else if (detail?.message?.includes('pcbnew not available')) message = 'Für native KiCad-Dateien muss KiCad mit dem Python-Modul pcbnew auf dem Server installiert sein. Alternativ einen Boardview-Export importieren.';
-      else if (detail?.message) message = detail.message;
-    } catch { /* Keep HTTP status when the response is not JSON. */ }
+    let message = tr('library.error.request_failed', 'Request failed (HTTP {status}).', { status: response.status });
+    message = await describeResponseError(response, message);
     throw new Error(message);
   }
   return response.status === 204 ? null : response.json();
 }
 
 const viewer = new LibraryViewer($('board-canvas'), renderSelection, position => {
-  $('dimensions').textContent = `X ${(position.x * .0254).toFixed(2)} · Y ${(position.y * .0254).toFixed(2)} mm`;
+  live('dimensions', () => `X ${(position.x * .0254).toFixed(2)} · Y ${(position.y * .0254).toFixed(2)} mm`);
 });
 const catalog = new CatalogBrowser({ request, notify, getBoards: () => state.boards,
   openBoard: async id => { await refresh();await openBoard(id); } });
@@ -61,11 +82,11 @@ const tabs = new BoardTabs($('board-tabs'), {
   onClose: tabClosed,
   loadBoard: id => request(`/boards/${encodeURIComponent(id)}`),
   getView: () => viewer.getView(),
-  onError: (tab, error) => notify(`${tab.title} konnte nicht geladen werden: ${error.message}`, true),
+  onError: (tab, error) => notify(tr('library.error.tab_load_failed', '{title} could not be loaded: {message}', { title: tab.title, message: error.message }), true),
 });
 const worklist = new Worklist($('worklist-panel'), { request, notify, onJump: refdes => {
   const part = state.board?.parts.find(candidate => candidate.refdes === refdes);
-  if (part) focusPart(part); else notify(`${refdes} gibt es auf dieser Platine nicht.`, true);
+  if (part) focusPart(part); else notify(tr('library.notify.refdes_missing', '{refdes} does not exist on this board.', { refdes }), true);
 } });
 const compare = new PartCompareView($('part-compare'), {
   getOpenBoards: () => tabs.all,
@@ -78,7 +99,7 @@ const compare = new PartCompareView($('part-compare'), {
 const schematic = new SchematicDock({ request, notify, onTerm: findOnBoard });
 const colorRules = new ColorRulesEditor($('colors-panel'), {
   onPreview: rules => viewer.setColorRules(rules),
-  onApply: rules => { viewer.setColorRules(rules);notify('Farbregeln gespeichert.'); },
+  onApply: rules => { viewer.setColorRules(rules);notify(tr('library.notify.colors_saved', 'Color rules saved.')); },
 });
 viewer.setColorRules(loadRules());
 tabs.bindKeys();
@@ -97,20 +118,20 @@ function renderCatalog() {
   const query = $('library-search').value.trim().toLocaleLowerCase();
   const boards = state.boards.filter(board => (!state.favorites || board.favorite)
     && `${board.title} ${board.filename} ${board.format} ${board.notes}`.toLocaleLowerCase().includes(query));
-  boards.sort($('sort').value === 'name' ? (a, b) => a.title.localeCompare(b.title, 'de', { numeric: true })
+  boards.sort($('sort').value === 'name' ? (a, b) => a.title.localeCompare(b.title, intlTag(), { numeric: true })
     : $('sort').value === 'parts' ? (a, b) => b.parts_count - a.parts_count
     : (a, b) => b.imported_at.localeCompare(a.imported_at));
   $('board-list').replaceChildren();
   if (!boards.length) {
     $('board-list').append(element('p', 'placeholder', state.boards.length
-      ? 'Keine Platinen für diese Suche.' : 'Deine Bibliothek ist noch leer. Importiere deine erste PCB-Datei.'));
+      ? tr('library.sidebar.no_match', 'No boards match this search.') : tr('library.sidebar.empty', 'Your library is still empty. Import your first PCB file.')));
   }
   for (const board of boards) {
     const button = element('button', `board-card${state.active?.id === board.id ? ' active' : ''}`);
     button.type = 'button';button.title = board.filename;
     button.setAttribute('aria-pressed', String(state.active?.id === board.id));
     const copy = element('div', 'board-copy');
-    copy.append(element('strong', '', board.title), element('small', '', `${board.format.toUpperCase()} · ${number(board.parts_count)} Bauteile`));
+    copy.append(element('strong', '', board.title), element('small', '', `${board.format.toUpperCase()} · ${tr('library.sidebar.parts_count', '{count} components', { count: number(board.parts_count) })}`));
     button.append(element('span', 'board-icon', '▦'), copy);
     if (board.favorite) button.append(element('span', 'star', '★'));
     button.addEventListener('click', () => openBoard(board.id));
@@ -132,14 +153,19 @@ function updateMetadata(metadata) {
   if (tab?.id === metadata.id) { tab.metadata = metadata;tab.title = metadata.title;tabs.activate(tab.id); }
   const index = state.boards.findIndex(board => board.id === metadata.id);
   if (index < 0) state.boards.unshift(metadata); else state.boards[index] = metadata;
-  $('board-title').textContent = metadata.title;
-  $('board-subtitle').textContent = `${metadata.filename} · ${size(metadata.size_bytes)} · Importiert am ${new Date(metadata.imported_at).toLocaleDateString('de-DE')}`;
+  live('board-title', () => metadata.title);
+  live('board-subtitle', () => `${metadata.filename} · ${size(metadata.size_bytes)} · ${tr('library.board.imported_on', 'Imported on {date}', { date: new Date(metadata.imported_at).toLocaleDateString(intlTag()) })}`);
   $('favorite').textContent = metadata.favorite ? '★' : '☆';
   $('favorite').setAttribute('aria-pressed', String(metadata.favorite));
-  $('favorite').setAttribute('aria-label', metadata.favorite ? 'Aus Favoriten entfernen' : 'Als Favorit markieren');
+  syncFavoriteLabel();
   $('edit-title').value = metadata.title;
   $('edit-notes').value = metadata.notes;
   renderCatalog();
+}
+
+function syncFavoriteLabel() {
+  $('favorite').setAttribute('aria-label', state.active?.favorite
+    ? tr('library.board.favorite_remove', 'Remove from favorites') : tr('library.board.favorite_add', 'Mark as favorite'));
 }
 
 function size(bytes) { return bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`; }
@@ -186,15 +212,37 @@ async function openBoard(id) {
       await tabs.activate(id);
       return;
     }
-    $('viewer-status').textContent = 'Platine wird geladen …';
+    live('viewer-status', () => tr('library.viewer.status_loading', 'Loading board …'));
     const data = await request(`/boards/${encodeURIComponent(id)}`, { signal });
     if (signal.aborted) return;
     await tabs.open({ id, title: data.metadata.title, board: data.board, metadata: data.metadata });
   } catch (error) {
     if (error.name === 'AbortError') return;
-    notify(`Platine konnte nicht geöffnet werden: ${error.message}`, true);
-    $('viewer-status').textContent = state.active ? 'Vorherige Platine geöffnet' : 'Laden fehlgeschlagen';
+    notify(tr('library.error.open_failed', 'The board could not be opened: {message}', { message: error.message }), true);
+    const hadBoard = Boolean(state.active);
+    live('viewer-status', () => (hadBoard
+      ? tr('library.viewer.status_previous', 'Previous board still open') : tr('library.viewer.status_failed', 'Loading failed')));
   }
+}
+
+/** Lists the trace layers of the shown board; the viewer keeps the chosen one. */
+function fillTraceLayers() {
+  const board = state.board;
+  const chosen = viewer.traceLayer;
+  $('trace-layer').replaceChildren(new Option(tr('library.toolbar.traces_off', 'Traces off'), ''));
+  if (!board) return;
+  const layers = [...new Set([...(board.traces || []), ...(board.arcs || [])].map(trace => trace.layer))]
+    .filter(layer => layer !== 28).sort((a, b) => a - b);
+  if (layers.length) $('trace-layer').add(new Option(tr('library.toolbar.traces_all', 'All traces'), 'all'));
+  layers.forEach(layer => $('trace-layer').add(new Option(tr('library.toolbar.trace_layer', 'Layer {layer}', { layer }), String(layer))));
+  $('trace-layer').value = chosen;
+}
+
+/** Import notes of the open board, in the current language (stored text when a note has no code). */
+function renderImportNotes() {
+  const notes = boardNotes(state.board);
+  $('import-notes').textContent = notes.join(' · ');
+  $('import-notes').hidden = !notes.length;
 }
 
 /** Puts an activated tab's board into the viewer and every panel. */
@@ -202,8 +250,7 @@ function showBoard(tab) {
   const { id, board, metadata } = tab;
   revealWorkspace(id);
   state.board = board;
-  $('import-notes').textContent = (board.parser_notes || []).join(' · ');
-  $('import-notes').hidden = !board.parser_notes?.length;
+  renderImportNotes();
   updateMetadata(metadata);
   enableControls(true);
   $('parts-count').textContent = number(metadata.parts_count);
@@ -214,11 +261,7 @@ function showBoard(tab) {
   $('nets-tab-count').textContent = number(metadata.nets_count);
   $('entity-search').value = '';$('entity-search').rows = 1;
   state.limit = 250;
-  $('trace-layer').replaceChildren(new Option('Leiterbahnen aus', ''));
-  const layers = [...new Set([...(board.traces || []), ...(board.arcs || [])].map(trace => trace.layer))]
-    .filter(layer => layer !== 28).sort((a, b) => a - b);
-  if (layers.length) $('trace-layer').add(new Option('Alle Leiterbahnen', 'all'));
-  layers.forEach(layer => $('trace-layer').add(new Option(`Ebene ${layer}`, String(layer))));
+  fillTraceLayers();
   viewer.setView({ side: 3, mirror: false, traceLayer: '', labels: viewer.labels, layout: 'single' });
   viewer.load(board);
   viewer.resize();viewer.fit();
@@ -229,8 +272,8 @@ function showBoard(tab) {
   $('download').href = `/api/library/boards/${encodeURIComponent(id)}/download`;
   $('download').setAttribute('download', metadata.filename);
   const b = viewer.bounds;
-  $('viewer-status').textContent = 'Platine geladen';
-  $('dimensions').textContent = `${((b.maxX - b.minX) * .0254).toFixed(1)} × ${((b.maxY - b.minY) * .0254).toFixed(1)} mm`;
+  live('viewer-status', () => tr('library.viewer.status_loaded', 'Board loaded'));
+  live('dimensions', () => `${((b.maxX - b.minX) * .0254).toFixed(1)} × ${((b.maxY - b.minY) * .0254).toFixed(1)} mm`);
   $('notification').hidden = true;
   worklist.load(id);
   schematic.setBoard(id, metadata.filename);
@@ -261,7 +304,7 @@ function findOnBoard(token) {
   if (part) { focusPart(part);return; }
   const net = state.board?.nets.find(candidate => candidate.name.toUpperCase() === name);
   if (net) viewer.select({ kind: 'net', item: net });
-  else notify(`„${token}“ gibt es auf dieser Platine nicht.`);
+  else notify(tr('library.notify.token_missing', '“{token}” does not exist on this board.', { token }));
 }
 
 function clearBoard() {
@@ -269,17 +312,18 @@ function clearBoard() {
   $('import-notes').hidden = true;
   worklist.clear();compare.hide();schematic.setBoard(null);
   viewer.load(null);enableControls(false);renderCatalog();renderEntities();renderSelection(null);
-  $('board-title').textContent = 'Dein nächster Blick ins Detail.';
-  $('board-subtitle').textContent = 'Wähle eine Platine aus deiner Bibliothek.';
+  live('board-title', () => tr('library.board.title_default', 'Your next close look.'));
+  live('board-subtitle', () => tr('library.board.subtitle_default', 'Pick a board from your library.'));
+  syncFavoriteLabel();
   $('parts-tab-count').textContent = '0';$('nets-tab-count').textContent = '0';
-  $('viewer-status').textContent = 'Bereit für deine nächste Platine';
-  $('dimensions').textContent = 'Mausrad: Zoom · Ziehen: Verschieben';
+  live('viewer-status', () => tr('library.viewer.status_ready_next', 'Ready for your next board'));
+  live('dimensions', () => tr('library.viewer.hint_controls', 'Mouse wheel: zoom · Drag: pan'));
   history.replaceState(null, '', location.pathname + location.search);
   showBrowser();
 }
 
 async function importFiles(files) {
-  if (state.busy) { notify('Ein Import läuft bereits. Bitte kurz warten.');return; }
+  if (state.busy) { notify(tr('library.import.busy', 'An import is already running. Please wait a moment.'));return; }
   const selected = [...files];
   if (!selected.length) return;
   state.busy = true;$('import-button').disabled = true;$('empty-import').disabled = true;
@@ -287,9 +331,9 @@ async function importFiles(files) {
   const errors = [];
   try {
     for (const [index, file] of selected.entries()) {
-      notify(`Import ${index + 1}/${selected.length}: ${file.name} wird verarbeitet …`, false, true);
+      notify(tr('library.import.progress', 'Import {index}/{total}: processing {name} …', { index: index + 1, total: selected.length, name: file.name }), false, true);
       try {
-        if (state.maxUpload && file.size > state.maxUpload) throw new Error(`Datei zu groß (maximal ${Math.round(state.maxUpload / 1048576)} MB).`);
+        if (state.maxUpload && file.size > state.maxUpload) throw new Error(tr('library.import.too_large', 'File too large (maximum {max} MB).', { max: Math.round(state.maxUpload / 1048576) }));
         const form = new FormData();form.append('file', file);
         const result = await request('/boards', { method: 'POST', body: form });
         lastId = result.board.id;
@@ -298,8 +342,11 @@ async function importFiles(files) {
     }
     await refresh();
     if (lastId) await openBoard(lastId);
-    const status = [added ? `${added} Platine${added === 1 ? '' : 'n'} importiert.` : '',
-      duplicates ? `${duplicates} Datei${duplicates === 1 ? ' ist' : 'en sind'} bereits in der Bibliothek.` : '', ...errors].filter(Boolean).join('\n');
+    const addedText = added === 1 ? tr('library.import.added_one', '1 board imported.')
+      : tr('library.import.added_other', '{count} boards imported.', { count: added });
+    const duplicateText = duplicates === 1 ? tr('library.import.duplicate_one', '1 file is already in the library.')
+      : tr('library.import.duplicate_other', '{count} files are already in the library.', { count: duplicates });
+    const status = [added ? addedText : '', duplicates ? duplicateText : '', ...errors].filter(Boolean).join('\n');
     notify(status, Boolean(errors.length));
   } catch (error) { notify(error.message, true); }
   finally {
@@ -310,15 +357,16 @@ async function importFiles(files) {
 
 function renderEntities() {
   const list = $('entity-list');list.replaceChildren();
-  if (!state.board) { list.append(element('p', 'placeholder', 'Importiere eine Platine, um ihre Bauteile und Netze zu erkunden.'));return; }
+  if (!state.board) { list.append(element('p', 'placeholder', tr('library.inspector.placeholder_import', 'Import a board to explore its components and nets.')));return; }
   const query = parseQuery($('entity-search').value);
   const items = state.board[state.tab].filter(item => (state.tab === 'parts'
     ? viewer.visible(item.layer) && matchesPart(query, item) : matchesNet(query, item)));
-  if (!items.length) list.append(element('p', 'placeholder', 'Keine Treffer. Ändere die Suche oder die Platinenseite.'));
+  if (!items.length) list.append(element('p', 'placeholder', tr('library.inspector.no_hits', 'No hits. Change the search or the board side.')));
   for (const item of items.slice(0, state.limit)) {
     const button = element('button', 'entity-row');button.type = 'button';
     const name = state.tab === 'parts' ? item.refdes : item.name;
-    const detail = state.tab === 'parts' ? item.value || `${item.pin_refs.length} Pins` : `${item.pin_refs.length} Pins`;
+    const pins = tr('library.inspector.pin_count', '{count} pins', { count: item.pin_refs.length });
+    const detail = state.tab === 'parts' ? item.value || pins : pins;
     button.title = `${name} · ${detail}`;
     button.append(element('span', '', name), element('small', '', detail));
     button.addEventListener('click', () => {
@@ -328,7 +376,7 @@ function renderEntities() {
     list.append(button);
   }
   if (items.length > state.limit) {
-    const more = element('button', 'text-button', `Weitere anzeigen (${number(state.limit)}/${number(items.length)})`);
+    const more = element('button', 'text-button', tr('library.inspector.show_more', 'Show more ({shown}/{total})', { shown: number(state.limit), total: number(items.length) }));
     more.addEventListener('click', () => { state.limit += 250;renderEntities(); });list.append(more);
   }
 }
@@ -339,7 +387,8 @@ function detail(parent, label, value) {
   row.append(element('span', '', label), element('span', '', String(value)));parent.append(row);
 }
 
-const sideName = layer => layer === 1 ? 'Oberseite' : layer === 2 ? 'Unterseite' : 'Beide Seiten';
+const sideName = layer => layer === 1 ? tr('library.selection.side_top', 'Top side')
+  : layer === 2 ? tr('library.selection.side_bottom', 'Bottom side') : tr('library.selection.side_both', 'Both sides');
 
 function showPin(pin) {
   if (!viewer.visible(pin.layer)) setSide(pin.layer);
@@ -351,11 +400,11 @@ function showPin(pin) {
 function appendPins(pins, container, start = 0) {
   pins.slice(start, start + 100).forEach(pin => {
     const row = element('button', 'pin-row');row.type = 'button';
-    row.append(element('span', '', `${pin.part_refdes}.${pin.name || pin.index}`), element('span', '', pin.net || 'Nicht verbunden'));
+    row.append(element('span', '', `${pin.part_refdes}.${pin.name || pin.index}`), element('span', '', pin.net || tr('library.selection.not_connected', 'Not connected')));
     row.addEventListener('click', () => showPin(pin));container.append(row);
   });
   if (pins.length > start + 100) {
-    const more = element('button', 'text-button', `Weitere Pins (${number(pins.length - start - 100)})`);
+    const more = element('button', 'text-button', tr('library.selection.more_pins', 'More pins ({count})', { count: number(pins.length - start - 100) }));
     more.addEventListener('click', () => { more.remove();appendPins(pins, container, start + 100); });container.append(more);
   }
 }
@@ -373,47 +422,48 @@ function updateNeighbours() {
 function renderSelection(selection) {
   updateNeighbours();
   const container = $('selection');
-  container.replaceChildren(element('span', 'eyebrow', 'AUSWAHL'));
+  container.replaceChildren(element('span', 'eyebrow', tr('library.selection.eyebrow', 'SELECTION')));
   if (!selection) {
-    container.append(element('p', 'placeholder', 'Klicke auf ein Bauteil oder einen Pin, um die Details zu sehen.'));return;
+    container.append(element('p', 'placeholder', tr('library.selection.placeholder', 'Click a component or a pin to see its details.')));return;
   }
   const item = selection.item;
   if (selection.kind === 'net') {
     container.append(element('h3', '', item.name));
-    detail(container, 'Typ', item.is_ground ? 'Masse' : item.is_power ? 'Versorgung' : 'Signal');
-    detail(container, 'Pins', number(item.pin_refs.length));
-    detail(container, 'Sollspannung', item.expected_voltage_v != null ? `${item.expected_voltage_v} V` : null);
-    detail(container, 'Sollwiderstand', item.expected_open ? 'Offen / OL' : item.expected_resistance_ohms != null ? `${item.expected_resistance_ohms} Ω` : null);
-    action(container, 'Im Schaltplan suchen →', () => schematic.search(item.name));
+    detail(container, tr('library.selection.type', 'Type'), item.is_ground ? tr('library.selection.type_ground', 'Ground')
+      : item.is_power ? tr('library.selection.type_power', 'Power') : tr('library.selection.type_signal', 'Signal'));
+    detail(container, tr('library.selection.pins', 'Pins'), number(item.pin_refs.length));
+    detail(container, tr('library.selection.expected_voltage', 'Expected voltage'), item.expected_voltage_v != null ? `${item.expected_voltage_v} V` : null);
+    detail(container, tr('library.selection.expected_resistance', 'Expected resistance'), item.expected_open ? tr('library.selection.open_ol', 'Open / OL') : item.expected_resistance_ohms != null ? `${item.expected_resistance_ohms} Ω` : null);
+    action(container, tr('library.selection.find_in_schematic', 'Find in schematic →'), () => schematic.search(item.name));
     appendPins(item.pin_refs.map(index => state.board.pins[index]).filter(Boolean), container);
   } else if (selection.kind === 'part') {
     container.append(element('h3', '', item.refdes));
-    if (item.placement_inferred) detail(container, 'Position', 'Aus Leiterbahnen geschätzt – nicht direkt in der Datei gespeichert');
-    detail(container, 'Importhinweis', item.import_note);
-    detail(container, 'Wert', item.value);detail(container, 'Gehäuse', item.footprint);
-    detail(container, 'Seite', sideName(item.layer));detail(container, 'Pins', number(item.pin_refs.length));
-    detail(container, 'Drehung', item.rotation_deg != null ? `${item.rotation_deg}°` : null);
-    if (item.is_dnp) detail(container, 'Bestückung', 'Nicht bestückt (DNP)');
-    action(container, 'Auf die Arbeitsliste →', () => worklist.add(item.refdes));
-    action(container, 'Pinbelegung vergleichen →', () => compare.show(state.active.id, item.refdes));
-    action(container, 'Im Schaltplan suchen →', () => schematic.search(item.refdes));
+    if (item.placement_inferred) detail(container, tr('library.selection.position', 'Position'), tr('library.selection.position_inferred', 'Estimated from traces – not stored in the file itself'));
+    detail(container, tr('library.selection.import_note', 'Import note'), item.import_note ? noteText(item.import_note, item.import_note_code) : null);
+    detail(container, tr('library.selection.value', 'Value'), item.value);detail(container, tr('library.selection.footprint', 'Footprint'), item.footprint);
+    detail(container, tr('library.selection.side', 'Side'), sideName(item.layer));detail(container, tr('library.selection.pins', 'Pins'), number(item.pin_refs.length));
+    detail(container, tr('library.selection.rotation', 'Rotation'), item.rotation_deg != null ? `${item.rotation_deg}°` : null);
+    if (item.is_dnp) detail(container, tr('library.selection.population', 'Population'), tr('library.selection.dnp', 'Not populated (DNP)'));
+    action(container, tr('library.selection.add_to_worklist', 'Add to worklist →'), () => worklist.add(item.refdes));
+    action(container, tr('library.selection.compare_pinout', 'Compare pinout →'), () => compare.show(state.active.id, item.refdes));
+    action(container, tr('library.selection.find_in_schematic', 'Find in schematic →'), () => schematic.search(item.refdes));
     appendPins(item.pin_refs.map(index => state.board.pins[index]).filter(Boolean), container);
   } else {
     container.append(element('h3', '', `${item.part_refdes}.${item.name || item.index}`));
-    detail(container, 'Seite', sideName(item.layer));
-    detail(container, 'Position', `${(item.pos.x * .0254).toFixed(3)}, ${(item.pos.y * .0254).toFixed(3)} mm`);
-    detail(container, 'Netz', item.net || 'Nicht verbunden');
+    detail(container, tr('library.selection.side', 'Side'), sideName(item.layer));
+    detail(container, tr('library.selection.position', 'Position'), `${(item.pos.x * .0254).toFixed(3)}, ${(item.pos.y * .0254).toFixed(3)} mm`);
+    detail(container, tr('library.selection.net', 'Net'), item.net || tr('library.selection.not_connected', 'Not connected'));
     if (item.net) {
       const net = state.board.nets.find(net => net.name === item.net);
       if (net) {
-        const button = element('button', 'text-button', `Netz inspizieren (${number(net.pin_refs.length)} Pins) →`);
+        const button = element('button', 'text-button', tr('library.selection.inspect_net', 'Inspect net ({count} pins) →', { count: number(net.pin_refs.length) }));
         button.addEventListener('click', () => viewer.select({ kind: 'net', item: net }));container.append(button);
       }
-      action(container, 'Im Schaltplan suchen →', () => schematic.search(item.net));
+      action(container, tr('library.selection.find_in_schematic', 'Find in schematic →'), () => schematic.search(item.net));
     }
     const part = state.board.parts.find(part => part.refdes === item.part_refdes);
     if (part) {
-      const button = element('button', 'text-button', `Bauteil ${part.refdes} ansehen →`);
+      const button = element('button', 'text-button', tr('library.selection.view_part', 'View component {refdes} →', { refdes: part.refdes }));
       button.addEventListener('click', () => viewer.select({ kind: 'part', item: part }));container.append(button);
     }
   }
@@ -446,9 +496,17 @@ function selectPanel(name) {
   $('colors-panel').hidden = name !== 'colors';
   if (!entities) return;
   state.tab = name;state.limit = 250;
-  $('entity-search').placeholder = name === 'parts' ? 'Bauteil oder Wert suchen …' : 'Netz suchen …';
-  $('entity-search').setAttribute('aria-label', `${name === 'parts' ? 'Bauteile' : 'Netze'} durchsuchen, jede Zeile filtert weiter`);
+  syncEntitySearch();
   renderEntities();
+}
+
+function syncEntitySearch() {
+  const parts = state.tab === 'parts';
+  $('entity-search').placeholder = parts ? tr('library.inspector.search_parts_placeholder', 'Search component or value …')
+    : tr('library.inspector.search_nets_placeholder', 'Search net …');
+  $('entity-search').setAttribute('aria-label', parts
+    ? tr('library.inspector.search_parts_aria', 'Search components, each line narrows the filter')
+    : tr('library.inspector.search_nets_aria', 'Search nets, each line narrows the filter'));
 }
 document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => selectPanel(button.dataset.tab)));
 document.addEventListener('keydown', event => {
@@ -499,14 +557,14 @@ $('metadata-form').addEventListener('submit', async event => {
     const updated = await request(`/boards/${current.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: $('edit-title').value, notes: $('edit-notes').value }) });
     if (state.active?.id === current.id) updateMetadata(updated); else await refresh();
-    notify('Name und Notizen gespeichert.');
+    notify(tr('library.notify.metadata_saved', 'Name and notes saved.'));
   } catch (error) { notify(error.message, true); }
   finally { button.disabled = false; }
 });
 $('delete').addEventListener('click', () => {
   if (!state.active) return;
   $('delete-dialog').dataset.boardId = state.active.id;
-  $('delete-description').textContent = `„${state.active.title}“ mit Originaldatei und Notizen wird dauerhaft vom Server entfernt.`;
+  $('delete-description').textContent = tr('library.delete.description', '“{title}”, its original file and its notes will be permanently removed from the server.', { title: state.active.title });
   $('delete-dialog').returnValue = '';$('delete-dialog').showModal();
 });
 $('delete-dialog').addEventListener('close', async () => {
@@ -515,7 +573,7 @@ $('delete-dialog').addEventListener('close', async () => {
   try {
     await request(`/boards/${id}`, { method: 'DELETE' });
     dropBoard(id);
-    await refresh();notify('Platine aus der Bibliothek gelöscht.');
+    await refresh();notify(tr('library.notify.deleted', 'Board deleted from the library.'));
   } catch (error) { notify(error.message, true); }
 });
 
@@ -536,17 +594,38 @@ window.addEventListener('hashchange', () => {
   else if (!id) { catalog.syncFromHash();showBrowser(); }
 });
 
+/** Re-renders everything this module wrote into the page in the active locale. */
+function relocalize() {
+  applyTextNodes();
+  for (const [id, text] of liveTexts) $(id).textContent = text();
+  syncFavoriteLabel();
+  syncEntitySearch();
+  fillTraceLayers();
+  renderCatalog();
+  renderEntities();
+  renderSelection(viewer.selected);
+  renderImportNotes();
+  catalog.relocalize();
+  schematic.relocalize();
+  viewer.draw();
+}
+
 (async function init() {
+  // Dictionaries first, so nothing below renders in the fallback language.
+  if (window.i18n?.ready) await window.i18n.ready;
+  relocalize();
+  window.i18n?.onChange?.(relocalize);
   try {
     const [info] = await Promise.all([request(''), refresh(), catalog.init()]);
     state.maxUpload = info.max_upload_bytes;
     $('file-input').accept = info.extensions.join(',');
-    $('formats').textContent = `${info.extensions.length} Dateiformate · max. ${Math.round(info.max_upload_bytes / 1048576)} MB / Datei`;
+    live('formats', () => tr('library.sidebar.formats', '{count} file formats · max. {max} MB / file',
+      { count: info.extensions.length, max: Math.round(info.max_upload_bytes / 1048576) }));
     const id = location.hash.match(/^#board\/([a-f0-9]{64})$/)?.[1];
     if (id) await openBoard(id);
   } catch (error) {
-    $('formats').textContent = 'Server nicht erreichbar';
-    notify(`Bibliothek konnte nicht geladen werden: ${error.message}`, true);
+    live('formats', () => tr('library.sidebar.server_unreachable', 'Server unreachable'));
+    notify(tr('library.error.library_load_failed', 'The library could not be loaded: {message}', { message: error.message }), true);
   }
 })();
 
@@ -563,9 +642,9 @@ window.addEventListener('pagehide', event => {
 });
 
 $('offline-save').onclick = async () => {
-  if (!state.board) { notify('Bitte zuerst eine Platine öffnen.'); return; }
+  if (!state.board) { notify(tr('library.offline.open_first', 'Open a board first.')); return; }
   $('offline-save').disabled = true;
-  try { await saveOffline(state.board); notify('Offline gespeichert. Unter Einstellungen → Offline-Bibliothek öffnen.'); }
+  try { await saveOffline(state.board); notify(tr('library.offline.saved', 'Saved offline. Open it under Settings → Offline library.')); }
   catch(error) { notify(error.message, true); }
   finally { $('offline-save').disabled = false; }
 };

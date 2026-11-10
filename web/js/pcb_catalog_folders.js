@@ -1,4 +1,13 @@
 // Lazy folder tree of the source catalog; children load on first expansion.
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+const intlTag = () => window.i18n?.intlTag || 'en-US';
+
 const COUNT_FIELD = { board: 'boards', pdf: 'pdfs', archive: 'archives', other: 'other' };
 
 function folderCount(folder, kind) {
@@ -6,9 +15,10 @@ function folderCount(folder, kind) {
   return field ? folder[field] : folder.boards + folder.pdfs + folder.archives + folder.other;
 }
 
-/** "1.234 Boardviews · 56 PDFs · 3 Ordner", leaving out what the folder lacks. */
+/** "1,234 boardviews · 56 PDFs · 3 folders", leaving out what the folder lacks. */
 export function folderSummary(folder, format) {
-  const parts = [[folder.boards, 'Boardviews'], [folder.pdfs, 'PDFs'], [folder.subfolders, 'Ordner']];
+  const parts = [[folder.boards, tr('library.catalog.stat.boards', 'Boardviews')], [folder.pdfs, tr('library.catalog.stat.pdfs', 'PDFs')],
+    [folder.subfolders, folder.subfolders === 1 ? tr('library.catalog.stat.folder_one', 'folder') : tr('library.catalog.stat.folder_other', 'folders')]];
   return parts.filter(([value]) => value).map(([value, label]) => `${format(value)} ${label}`).join(' · ');
 }
 
@@ -102,12 +112,12 @@ export class FolderTree {
     const toggle = element('button', `tree-toggle${expandable ? '' : ' none'}`, expandable ? '▸' : '');
     toggle.type = 'button';
     toggle.tabIndex = expandable ? 0 : -1;
-    toggle.setAttribute('aria-label', `${folder.label} auf- oder zuklappen`);
+    toggle.setAttribute('aria-label', tr('library.catalog.tree_toggle', 'Expand or collapse {folder}', { folder: this.displayName(folder.label) }));
     const label = element('button', 'tree-label');
     label.type = 'button';
     label.title = folder.name;
     label.append(element('span', 'tree-name', this.displayName(folder.label)), element('small', 'tree-count',
-      new Intl.NumberFormat('de-DE').format(folderCount(folder, this.kind()))));
+      new Intl.NumberFormat(intlTag()).format(folderCount(folder, this.kind()))));
     row.append(toggle, label);
     const children = element('ul', 'tree-list');
     children.setAttribute('role', 'group');

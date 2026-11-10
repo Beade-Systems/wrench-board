@@ -33,6 +33,32 @@ const el = (id) => document.getElementById(id);
 // (agent emitted two messages back-to-back without a user interjection).
 let currentTurn = null;
 
+// ── Live re-labelling on locale switch ─────────────────────────────────────
+// UI-authored strings in the log (system lines, tool-step phrases, role labels,
+// card chrome) are rendered by a closure kept on the node, so a locale switch
+// can re-run it. Model-authored text (assistant messages, thinking, summaries)
+// is never registered — it stays in the language the agent wrote it in.
+const LIVE_ATTR = "data-chat-live";
+
+// Register `render(node)` on `node` and paint it once.
+export function liveNode(node, render) {
+  node.setAttribute(LIVE_ATTR, "");
+  node._liveRender = render;
+  render(node);
+  return node;
+}
+
+// Re-run every registered renderer under #llmLog (called from llm.js on
+// i18n.onChange). Nodes dropped from the log are simply no longer found.
+export function relabelLog() {
+  const log = el("llmLog");
+  if (!log) return;
+  log.querySelectorAll(`[${LIVE_ATTR}]`).forEach((node) => {
+    try { if (node._liveRender) node._liveRender(node); }
+    catch (e) { console.warn("[chatLog] relabel failed", e); }
+  });
+}
+
 export function logRow(cls, innerHTML) {
   const log = el("llmLog");
   const row = document.createElement("div");
@@ -44,13 +70,13 @@ export function logRow(cls, innerHTML) {
 }
 
 export function logMessage(role, text, isReplay = false) {
-  const roleLabel = role === "user" ? t('chat.roles.user') : t('chat.roles.agent');
   const cls = `msg ${role}${isReplay ? " replay" : ""}`;
-  const replaySuffix = isReplay ? t('chat.roles.replay_suffix') : "";
-  logRow(
-    cls,
-    `<span class="role">${escapeHTML(roleLabel)}${escapeHTML(replaySuffix)}</span>${escapeHTML(text)}`,
-  );
+  const row = logRow(cls, `<span class="role"></span>${escapeHTML(text)}`);
+  // Only the role label is UI copy — the message text itself is left alone.
+  liveNode(row.querySelector(".role"), (node) => {
+    const roleLabel = role === "user" ? t('chat.roles.user') : t('chat.roles.agent');
+    node.textContent = roleLabel + (isReplay ? t('chat.roles.replay_suffix') : "");
+  });
 }
 
 // Distinct card rendered when MA dropped the prior session AND we had
@@ -59,6 +85,11 @@ export function logMessage(role, text, isReplay = false) {
 // from the violet "resumed-with-summary" card) so the tech knows their
 // next message hits a blank-slate model.
 export function renderContextLost(payload) {
+  const row = logRow("context-lost", "");
+  liveNode(row, (node) => { node.innerHTML = contextLostHTML(payload); });
+}
+
+function contextLostHTML(payload) {
   const oldId = payload?.old_session_id || "";
   const newId = payload?.new_session_id || "";
   const reason = payload?.reason === "ma_events_empty"
@@ -88,9 +119,7 @@ export function renderContextLost(payload) {
   const preservedHTML = preservedItems.length
     ? `<p class="preserved"><strong>${escapeHTML(t('chat.context_lost.preserved_label'))}</strong> : ${preservedItems.join(" · ")}.</p>`
     : `<p class="preserved muted">${escapeHTML(t('chat.context_lost.preserved_none'))}</p>`;
-  logRow(
-    "context-lost",
-    `<header>
+  return `<header>
        <span class="icon-dot"></span>
        <span class="title">${escapeHTML(t('chat.context_lost.title'))}</span>
      </header>
@@ -99,9 +128,8 @@ export function renderContextLost(payload) {
        <p>${escapeHTML(t('chat.context_lost.context_reinject'))}</p>
        ${preservedHTML}
        <p>${t('chat.context_lost.lost_explainer')}</p>
-       ${oldId ? `<p class="meta">old=<code>${escapeHTML(oldId)}</code> · new=<code>${escapeHTML(newId)}</code></p>` : ""}
-     </div>`,
-  );
+       ${oldId ? `<p class="meta">${t('chat.context_lost.session_ids', { old: escapeHTML(oldId), new: escapeHTML(newId) })}</p>` : ""}
+     </div>`;
 }
 
 // Distinct card rendered when an expired MA session had to be recreated and
@@ -109,27 +137,54 @@ export function renderContextLost(payload) {
 // same block the new agent is seeing, so the tech knows what carried over.
 export function renderResumeSummary(payload) {
   const summary = payload?.summary || "";
-  const tokIn = payload?.tokens_in ?? "n/a";
-  const tokOut = payload?.tokens_out ?? "n/a";
   let bodyHTML = escapeHTML(summary);
   if (typeof window.marked !== "undefined" && typeof window.DOMPurify !== "undefined") {
     try {
       bodyHTML = window.DOMPurify.sanitize(window.marked.parse(summary));
     } catch (e) { /* keep escaped fallback */ }
   }
-  logRow(
+  const row = logRow(
     "resume-summary",
     `<header>
        <span class="icon-dot"></span>
-       <span class="title">${escapeHTML(t('chat.resume.title'))}</span>
-       <span class="meta">${escapeHTML(t('chat.resume.meta_summary', { tok_in: tokIn, tok_out: tokOut }))}</span>
+       <span class="title"></span>
+       <span class="meta"></span>
      </header>
      <div class="body">${bodyHTML}</div>`,
   );
+  // Card chrome only — the summary body is model-authored and stays as is.
+  liveNode(row.querySelector("header"), (head) => {
+    const tokIn = payload?.tokens_in ?? t('chat.foot.na');
+    const tokOut = payload?.tokens_out ?? t('chat.foot.na');
+    head.querySelector(".title").textContent = t('chat.resume.title');
+    head.querySelector(".meta").textContent =
+      t('chat.resume.meta_summary', { tok_in: tokIn, tok_out: tokOut });
+  });
 }
 
+// Plain system line from an already-resolved string. Prefer logSysKey() for
+// anything that comes from the dictionaries — this one cannot be re-translated.
 export function logSys(text, isErr = false) {
-  logRow(isErr ? "sys err" : "sys", escapeHTML(text));
+  return logRow(isErr ? "sys err" : "sys", escapeHTML(text));
+}
+
+// System line by i18n key: the key + params stay on the row so a locale switch
+// re-resolves it. `params` may be a function returning the params object, for
+// values that are themselves localised (tier names, nested reasons).
+// `detail` (optional, raw server/exception text) is appended after the
+// translated sentence in a `.sys-detail` span, never translated.
+export function logSysKey(key, params, isErr = false, detail = "") {
+  const row = logRow(isErr ? "sys err" : "sys", "");
+  return liveNode(row, (node) => {
+    const p = typeof params === "function" ? params() : params;
+    node.textContent = t(key, p);
+    if (detail) {
+      const d = document.createElement("span");
+      d.className = "sys-detail";
+      d.textContent = ` · ${detail}`;
+      node.appendChild(d);
+    }
+  });
 }
 
 // Append a small terminal-state chip to the chat log (abandoned / completed).
@@ -145,15 +200,17 @@ export function appendProtocolSystemEvent(kind, { protocol_id, reason } = {}) {
   const chip = document.createElement("div");
   chip.className = `protocol-system-event is-${kind}`;
   chip.dataset.key = dedupeKey;
-  const label = kind === "abandoned"
-    ? (window.t?.("protocol.system_event.abandoned") || "Protocol abandoned")
-    : (window.t?.("protocol.system_event.completed") || "Protocol completed");
   // Inline SVG matches the project's icon convention (16/12 px,
   // stroke="currentColor", stroke-width=1.6) — no font icon dependency.
   const icon = kind === "abandoned"
     ? `<svg class="pse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12"/></svg>`
     : `<svg class="pse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>`;
-  chip.innerHTML = icon + `<span>${escapeHTML(label)}</span>`;
+  chip.innerHTML = icon + `<span class="pse-label"></span>`;
+  liveNode(chip.querySelector(".pse-label"), (node) => {
+    node.textContent = kind === "abandoned"
+      ? (window.t?.("protocol.system_event.abandoned") || "Protocol abandoned")
+      : (window.t?.("protocol.system_event.completed") || "Protocol completed");
+  });
   if (reason && reason !== "tech_dismiss") {
     const r = document.createElement("span");
     r.className = "pse-reason";
@@ -220,14 +277,16 @@ export function getCurrentTurn() {
 export function ensurePendingNode(turn, label) {
   const rail = turn.querySelector(".turn-rail");
   if (!rail || rail.querySelector(".step.pending")) return;
-  const finalLabel = label != null ? label : t('chat.pending.thinking');
   const step = document.createElement("div");
   step.className = "step pending";
   step.innerHTML =
     `<span class="node"></span>` +
-    `<span class="step-phrase">${escapeHTML(finalLabel)}` +
+    `<span class="step-phrase"><span class="pending-label"></span>` +
     `<span class="pending-dots"><span>.</span><span>.</span><span>.</span></span>` +
     `</span>`;
+  liveNode(step.querySelector(".pending-label"), (node) => {
+    node.textContent = label != null ? label : t('chat.pending.thinking');
+  });
   rail.appendChild(step);
   el("llmLog").scrollTop = el("llmLog").scrollHeight;
 }
@@ -248,6 +307,10 @@ function clearPendingNode(turn) {
 // whole run. A lone call (no following same-key call) renders normally. Returns
 // the live step node either way (the existing one when merged) so the caller's
 // addExpandToStep() attaches/accumulates the payload onto it.
+//
+// `phraseHTML` may also be a FUNCTION returning that HTML: the step then
+// re-renders its phrase on a locale switch (tool paraphrases). A plain string
+// is rendered once and left alone (model-authored "thinking" text).
 export function appendStep(turn, kind, phraseHTML, group = null) {
   clearPendingNode(turn);
   const rail = turn.querySelector(".turn-rail");
@@ -263,7 +326,19 @@ export function appendStep(turn, kind, phraseHTML, group = null) {
   }
   const step = document.createElement("div");
   step.className = `step ${kind}`;
-  step.innerHTML = `<span class="node"></span><span class="step-phrase">${phraseHTML}</span>`;
+  step.innerHTML = `<span class="node"></span><span class="step-phrase"></span>`;
+  const phrase = step.querySelector(".step-phrase");
+  if (typeof phraseHTML === "function") {
+    liveNode(phrase, (node) => {
+      // Keep what a coalesced run appended (target list / ×N badge) — those
+      // are language-neutral and not part of the paraphrase itself.
+      const keep = [...node.querySelectorAll(":scope > .step-items, :scope > .step-count")];
+      node.innerHTML = phraseHTML();
+      keep.forEach((k) => node.appendChild(k));
+    });
+  } else {
+    phrase.innerHTML = phraseHTML;
+  }
   if (group && group.key) {
     step.dataset.groupKey = group.key;
     step.dataset.groupCount = "1";
@@ -318,7 +393,10 @@ export function addExpandToStep(step, payloadObj) {
     btn.type = "button";
     btn.className = "step-expand";
     btn.setAttribute("aria-expanded", "false");
-    btn.title = t('chat.step.expand_title');
+    liveNode(btn, (node) => {
+      node.title = t('chat.step.expand_title');
+      renderStepPayload(step);
+    });
     btn.innerHTML =
       '<svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" ' +
       'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
@@ -335,7 +413,13 @@ export function addExpandToStep(step, payloadObj) {
     });
   }
 
+  renderStepPayload(step);
+}
+
+function renderStepPayload(step) {
+  const pre = step.querySelector(":scope > .step-payload");
   const payloads = step._payloads;
+  if (!pre || !payloads || !payloads.length) return;
   if (payloads.length === 1) {
     const p = payloads[0];
     const hasResult = p && typeof p === "object" && "result" in p;
@@ -374,13 +458,18 @@ export function appendTurnFoot(turn, payload) {
     foot.className = "turn-foot";
     turn.appendChild(foot);
   }
-  const priceLabel = payload.priced ? fmtUsd(payload.cost_usd) : "n/a";
-  const modelLabel = payload.model ? payload.model.replace("claude-", "") : "?";
-  const tokensLabel = `${(payload.input_tokens || 0) + (payload.cache_read_input_tokens || 0) + (payload.cache_creation_input_tokens || 0)}→${payload.output_tokens || 0} tok`;
-  foot.innerHTML =
-    `<span class="foot-cost">${priceLabel}</span>` +
-    `<span class="foot-sep">·</span>` +
-    `<span class="foot-tokens">${tokensLabel}</span>` +
-    `<span class="foot-sep">·</span>` +
-    `<span class="foot-model">${escapeHTML(modelLabel)}</span>`;
+  liveNode(foot, (node) => {
+    const priceLabel = payload.priced ? fmtUsd(payload.cost_usd) : escapeHTML(t('chat.foot.na'));
+    const modelLabel = payload.model ? payload.model.replace("claude-", "") : "?";
+    const tokensLabel = escapeHTML(t('chat.foot.tokens', {
+      input: (payload.input_tokens || 0) + (payload.cache_read_input_tokens || 0) + (payload.cache_creation_input_tokens || 0),
+      output: payload.output_tokens || 0,
+    }));
+    node.innerHTML =
+      `<span class="foot-cost">${priceLabel}</span>` +
+      `<span class="foot-sep">·</span>` +
+      `<span class="foot-tokens">${tokensLabel}</span>` +
+      `<span class="foot-sep">·</span>` +
+      `<span class="foot-model">${escapeHTML(modelLabel)}</span>`;
+  });
 }

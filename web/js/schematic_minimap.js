@@ -238,6 +238,15 @@ function clearSvg() {
   if (ng) while (ng.firstChild) ng.removeChild(ng.firstChild);
   if (lg) while (lg.firstChild) lg.removeChild(lg.firstChild);
 }
+// Localised component-type name (backend enum → label); raw value when no
+// key exists.
+function typeLabel(type) {
+  if (!type) return "";
+  const key = `stock.type_${type}`;
+  const label = t(key);
+  return label === key ? String(type) : label;
+}
+
 function clearBody() {
   const b = el("bvMinimapBody");
   if (b) b.innerHTML = "";
@@ -323,7 +332,7 @@ function openRailInSchematic(railLabel) {
 
 function renderComponent(relations) {
   const { refdes, type, mpn, populated, pinsByRole, consumed, produced, decoupled, data } = relations;
-  setHeader("COMP", refdes, [mpn, type].filter(Boolean).join(" · ") + (populated ? "" : " · NOSTUFF"));
+  setHeader("COMP", refdes, [mpn, typeLabel(type)].filter(Boolean).join(" · ") + (populated ? "" : ` · ${t('schematic.inspector.meta_populated_no')}`));
   prepareRender();
 
   // --- SVG graph: compact IC + rail flanking ---
@@ -338,7 +347,7 @@ function renderComponent(relations) {
     x: cx - 34, y: cy - 17, width: 68, height: 34, rx: 5,
   }));
   center.appendChild(mkSvg("text", { class: "bv-mm-center-label", x: cx, y: cy - 2 }, refdes));
-  center.appendChild(mkSvg("text", { class: "bv-mm-center-sub", x: cx, y: cy + 10 }, type || "comp"));
+  center.appendChild(mkSvg("text", { class: "bv-mm-center-sub", x: cx, y: cy + 10 }, typeLabel(type) || "comp"));
   nodesG.appendChild(center);
 
   // Rails consumed — LEFT
@@ -609,8 +618,9 @@ function renderNet(relations) {
   const R = 62;
   const arcStart = Math.PI * 0.15, arcEnd = Math.PI * 0.85;
   visible.forEach((m, i) => {
-    const t = visible.length === 1 ? 0.5 : i / (visible.length - 1);
-    const theta = arcStart + (arcEnd - arcStart) * t;
+    // Not named `t`: that would shadow the i18n lookup used for the tooltip below.
+    const frac = visible.length === 1 ? 0.5 : i / (visible.length - 1);
+    const theta = arcStart + (arcEnd - arcStart) * frac;
     const mx = cx - Math.cos(theta) * R * 1.8;
     const my = cy + Math.sin(theta) * R;
     const clamped = Math.max(28, Math.min(332, mx));
@@ -623,7 +633,7 @@ function renderNet(relations) {
       class: `bv-mm-node ${m.self ? "kind-self" : isProd ? "kind-producer" : "kind-comp"} clickable`,
     });
     g.appendChild(mkSvg("title", {}, m.type
-      ? t('brd.minimap.tooltip.pin_role_type_full', { refdes: m.refdes, pin: m.pinNum, role: m.pinName || m.role, type: m.type })
+      ? t('brd.minimap.tooltip.pin_role_type_full', { refdes: m.refdes, pin: m.pinNum, role: m.pinName || m.role, type: typeLabel(m.type) })
       : t('brd.minimap.tooltip.pin_role_type', { refdes: m.refdes, pin: m.pinNum, role: m.pinName || m.role })));
     const w = 44, h = 18;
     g.appendChild(mkSvg("rect", {
@@ -712,8 +722,8 @@ function renderNetRoleRow(role, members, data) {
   }
   const entries = [...byRef.values()].slice(0, 14);
   entries.forEach(e => {
-    const type = e.type || "";
-    const isCap = type === "capacitor";
+    const isCap = e.type === "capacitor";
+    const type = typeLabel(e.type);
     const cls = e.self ? "self" : (role === "power_out" || role === "switch_node") ? "producer" : "";
     const pinList = e.pins.join(", ");
     let chipTitle;
@@ -803,7 +813,10 @@ window.addEventListener("bv:minimap-toggle", (ev) => {
 // Re-render the minimap content on locale switch so the dynamic labels
 // (section heads, tooltips, role rows) pick up the new dictionary.
 if (window.i18n && typeof window.i18n.onChange === "function") {
-  window.i18n.onChange(() => {
+  const rerender = () => {
     if (enabled && lastSelection?.refdes) handleSelection(lastSelection);
-  });
+  };
+  window.i18n.onChange(rerender);
+  // A selection can land before the dictionaries do — repaint once ready.
+  if (typeof window.i18n.onReady === "function") window.i18n.onReady(rerender);
 }

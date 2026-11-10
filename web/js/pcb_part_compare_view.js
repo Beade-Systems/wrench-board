@@ -5,12 +5,43 @@ import { comparePinout, DIFFERING_STATUSES, differingPinRefs, STATUSES } from '.
 
 const ROW_BATCH = 400;
 const STATUS_LABEL = {
-  same: 'Gleich', renamed: 'Umbenannt', equivalent_rail: 'Gleiche Schiene',
-  unused: 'Unbenutzt', different: 'Abweichend', missing: 'Fehlt',
+  same: 'Same', renamed: 'Renamed', equivalent_rail: 'Same rail',
+  unused: 'Unused', different: 'Different', missing: 'Missing',
 };
-const decimal = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 });
-const twoDecimals = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 let instances = 0;
+
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fallback : text;
+};
+
+/** Runs `fn` once dictionaries are loaded and on every locale switch; returns an unsubscribe. */
+function onLocale(fn) {
+  const i18n = window.i18n;
+  if (!i18n) return () => {};
+  let live = true;
+  const run = () => { if (live) fn(); };
+  if (typeof i18n.onReady === 'function') i18n.onReady(run);
+  const off = typeof i18n.onChange === 'function' ? i18n.onChange(run) : null;
+  return () => { live = false; if (typeof off === 'function') off(); };
+}
+
+const statusLabel = status => tr(`pcb.compare.status.${status}`, STATUS_LABEL[status] ?? status);
+
+// Number formats follow the UI locale; without i18n the browser locale applies.
+const formatters = new Map();
+function formatNumber(value, minimumFractionDigits, maximumFractionDigits) {
+  const tag = window.i18n?.intlTag;
+  const id = `${tag}|${minimumFractionDigits}|${maximumFractionDigits}`;
+  if (!formatters.has(id)) {
+    formatters.set(id, new Intl.NumberFormat(tag || undefined, { minimumFractionDigits, maximumFractionDigits }));
+  }
+  return formatters.get(id).format(value);
+}
+const decimal = { format: value => formatNumber(value, 0, 3) };
+const twoDecimals = { format: value => formatNumber(value, 2, 2) };
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -28,31 +59,44 @@ function reading(side) {
   return parts.join(' · ');
 }
 
-const netText = side => (side ? side.net || 'nicht verbunden' : 'kein Pin');
+const netText = side => (side ? side.net || tr('pcb.compare.not_connected', 'not connected') : tr('pcb.compare.no_pin', 'no pin'));
 
 function connectivityText(evidence) {
-  if (!evidence || evidence.jaccard === null) return 'keine weiteren Anschlüsse zum Vergleichen';
+  if (!evidence || evidence.jaccard === null) return tr('pcb.compare.connectivity_none', 'no other connections to compare');
   const total = evidence.shared + evidence.onlyA + evidence.onlyB;
-  return `${evidence.shared} von ${total} Anschlüssen gemeinsam, Jaccard ${twoDecimals.format(evidence.jaccard)}`;
+  const jaccard = twoDecimals.format(evidence.jaccard);
+  return tr('pcb.compare.connectivity', `${evidence.shared} of ${total} connections shared, Jaccard ${jaccard}`,
+    { shared: evidence.shared, total, jaccard });
 }
 
 function explain(row, threshold) {
-  const unusedSide = row.unusedSide === 'both' ? 'beiden Seiten' : `Seite ${row.unusedSide?.toUpperCase()}`;
+  const evidence = connectivityText(row.evidence);
+  const limit = twoDecimals.format(threshold);
+  const why = (fallback, params) => tr(`pcb.compare.why.${row.reason}`, fallback, params);
   switch (row.reason) {
-    case 'names_equal': return 'Gleicher Netzname auf beiden Platinen.';
-    case 'auto_name_connectivity_match': return `Gleiche Exportnummer, Anschlüsse stimmen überein (${connectivityText(row.evidence)}).`;
-    case 'auto_name_collision': return `Gleiche Exportnummer, aber andere Anschlüsse (${connectivityText(row.evidence)}). Die Nummer sagt nichts über das Netz aus.`;
-    case 'connectivity_match': return `Anderer Name, gleiche Anschlüsse (${connectivityText(row.evidence)}, Schwelle ${twoDecimals.format(threshold)}).`;
-    case 'names_and_connectivity_differ': return `Weicht ab: ${connectivityText(row.evidence)} (Schwelle ${twoDecimals.format(threshold)}).`;
-    case 'rail_name_match': return 'Gleiche Versorgungsschiene nach Namenskonvention.';
-    case 'ground_alias': return 'Beide Netze sind Masse.';
+    case 'names_equal': return why('Same net name on both boards.');
+    case 'auto_name_connectivity_match':
+      return why(`Same export number, connections match (${evidence}).`, { evidence });
+    case 'auto_name_collision':
+      return why(`Same export number but different connections (${evidence}). The number says nothing about the net.`, { evidence });
+    case 'connectivity_match':
+      return why(`Different name, same connections (${evidence}, threshold ${limit}).`, { evidence, threshold: limit });
+    case 'names_and_connectivity_differ':
+      return why(`Differs: ${evidence} (threshold ${limit}).`, { evidence, threshold: limit });
+    case 'rail_name_match': return why('Same rail by naming convention.');
+    case 'ground_alias': return why('Both nets are ground.');
     case 'no_connection_marker': {
-      const connected = [row.a, row.b].filter(side => side?.net && side.connections > 0)
-        .map(side => `${side.net}: ${side.connections} weitere Anschlüsse`);
-      return `Auf ${unusedSide} als nicht verbunden markiert, kein Fehler.${connected.length ? ` (${connected.join(', ')})` : ''}`;
+      const letter = row.unusedSide?.toUpperCase();
+      const side = row.unusedSide === 'both' ? tr('pcb.compare.side_both', 'both sides')
+        : tr('pcb.compare.side_one', `side ${letter}`, { side: letter });
+      const connected = [row.a, row.b].filter(entry => entry?.net && entry.connections > 0)
+        .map(entry => tr('pcb.compare.more_connections', `${entry.net}: ${entry.connections} more connections`,
+          { net: entry.net, n: entry.connections }));
+      const text = why(`Marked as not connected on ${side}, not a fault.`, { side });
+      return `${text}${connected.length ? ` (${connected.join(', ')})` : ''}`;
     }
-    case 'pin_absent_on_b': return 'Diesen Pin gibt es nur auf Seite A.';
-    case 'pin_absent_on_a': return 'Diesen Pin gibt es nur auf Seite B.';
+    case 'pin_absent_on_b': return why('This pin exists only on side A.');
+    case 'pin_absent_on_a': return why('This pin exists only on side B.');
     default: return '';
   }
 }
@@ -81,8 +125,10 @@ export class PartCompareView {
     this.visibleRows = [];
     this._request = 0;
     this._listId = `pcv-parts-${++instances}`;
+    this._notice = null;
     this._build();
     container.hidden = true;
+    onLocale(() => this._retranslate());
   }
 
   /** Open the comparison for a part of the board shown in the viewer. */
@@ -123,17 +169,20 @@ export class PartCompareView {
     root.replaceChildren();
 
     const head = el('header', 'pcv-head');
-    head.append(el('span', 'pcv-eyebrow', 'PINVERGLEICH'));
+    this.eyebrow = el('span', 'pcv-eyebrow');
+    head.append(this.eyebrow);
     this.title = el('strong', 'pcv-refdes');
     const close = el('button', 'pcv-close');
     close.type = 'button';
     close.append(closeIcon());
-    close.setAttribute('aria-label', 'Vergleich schließen');
+    this.closeButton = close;
     close.addEventListener('click', () => this.hide());
     head.append(this.title, close);
 
     const controls = el('div', 'pcv-controls');
-    const boardField = el('label', 'pcv-field', 'Vergleichen mit');
+    this.boardLabel = document.createTextNode('');
+    const boardField = el('label', 'pcv-field');
+    boardField.append(this.boardLabel);
     this.boardPicker = el('select');
     this.boardPicker.addEventListener('change', () => {
       this.otherId = this._pickedBoardId();
@@ -141,7 +190,9 @@ export class PartCompareView {
       this._selectBoard(this.otherId, this.refdes);
     });
     boardField.append(this.boardPicker);
-    const partField = el('label', 'pcv-field', 'Bauteil');
+    this.partLabel = document.createTextNode('');
+    const partField = el('label', 'pcv-field');
+    partField.append(this.partLabel);
     this.partInput = el('input', 'pcv-mono');
     this.partInput.setAttribute('list', this._listId);
     this.partInput.spellcheck = false;
@@ -154,7 +205,8 @@ export class PartCompareView {
     this.differingOnly = el('input');
     this.differingOnly.type = 'checkbox';
     this.differingOnly.addEventListener('change', () => { this.limit = ROW_BATCH; this._renderRows(); });
-    filterField.append(this.differingOnly, ' Nur Abweichungen');
+    this.filterLabel = document.createTextNode('');
+    filterField.append(this.differingOnly, this.filterLabel);
     const markField = el('label', 'pcv-check');
     this.highlightToggle = el('input');
     this.highlightToggle.type = 'checkbox';
@@ -162,7 +214,8 @@ export class PartCompareView {
       this.highlighting = this.highlightToggle.checked;
       this._emitHighlight();
     });
-    markField.append(this.highlightToggle, ' Auf dem Board markieren');
+    this.markLabel = document.createTextNode('');
+    markField.append(this.highlightToggle, this.markLabel);
     controls.append(boardField, partField, filterField, markField);
 
     this.summary = el('div', 'pcv-summary');
@@ -180,7 +233,8 @@ export class PartCompareView {
     this.headB.colSpan = 2;
     sides.append(el('th'), this.headA, el('th'), this.headB);
     const columns = el('tr');
-    for (const label of ['Pin', 'Netz', 'Soll', 'Status', 'Netz', 'Soll']) columns.append(el('th', '', label));
+    this.columnHeads = Array.from({ length: 6 }, () => el('th'));
+    columns.append(...this.columnHeads);
     thead.append(sides, columns);
     this.tbody = el('tbody');
     table.append(thead, this.tbody);
@@ -192,7 +246,50 @@ export class PartCompareView {
 
     this.detail = el('footer', 'pcv-detail');
     root.append(head, controls, this.summary, this.notice, scroller, this.detail);
+    this._applyStaticText();
     this._clearDetail();
+  }
+
+  /** Labels created once in _build(); re-applied when the locale changes. */
+  _applyStaticText() {
+    this.eyebrow.textContent = tr('pcb.compare.eyebrow', 'PIN COMPARISON');
+    this.closeButton.setAttribute('aria-label', tr('pcb.compare.close', 'Close comparison'));
+    this.boardLabel.data = tr('pcb.compare.compare_with', 'Compare with');
+    this.partLabel.data = tr('pcb.compare.part', 'Component');
+    this.filterLabel.data = ` ${tr('pcb.compare.differing_only', 'Differences only')}`;
+    this.markLabel.data = ` ${tr('pcb.compare.mark_on_board', 'Mark on the board')}`;
+    const net = tr('pcb.compare.col_net', 'Net');
+    const expected = tr('pcb.compare.col_expected', 'Expected');
+    const labels = [tr('pcb.compare.col_pin', 'Pin'), net, expected, tr('pcb.compare.col_status', 'Status'), net, expected];
+    this.columnHeads.forEach((head, index) => { head.textContent = labels[index]; });
+  }
+
+  /** Re-renders every translated string after dictionaries load or the locale changes. */
+  _retranslate() {
+    this._applyStaticText();
+    if (this.container.hidden) return;
+    const picked = this.boardPicker.value;
+    this._fillBoardPicker(this.getOpenBoards());
+    this.boardPicker.value = picked;
+    if (this.result) {
+      this._showWarnings();
+      this.headA.textContent = this._sideTitle(this.boardId, this.result.parts.a);
+      this.headB.textContent = this._sideTitle(this.otherId, this.result.parts.b);
+      this._renderSummary();
+      this._renderRows();
+    } else {
+      this.notice.textContent = this._notice ? this._notice() : '';
+    }
+    this._clearDetail();
+  }
+
+  _showWarnings() {
+    const { warnings } = this.result.summary;
+    this.notice.hidden = !warnings.length;
+    if (warnings.includes('no_common_pin_labels')) {
+      this.notice.textContent = tr('pcb.compare.no_common_labels',
+        'The pin labels of the two components do not match, so no pin could be paired.');
+    }
   }
 
   _pickedBoardId() {
@@ -202,8 +299,9 @@ export class PartCompareView {
 
   _fillBoardPicker(boards) {
     this.boardPicker.replaceChildren(...boards.map(entry => {
-      const suffix = entry.id === this.boardId ? ' (diese Platine)' : '';
-      return new Option(`${entry.title}${suffix}`, String(entry.id));
+      const text = entry.id === this.boardId
+        ? tr('pcb.compare.this_board', `${entry.title} (this board)`, { title: entry.title }) : entry.title;
+      return new Option(text, String(entry.id));
     }));
   }
 
@@ -218,22 +316,23 @@ export class PartCompareView {
   // Runs when the second board changes: refreshes the part list and picks a part.
   async _selectBoard(otherId, preferredRefdes) {
     const request = ++this._request;
-    this._reset('Platine wird geladen …');
+    this._reset(() => tr('pcb.compare.loading_board', 'Loading board…'));
     const other = await this._boardFor(otherId);
     if (request !== this._request) return;
     if (!other) {
-      this._reset('Diese Platine ist nicht geladen. Öffne ihren Tab und versuche es erneut.');
+      this._reset(() => tr('pcb.compare.board_not_loaded', 'This board is not loaded. Open its tab and try again.'));
       return;
     }
     this.partList.replaceChildren(...other.parts.map(part => new Option(part.value || '', part.refdes)));
     const known = other.parts.some(part => part.refdes === preferredRefdes);
     if (otherId === this.boardId) {
-      this._reset('Öffne eine zweite Platine oder wähle ein anderes Bauteil dieser Platine.');
+      this._reset(() => tr('pcb.compare.need_second_board', 'Open a second board or pick another component of this board.'));
     } else if (known) {
       this.partInput.value = preferredRefdes;
       await this._compare(preferredRefdes, request);
     } else {
-      this._reset(`„${preferredRefdes}“ gibt es auf dieser Platine nicht. Bitte ein Bauteil auswählen.`);
+      this._reset(() => tr('pcb.compare.part_missing_pick',
+        `“${preferredRefdes}” does not exist on this board. Pick a component.`, { refdes: preferredRefdes }));
     }
   }
 
@@ -242,21 +341,19 @@ export class PartCompareView {
     const [boardA, boardB] = await Promise.all([this._boardFor(this.boardId), this._boardFor(this.otherId)]);
     if (request !== this._request) return;
     if (!boardA || !boardB) {
-      this._reset('Eine der Platinen ist nicht geladen.');
+      this._reset(() => tr('pcb.compare.boards_not_loaded', 'One of the boards is not loaded.'));
       return;
     }
     const result = comparePinout(boardA, this.refdes, boardB, refdesB);
     if (!result.found) {
       const side = result.missing.includes('a') ? this.refdes : refdesB;
-      this._reset(`„${side}“ gibt es auf dieser Platine nicht.`);
+      this._reset(() => tr('pcb.compare.part_missing', `“${side}” does not exist on this board.`, { refdes: side }));
       return;
     }
     this.result = result;
     this.limit = ROW_BATCH;
-    this.notice.hidden = !result.summary.warnings.length;
-    if (result.summary.warnings.includes('no_common_pin_labels')) {
-      this.notice.textContent = 'Die Pin-Bezeichnungen beider Bauteile passen nicht zueinander, deshalb konnte kein Pin zugeordnet werden.';
-    }
+    this._notice = null;
+    this._showWarnings();
     this.headA.textContent = this._sideTitle(this.boardId, result.parts.a);
     this.headB.textContent = this._sideTitle(this.otherId, result.parts.b);
     this._renderSummary();
@@ -271,15 +368,18 @@ export class PartCompareView {
   }
 
   // Clears the current result; a stale highlight must not outlive it.
+  // `message` is a function so the notice can be re-translated on a locale switch.
   _reset(message) {
+    this._notice = message;
+    const text = message();
     this.result = null;
     this.visibleRows = [];
     this.tbody.replaceChildren();
     this.summary.replaceChildren();
     this.headA.textContent = '';
     this.headB.textContent = '';
-    this.notice.textContent = message;
-    this.notice.hidden = !message;
+    this.notice.textContent = text;
+    this.notice.hidden = !text;
     this._clearDetail();
     if (this.highlighting) this._emitHighlight();
   }
@@ -292,7 +392,7 @@ export class PartCompareView {
     const { summary } = this.result;
     this.summary.replaceChildren(...STATUSES.filter(status => summary[status] > 0).map(status => {
       const chip = el('span', `pcv-chip st-${status}`);
-      chip.append(el('b', '', String(summary[status])), ` ${STATUS_LABEL[status]}`);
+      chip.append(el('b', '', String(summary[status])), ` ${statusLabel(status)}`);
       return chip;
     }));
   }
@@ -305,7 +405,8 @@ export class PartCompareView {
     this.tbody.replaceChildren(...rows.slice(0, this.limit).map((row, position) => this._rowElement(row, position)));
     if (!rows.length) {
       const empty = el('tr', 'pcv-empty');
-      const cell = el('td', '', this.differingOnly.checked ? 'Keine abweichenden Pins.' : 'Dieses Bauteil hat keine Pins.');
+      const cell = el('td', '', this.differingOnly.checked
+        ? tr('pcb.compare.no_differing_pins', 'No differing pins.') : tr('pcb.compare.no_pins', 'This component has no pins.'));
       cell.colSpan = 6;
       empty.append(cell);
       this.tbody.append(empty);
@@ -313,7 +414,8 @@ export class PartCompareView {
       const more = el('tr', 'pcv-more');
       const cell = el('td');
       cell.colSpan = 6;
-      const button = el('button', '', `Weitere Pins anzeigen (${rows.length - this.limit})`);
+      const remaining = rows.length - this.limit;
+      const button = el('button', '', tr('pcb.compare.show_more', `Show more pins (${remaining})`, { n: remaining }));
       button.type = 'button';
       button.dataset.more = '1';
       cell.append(button);
@@ -327,7 +429,7 @@ export class PartCompareView {
     tr.dataset.row = String(position);
     const pin = el('td', 'pcv-pin', row.occurrence ? `${row.pin} (${row.occurrence})` : row.pin);
     const status = el('td', 'pcv-status');
-    status.append(el('span', `pcv-chip st-${row.status}`, STATUS_LABEL[row.status]));
+    status.append(el('span', `pcv-chip st-${row.status}`, statusLabel(row.status)));
     tr.append(pin, this._netCell(row, 'a'), el('td', 'pcv-reading', reading(row.a)),
       status, this._netCell(row, 'b'), el('td', 'pcv-reading', reading(row.b)));
     return tr;
@@ -336,13 +438,14 @@ export class PartCompareView {
   _netCell(row, side) {
     const cell = el('td', 'pcv-net');
     if (!row[side]) {
-      cell.append(el('span', 'pcv-none', 'kein Pin'));
+      cell.append(el('span', 'pcv-none', tr('pcb.compare.no_pin', 'no pin')));
       return cell;
     }
     const button = el('button', row[side].net ? '' : 'pcv-none', netText(row[side]));
     button.type = 'button';
     button.dataset.side = side;
-    button.title = `${row[side].part_refdes}.${row[side].label} auf dem Board anzeigen`;
+    const pinName = `${row[side].part_refdes}.${row[side].label}`;
+    button.title = tr('pcb.compare.show_pin_title', `Show ${pinName} on the board`, { pin: pinName });
     cell.append(button);
     return cell;
   }
@@ -357,14 +460,14 @@ export class PartCompareView {
     if (!row) return;
     const threshold = this.result.summary.jaccardThreshold;
     this.detail.replaceChildren(
-      el('b', 'pcv-mono', `Pin ${row.pin}`),
+      el('b', 'pcv-mono', tr('pcb.compare.detail_pin', `Pin ${row.pin}`, { pin: row.pin })),
       el('span', 'pcv-mono', ` A: ${netText(row.a)}  ↔  B: ${netText(row.b)}`),
       el('span', 'pcv-why', explain(row, threshold)),
     );
   }
 
   _clearDetail() {
-    this.detail.replaceChildren(el('span', 'pcv-hint', 'Zeile überfahren für Details, Netz anklicken, um den Pin anzuzeigen.'));
+    this.detail.replaceChildren(el('span', 'pcv-hint', tr('pcb.compare.detail_hint', 'Hover a row for details, click a net to show the pin.')));
   }
 
   _onTableClick(event) {

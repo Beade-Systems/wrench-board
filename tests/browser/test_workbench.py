@@ -100,7 +100,7 @@ def page(server):
             executable_path=executable,
             args=["--disable-dev-shm-usage", "--enable-unsafe-swiftshader"],
         )
-        context = browser.new_context(viewport={"width": 1440, "height": 1000})
+        context = browser.new_context(locale="de-DE", viewport={"width": 1440, "height": 1000})
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
@@ -243,6 +243,30 @@ def test_library_import_duplicate_edit_filter_and_delete(page, server):
     )
     expect(page.locator("#notification")).to_contain_text("Die Datei ist leer")
     expect(page.locator("#board-count")).to_have_text("0")
+    # Parser errors are translated by their code, not shown in the server's language.
+    page.locator("#file-input").set_input_files(
+        {"name": "board.xyz", "mimeType": "application/octet-stream", "buffer": b"unrecognized"}
+    )
+    expect(page.locator("#notification")).to_contain_text(
+        "Dateien mit der Endung .xyz werden nicht unterstützt"
+    )
+
+
+def test_bridge_explains_a_failed_board_load_in_the_ui_language(page):
+    from playwright.sync_api import expect
+
+    page.evaluate("""async () => {
+      document.querySelector('[data-section-stub="pcb"]').classList.remove('hidden');
+      const {setContext} = await import('/js/shared/context.js');
+      setContext({device:'board-that-does-not-exist'}); await window.initBoardview(null);
+    }""")
+    card = page.locator("#no-file-message")
+    expect(card.locator(".brd-empty-title")).to_have_text("Boardview konnte nicht geladen werden")
+    expect(card.locator(".brd-empty-sub")).to_have_text(
+        "Für dieses Gerät ist kein Boardview hinterlegt."
+    )
+    page.evaluate("window.i18n.setLocale('en', {explicit: false})")
+    expect(card.locator(".brd-empty-sub")).to_have_text("No boardview is stored for this device.")
 
 
 def test_render_scheduler_coalesces_and_cancels(page):
@@ -451,6 +475,15 @@ def test_settings_and_offline_saved_board(page, server):
     page.goto(server + "/settings.html")
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
     page.wait_for_function("document.querySelector('#model-main').value.length > 0")
+    # A coded server error shows in German, with its interpolated folder.
+    page.locator('#folder-path').fill('/nonexistent-board-folder')
+    page.locator('#add-folder').click()
+    page.locator('button[type=submit]').click()
+    page.wait_for_function(
+        "document.querySelector('#status').textContent === 'Ordner nicht lesbar: /nonexistent-board-folder'"
+    )
+    page.locator('.folder-entry', has_text='/nonexistent-board-folder').locator('button').click()
+    page.locator('#folder-path').fill('')
     page.locator('#browse').click()
     page.locator('#directory-dialog').wait_for(state='visible')
     page.locator('#directory-pick').click()

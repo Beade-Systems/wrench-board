@@ -32,5 +32,8 @@
     "memory_loaded_approved": "Memory loaded · audit APPROVED",
     "memory_building_missing": "Memory building, missing {missing}",
     "open_repair_to_view_graph": "Open a repair from the journal to view its graph."
+  },
+  "session": {
+    "repair_title": "Repair {id}"
   }
 }

@@ -9,16 +9,31 @@
 //   i18n.t(key, params?)       → translated string, params interpolate {name}
 //   i18n.locale                → current 'en' | 'de'
 //   i18n.intlTag               → BCP-47 tag for Intl date/number formatting
-//   i18n.setLocale(lang)       → switch + persist + re-apply DOM
+//   i18n.setLocale(lang, opts?) → switch + persist + re-apply DOM. Counts as an
+//                                explicit user choice on this device unless
+//                                opts.explicit === false (e.g. a value synced
+//                                from the stored profile).
+//   i18n.hasExplicitChoice     → true once the user picked a language here
 //   i18n.applyDom(root?)       → re-translate `[data-i18n]` / `[data-i18n-attr]`
 //   i18n.ready                 → Promise resolved once first dictionary loaded
 //   i18n.onReady(fn)           → run fn once dictionaries are loaded
 //   i18n.onChange(fn)          → notify on locale switch (re-render hook)
+//
+// Locale resolution order: ?lang= → explicit choice made on this device →
+// browser languages → last persisted locale → English. A persisted English
+// value without the explicit marker is ambiguous (English is also the profile
+// schema default), so the browser languages outrank it.
+//
+// Single instance: this file is imported under more than one URL (bare and
+// with a `?v=` cache-bust), and the browser evaluates each URL as its own
+// module. Every copy after the first re-exports the first copy's API instead
+// of booting a second dictionary set with its own locale state.
 import { apiFetch } from "./shared/api.js";
 
 const SUPPORTED = ['en', 'de'];
 const DEFAULT_LOCALE = 'en';
 const STORAGE_KEY = 'wb.locale';
+const EXPLICIT_KEY = 'wb.locale.explicit';
 const INTL_TAGS = { en: 'en-US', de: 'de-DE' };
 
 // Static module list — keep alphabetic. Each entry expects one file per
@@ -32,9 +47,11 @@ const MODULES = [
   'home',
   'intro',
   'landing',
+  'library',
   'mascot',
   'memory_bank',
   'onboarding',
+  'pcb',
   'pipeline',
   'profile',
   'protocol',
@@ -51,16 +68,24 @@ let currentLocale = pickInitialLocale();
 let readyResolve;
 const ready = new Promise((res) => { readyResolve = res; });
 
+function hasExplicitChoice() {
+  try { return localStorage.getItem(EXPLICIT_KEY) === '1'; } catch { return false; }
+}
+
 function pickInitialLocale() {
   const url = new URL(window.location.href);
   const fromUrl = url.searchParams.get('lang');
   if (fromUrl && SUPPORTED.includes(fromUrl)) return fromUrl;
+  let stored = null;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && SUPPORTED.includes(stored)) return stored;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw && SUPPORTED.includes(raw)) stored = raw;
   } catch {}
-  // First visit with no explicit choice: match the browser's preferred
-  // languages. Falls through to English when nothing matches.
+  // A language the user picked on this device always wins. A persisted
+  // non-default locale is honoured too: it can only come from a real choice.
+  if (stored && (hasExplicitChoice() || stored !== DEFAULT_LOCALE)) return stored;
+  // No explicit choice: match the browser's preferred languages. Falls
+  // through to the persisted value, then English, when nothing matches.
   try {
     const navLangs = navigator.languages && navigator.languages.length
       ? navigator.languages
@@ -71,7 +96,7 @@ function pickInitialLocale() {
       if (SUPPORTED.includes(base)) return base;
     }
   } catch {}
-  return DEFAULT_LOCALE;
+  return stored || DEFAULT_LOCALE;
 }
 
 async function loadModule(name, lang) {
@@ -144,8 +169,14 @@ function applyDom(root) {
   if (document.documentElement) document.documentElement.setAttribute('lang', currentLocale);
 }
 
-async function setLocale(lang) {
+async function setLocale(lang, opts) {
   if (!SUPPORTED.includes(lang)) return;
+  if (!opts || opts.explicit !== false) {
+    try {
+      localStorage.setItem(EXPLICIT_KEY, '1');
+      localStorage.setItem(STORAGE_KEY, lang);
+    } catch {}
+  }
   if (lang === currentLocale && Object.keys(dicts[lang] || {}).length) return;
   currentLocale = lang;
   try { localStorage.setItem(STORAGE_KEY, lang); } catch {}
@@ -160,21 +191,42 @@ function onChange(fn) { changeListeners.add(fn); return () => changeListeners.de
 function onReady(fn) { ready.then(fn); }
 
 async function init() {
-  await loadLocale(currentLocale);
-  if (currentLocale !== DEFAULT_LOCALE) await loadLocale(DEFAULT_LOCALE);
+  // The active locale and the English fallback load side by side. The locale
+  // is re-read after the await: a setLocale() issued meanwhile must not be
+  // painted over with the boot locale.
+  const bootLocale = currentLocale;
+  const wanted = bootLocale === DEFAULT_LOCALE ? [bootLocale] : [bootLocale, DEFAULT_LOCALE];
+  await Promise.all(wanted.map((lang) => loadLocale(lang)));
+  if (currentLocale !== bootLocale && !Object.keys(dicts[currentLocale] || {}).length) {
+    await loadLocale(currentLocale);
+  }
   applyDom();
   readyResolve();
 }
 
-const api = { t, applyDom, setLocale, onChange, onReady, ready, get locale() { return currentLocale; }, get intlTag() { return INTL_TAGS[currentLocale] || INTL_TAGS[DEFAULT_LOCALE]; }, SUPPORTED };
-window.i18n = api;
-window.t = t; // global shortcut for convenience inside JS files
+const ownApi = { t, applyDom, setLocale, onChange, onReady, ready, get locale() { return currentLocale; }, get intlTag() { return INTL_TAGS[currentLocale] || INTL_TAGS[DEFAULT_LOCALE]; }, get hasExplicitChoice() { return hasExplicitChoice(); }, SUPPORTED, isI18nCore: true };
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init, { once: true });
-} else {
-  init();
+// First copy to evaluate owns the state; later copies delegate to it.
+const prior = window.i18n && window.i18n.isI18nCore ? window.i18n : null;
+const api = prior || ownApi;
+
+if (!prior) {
+  window.i18n = api;
+  window.t = t; // global shortcut for convenience inside JS files
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 }
 
+const { t: tShared, applyDom: applyDomShared, setLocale: setLocaleShared, onChange: onChangeShared, onReady: onReadyShared } = api;
+
 export default api;
-export { t, applyDom, setLocale, onChange, onReady };
+export {
+  tShared as t,
+  applyDomShared as applyDom,
+  setLocaleShared as setLocale,
+  onChangeShared as onChange,
+  onReadyShared as onReady,
+};

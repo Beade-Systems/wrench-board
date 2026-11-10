@@ -148,7 +148,8 @@
     "action_copied": "Copied",
     "diag_title": "Field diagnostic",
     "diag_hint": "Mark what you measure — the reverse engine narrows the cause.",
-    "faults_title": "Fault simulation"
+    "faults_title": "Fault simulation",
+    "type_comp": "COMP"
   },
   "boot": {
     "empty": "No boot_sequence in the pack.",
@@ -196,7 +197,8 @@
     "hyp_score": "score {score}",
     "hyp_contradicts": "contradicts",
     "hyp_does_not_cover": "does not cover",
-    "hyp_predicted": "{target} obs {observed} → predicted {predicted}"
+    "hyp_predicted": "{target} obs {observed} → predicted {predicted}",
+    "hyp_failed_title": "Diagnosis failed"
   },
   "rail_focus": {
     "select_hint": "← Pick a rail in the list",
@@ -247,5 +249,72 @@
     "layout_grid": "grid",
     "passives": "passives",
     "passives_title": "Show decoupling caps / sense resistors (tree & grid)"
+  },
+  "common": {
+    "na": "n/a"
+  },
+  "grid": {
+    "row_signals": "Signals"
+  },
+  "roles": {
+    "source": "source",
+    "consumer": "consumer",
+    "decoupling": "decoupling"
+  },
+  "narrative": {
+    "head_dead": "If {refdes} dies: {rails}",
+    "head_anomalous": "If {refdes} malfunctions (wrong output): {rails}",
+    "head_hot": "If {refdes} runs abnormally hot: {rails}",
+    "head_shorted": "If {refdes} shorts to GND: {rails}",
+    "head_default": "If {refdes} fails: {rails}",
+    "head_multi": "If {parts} fail simultaneously: {rails} → {count} downstream component(s) dead.",
+    "multi_part": "{refdes} ({mode})",
+    "multi_joiner": " AND ",
+    "list_sep": ", ",
+    "no_rail": "no rail",
+    "dead_downstream": " → {count} downstream component(s) dead",
+    "anomalous_downstream": ", {count} downstream component(s) anomalous",
+    "coverage": "Explains {tp}/{total} observations, {fp} contradiction(s).",
+    "measurements": "Measurements: {list}.",
+    "measurement_item": "{target} at {value}{unit}",
+    "contradicts": "Contradicts: {list}.",
+    "contradiction_item": "{target} observed {observed}, predicted {predicted}",
+    "not_covered": "Does not cover: {list}."
+  },
+  "pin_roles": {
+    "power_in": "power in",
+    "power_out": "power out",
+    "switch_node": "switch node",
+    "enable_in": "enable in",
+    "enable_out": "enable out",
+    "power_good_out": "power-good out",
+    "reset_in": "reset in",
+    "reset_out": "reset out",
+    "clock_in": "clock in",
+    "clock_out": "clock out",
+    "ground": "ground",
+    "feedback_in": "feedback in",
+    "bus_pin": "bus pin",
+    "signal_in": "signal in",
+    "signal_out": "signal out",
+    "signal_inout": "signal in/out",
+    "terminal": "terminal",
+    "no_connect": "not connected",
+    "unknown": "unknown"
+  },
+  "error": {
+    "no_pack": "No knowledge pack for {slug}.",
+    "no_schematic": "No schematic ingested yet for {slug}.",
+    "no_schematic_pdf": "No schematic PDF on disk for {slug}.",
+    "no_pages_rendered": "No pages could be rendered for {slug}.",
+    "page_not_found": "Page {page} not found for {slug}.",
+    "malformed_graph": "The electrical graph for {slug} is malformed. Re-ingest the schematic.",
+    "missing_api_key": "ANTHROPIC_API_KEY is not set on the server.",
+    "unknown_refdes": "Unknown component: {refdes}",
+    "unknown_rail": "Unknown rail: {rails}",
+    "invalid_observations": "These observations don't fit together: {detail}",
+    "pdf_path_forbidden": "The PDF must live under board_assets/ or the memory root.",
+    "pdf_not_found": "PDF not found: {pdf_path}",
+    "pdf_bad_suffix": "The file must be a .pdf (got {suffix})."
   }
 }

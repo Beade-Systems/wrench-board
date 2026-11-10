@@ -1,4 +1,5 @@
 /** Scene operations on the shared PCB viewer state. */
+import { localizeCode } from '../shared/errors.js';
 
 export const sceneMethods = {
 
@@ -14,7 +15,11 @@ export const sceneMethods = {
 
         if (data.error) {
             console.error('Load error:', data.message);
-            alert('Error: ' + data.message);
+            const translate = window.i18n?.t ?? window.t;
+            // A coded payload (`code` + `params`) is translated; `message` stays the fallback.
+            const message = localizeCode('library.error', data.code, { ...data.params, message: data.message }, data.message);
+            const text = typeof translate === 'function' ? translate('pcb.viewer.load_error', { message }) : '';
+            alert(text && text !== 'pcb.viewer.load_error' ? text : 'Error: ' + message);
             return;
         }
 

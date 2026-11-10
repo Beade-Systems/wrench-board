@@ -64,7 +64,9 @@
 <!-- Markdown rendering + sanitization for agent chat (MIT / Apache 2.0) -->
 <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js" defer></script>
-<script type="module" src="js/i18n.js?v=edge29"></script>
+<!-- No ?v= on i18n.js: every module imports it by its bare URL, and a
+     different query string would be evaluated as a second module copy. -->
+<script type="module" src="js/i18n.js"></script>
 </head>
 <body>
 
@@ -189,6 +191,7 @@
   <div class="landing-bg" aria-hidden="true"></div>
   <nav class="landing-tools" aria-label="Tools" data-i18n-attr="aria-label:workbench.landing.tools_aria">
     <a href="/library.html" class="landing-tool-link" data-i18n="workbench.landing.pcb_library">PCB Library</a>
+    <a href="/settings.html" class="landing-tool-link" data-i18n="workbench.landing.settings">Settings</a>
     <!-- Mobile-only drawer trigger for the recent-repairs sidebar (hidden on
          desktop where the sidebar is a persistent left column, and hidden until
          there is at least one repair — landing.js syncs its `hidden` with the
@@ -952,24 +955,24 @@
           <span class="finder-lbl" data-i18n="stock.col_role">Role</span>
           <select id="stock-q-role">
             <option value="" data-i18n="stock.select_role">(Target role)</option>
-            <option value="decoupling">decoupling</option>
-            <option value="bulk">bulk</option>
-            <option value="filter">filter</option>
-            <option value="bypass">bypass</option>
-            <option value="ac_coupling">ac_coupling</option>
-            <option value="tank">tank</option>
-            <option value="feedback">feedback</option>
-            <option value="pull_up">pull_up</option>
-            <option value="pull_down">pull_down</option>
-            <option value="current_sense">current_sense</option>
-            <option value="damping">damping</option>
-            <option value="series">series</option>
-            <option value="load_switch">load_switch</option>
-            <option value="level_shifter">level_shifter</option>
-            <option value="inrush_limiter">inrush_limiter</option>
-            <option value="flyback_switch">flyback_switch</option>
-            <option value="ic">ic</option>
-            <option value="connector">connector</option>
+            <option value="decoupling" data-i18n="workbench.stock.role.decoupling">decoupling</option>
+            <option value="bulk" data-i18n="workbench.stock.role.bulk">bulk</option>
+            <option value="filter" data-i18n="workbench.stock.role.filter">filter</option>
+            <option value="bypass" data-i18n="workbench.stock.role.bypass">bypass</option>
+            <option value="ac_coupling" data-i18n="workbench.stock.role.ac_coupling">ac_coupling</option>
+            <option value="tank" data-i18n="workbench.stock.role.tank">tank</option>
+            <option value="feedback" data-i18n="workbench.stock.role.feedback">feedback</option>
+            <option value="pull_up" data-i18n="workbench.stock.role.pull_up">pull_up</option>
+            <option value="pull_down" data-i18n="workbench.stock.role.pull_down">pull_down</option>
+            <option value="current_sense" data-i18n="workbench.stock.role.current_sense">current_sense</option>
+            <option value="damping" data-i18n="workbench.stock.role.damping">damping</option>
+            <option value="series" data-i18n="workbench.stock.role.series">series</option>
+            <option value="load_switch" data-i18n="workbench.stock.role.load_switch">load_switch</option>
+            <option value="level_shifter" data-i18n="workbench.stock.role.level_shifter">level_shifter</option>
+            <option value="inrush_limiter" data-i18n="workbench.stock.role.inrush_limiter">inrush_limiter</option>
+            <option value="flyback_switch" data-i18n="workbench.stock.role.flyback_switch">flyback_switch</option>
+            <option value="ic" data-i18n="workbench.stock.role.ic">ic</option>
+            <option value="connector" data-i18n="workbench.stock.role.connector">connector</option>
           </select>
         </label>
         <button id="stock-search-btn" class="btn-primary" data-i18n="stock.search">Search</button>

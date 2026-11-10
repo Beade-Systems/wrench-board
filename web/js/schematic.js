@@ -1,4 +1,5 @@
-import { apiFetch } from "./shared/api.js";
+import { apiFetch, ApiError } from "./shared/api.js";
+import { localizeError } from "./shared/errors.js";
 import {
   ICON_CHECK,
   ICON_CIRCLE,
@@ -118,6 +119,8 @@ export const SimulationController = {
     metrics_rails: new Map(),     // rail → {measured, unit, nominal?, note?, ts}
   },
   hypotheses: null,
+  hypothesesObs: null,     // observations_echo of the last hypothesize run (narrative input)
+  hypothesesError: null,   // ApiError of a failed run, re-localised on repaint
   playing: false,
   speedMs: 800,            // ms per phase at 1×
   cursor: 0,               // current phase index within timeline.states
@@ -320,6 +323,8 @@ export const SimulationController = {
   clearObservations() {
     for (const m of Object.values(this.observations)) m.clear();
     this.hypotheses = null;
+    this.hypothesesObs = null;
+    this.hypothesesError = null;
     this._applyObservationClasses();
     document.querySelectorAll(".sim-hypotheses-panel").forEach(p => p.remove());
   },
@@ -445,12 +450,17 @@ export const SimulationController = {
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       );
       if (!res.ok) {
-        const detail = await res.text();
-        console.error("[hypothesize] HTTP", res.status, detail);
+        const err = await apiErrorFromResponse(res);
+        console.error("[hypothesize] HTTP", res.status, err.body);
+        this.hypotheses = null;
+        this.hypothesesError = err;
+        this._renderHypothesesPanel();
         return;
       }
       const payload = await res.json();
       this.hypotheses = payload.hypotheses || [];
+      this.hypothesesObs = payload.observations_echo || null;
+      this.hypothesesError = null;
       this._renderHypothesesPanel();
     } catch (err) {
       console.error("[hypothesize] fetch error", err);
@@ -459,19 +469,35 @@ export const SimulationController = {
 
   _renderHypothesesPanel() {
     document.querySelectorAll(".sim-hypotheses-panel").forEach(p => p.remove());
-    if (!this.hypotheses || this.hypotheses.length === 0) return;
+    const failed = this.hypothesesError;
+    if (!failed && (!this.hypotheses || this.hypotheses.length === 0)) return;
     const panel = document.createElement("div");
     panel.className = "sim-hypotheses-panel";
+    const title = failed
+      ? t("schematic.simulator.hyp_failed_title")
+      : t("schematic.simulator.hypotheses_title", { count: this.hypotheses.length });
     panel.innerHTML = `
       <div class="sim-hyp-head">
-        <span class="sim-hyp-title">${escHtml(t("schematic.simulator.hypotheses_title", { count: this.hypotheses.length }))}</span>
+        <span class="sim-hyp-title">${escHtml(title)}</span>
         <button class="sim-hyp-close" title="${t("schematic.simulator.hyp_close_title")}">×</button>
       </div>
       <div class="sim-hyp-body"></div>
     `;
-    panel.querySelector(".sim-hyp-close").addEventListener("click", () => panel.remove());
+    panel.querySelector(".sim-hyp-close").addEventListener("click", () => {
+      // Dismissed error must not come back on the next locale repaint.
+      this.hypothesesError = null;
+      panel.remove();
+    });
 
     const body = panel.querySelector(".sim-hyp-body");
+    const host = document.querySelector("#schematicSection") || document.body;
+    if (failed) {
+      // Kept as the error object (not a string) so a locale switch re-translates it.
+      const msg = localizeError("schematic.error", failed, `HTTP ${failed.status}`);
+      body.innerHTML = `<div class="sim-hyp-card"><div class="sim-hyp-narr">${escHtml(msg)}</div></div>`;
+      host.appendChild(panel);
+      return;
+    }
     this.hypotheses.forEach((h, i) => {
       const card = document.createElement("div");
       card.className = "sim-hyp-card";
@@ -483,7 +509,7 @@ export const SimulationController = {
       const contradictions = (h.diff.contradictions || []).map(c => {
         if (Array.isArray(c) && c.length === 3) {
           const [target, observed, predicted] = c;
-          return `<span class="sim-hyp-tag sim-hyp-tag-fp">${escHtml(t("schematic.simulator.hyp_predicted", { target, observed, predicted }))}</span>`;
+          return `<span class="sim-hyp-tag sim-hyp-tag-fp">${escHtml(t("schematic.simulator.hyp_predicted", { target, observed: modeLabel(observed), predicted: modeLabel(predicted) }))}</span>`;
         }
         return `<span class="sim-hyp-tag sim-hyp-tag-fp">${escHtml(c)}</span>`;
       }).join(" ");
@@ -494,7 +520,7 @@ export const SimulationController = {
           <span class="sim-hyp-kills">${chips}</span>
           <span class="sim-hyp-score">${escHtml(t("schematic.simulator.hyp_score", { score: h.score.toFixed(1) }))}</span>
         </div>
-        <div class="sim-hyp-narr">${escHtml(h.narrative)}</div>
+        <div class="sim-hyp-narr">${escHtml(narrateHypothesis(h, this.hypothesesObs))}</div>
         ${contradictions ? `<div class="sim-hyp-diff"><span class="k">${escHtml(t("schematic.simulator.hyp_contradicts"))}</span> ${contradictions}</div>` : ""}
         ${missing ? `<div class="sim-hyp-diff"><span class="k">${escHtml(t("schematic.simulator.hyp_does_not_cover"))}</span> ${missing}</div>` : ""}
       `;
@@ -506,7 +532,6 @@ export const SimulationController = {
       body.appendChild(card);
     });
 
-    const host = document.querySelector("#schematicSection") || document.body;
     host.appendChild(panel);
   },
 };
@@ -525,7 +550,10 @@ async function fetchSchematic(slug) {
   try {
     const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(slug)}/schematic`);
     if (res.status === 404) return { missing: true };
-    if (!res.ok) return { error: `HTTP ${res.status}` };
+    if (!res.ok) {
+      const err = await apiErrorFromResponse(res);
+      return { error: localizeError("schematic.error", err, `HTTP ${res.status}`) };
+    }
     return { graph: await res.json() };
   } catch (err) {
     return { error: String(err) };
@@ -574,7 +602,110 @@ const MODE_GLYPH = {
 
 // Human-readable labels per mode — resolved through i18n at call time so
 // the picker re-renders correctly on locale switch.
-function modeLabel(m) { return t(`schematic.modes.${m}`) || m; }
+function modeLabel(m) { return tOrNull(`schematic.modes.${m}`) || m; }
+
+// Dictionary lookup that reports a miss as null (t() echoes the key).
+function tOrNull(key, params) {
+  const val = t(key, params);
+  return val === key ? null : val;
+}
+
+// Readable label for a pin-role id (power_in, …). Roles are free-form on the
+// backend, so an id without a dictionary entry is shown raw.
+function pinRoleLabel(role) {
+  if (!role) return t("schematic.inspector.pin_unknown_role");
+  return tOrNull(`schematic.pin_roles.${role}`) || role;
+}
+
+// Non-OK Response → ApiError carrying the parsed body, so localizeError() can
+// read the backend's `{detail, code, params}`.
+async function apiErrorFromResponse(res) {
+  let body = null;
+  try { body = await res.json(); } catch (_) { /* non-JSON error body */ }
+  const detail = body && typeof body.detail === "string" ? body.detail : `HTTP ${res.status}`;
+  return new ApiError(res.status, detail, body);
+}
+
+function fmtMeasured(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return String(value);
+  return value.toLocaleString(window.i18n?.intlTag || "en-US", { maximumFractionDigits: 6, useGrouping: false });
+}
+
+// Hypothesis narrative, rendered client-side from the structured fields so it
+// follows the UI language. Mirrors `_narrate` in
+// api/pipeline/schematic/hypothesize.py (which emits one fixed language);
+// falls back to the server sentence when a field it needs is absent.
+function narrateHypothesis(h, obs) {
+  const cas = h && h.cascade_preview;
+  const m = h && h.metrics;
+  const kills = h && h.kill_refdes;
+  const usable = Array.isArray(kills) && kills.length > 0 && cas && m && obs
+    && Array.isArray(cas.dead_rails) && Array.isArray(cas.shorted_rails)
+    && typeof cas.dead_comps_count === "number"
+    && tOrNull("schematic.narrative.coverage", {}) !== null;
+  if (!usable) return (h && h.narrative) || "";
+  const N = (k, params) => t(`schematic.narrative.${k}`, params);
+  const modes = h.kill_modes || [];
+  const sep = N("list_sep");
+
+  // Shorted rails take precedence over dead ones, as on the server.
+  const shorted = [...cas.shorted_rails].sort().slice(0, 2).join(sep);
+  const dead = [...cas.dead_rails].sort().slice(0, 3).join(sep) || N("no_rail");
+  const rails = shorted || dead;
+  const deadCount = Math.max(0, cas.dead_comps_count - kills.length);
+  const anomCount = cas.anomalous_count || 0;
+
+  let head;
+  if (kills.length === 1) {
+    const mode = modes[0];
+    head = tOrNull(`schematic.narrative.head_${mode}`, { refdes: kills[0], rails })
+      || N("head_default", { refdes: kills[0], rails });
+    if (deadCount > 0) head += N("dead_downstream", { count: deadCount });
+    if (anomCount > 1) head += N("anomalous_downstream", { count: anomCount });
+    head += ".";
+  } else {
+    const parts = kills.map((r, i) => N("multi_part", { refdes: r, mode: modeLabel(modes[i] || "dead") }));
+    head = N("head_multi", { parts: parts.join(N("multi_joiner")), rails, count: deadCount });
+  }
+
+  const size = (o) => Object.keys(o || {}).length;
+  const out = [head, N("coverage", {
+    tp: (m.tp_comps || 0) + (m.tp_rails || 0),
+    total: size(obs.state_comps) + size(obs.state_rails),
+    fp: (m.fp_comps || 0) + (m.fp_rails || 0),
+  })];
+
+  // Cite up to 2 component + 2 rail measurements.
+  const cite = (bucket) => Object.entries(bucket || {}).slice(0, 2)
+    .map(([target, mt]) => N("measurement_item", { target, value: fmtMeasured(mt.measured), unit: mt.unit || "" }));
+  const cited = [...cite(obs.metrics_comps), ...cite(obs.metrics_rails)];
+  if (cited.length) out.push(N("measurements", { list: cited.join(sep) }));
+
+  const diff = h.diff || {};
+  const contras = (diff.contradictions || []).slice(0, 3)
+    .filter(c => Array.isArray(c) && c.length === 3)
+    .map(([target, observed, predicted]) => N("contradiction_item", {
+      target, observed: modeLabel(observed), predicted: modeLabel(predicted),
+    }));
+  if (contras.length) out.push(N("contradicts", { list: contras.join(sep) }));
+  const uncovered = (diff.under_explained || []).slice(0, 4);
+  if (uncovered.length) out.push(N("not_covered", { list: uncovered.join(sep) }));
+  return out.join(" ");
+}
+
+// Localised placeholder for a missing value ("n/a").
+function naLabel() { return t("schematic.common.na"); }
+
+// Localised label for an enum value coming from the backend (component
+// type, power-tree role). Falls back to the raw value when no key exists.
+function enumLabel(prefix, value) {
+  if (!value) return "";
+  const key = `${prefix}${value}`;
+  const label = t(key);
+  return label === key ? String(value) : label;
+}
+function typeLabel(type) { return enumLabel("stock.type_", type); }
+function roleLabel(role) { return enumLabel("schematic.roles.", role); }
 
 // A component "touches a power rail" if any of its pins has a known
 // power role (power_in/out, ground, switch_node, enable_in/out) or a
@@ -967,7 +1098,7 @@ const V_ROWS = [
   { id: "v3v3",  label: "3V3",     min: 3,         max: 4.999    },
   { id: "v1v8",  label: "1V8-2V5", min: 1.2001,    max: 2.999    },
   { id: "vCore", label: "≤ 1V2",   min: 0.01,      max: 1.2      },
-  { id: "vSig",  label: "Signaux", min: null,      max: null     },
+  { id: "vSig",  get label() { return t("schematic.grid.row_signals"); }, min: null, max: null },
 ];
 
 function voltageRowFor(v) {
@@ -1484,7 +1615,7 @@ function renderRailBar(model) {
       const consumerCount = (rail.consumers || []).length;
       const voltageLbl = rail.voltage_nominal != null
         ? `${rail.voltage_nominal} V`
-        : "n/a";
+        : naLabel();
       const sourceLbl = rail.source_refdes
         ? `<span class="sch-rail-source">${escHtml(rail.source_refdes)}</span>`
         : `<span class="sch-rail-source external">${escHtml(t("schematic.railbar.external_supply"))}</span>`;
@@ -1975,7 +2106,7 @@ function renderNodes(model) {
       if (val && d.role === "source") {
         s.append("text").attr("class", "sch-sub sch-sub-comp").attr("y", h / 2 + 11).text(String(val).slice(0, 16));
       } else if (d.role === "consumer" && d.type) {
-        s.append("text").attr("class", "sch-sub sch-sub-comp").attr("y", h / 2 + 11).text(d.type);
+        s.append("text").attr("class", "sch-sub sch-sub-comp").attr("y", h / 2 + 11).text(typeLabel(d.type));
       }
     } else {
       // Small cap value label (e.g. 100nF) inline.
@@ -2311,7 +2442,7 @@ function renderBootTimeline(model) {
     btn.textContent = `↻ ${t("schematic.boot.reanalyzing")}`;
     try {
       const res = await apiFetch(`/pipeline/packs/${encodeURIComponent(STATE.slug)}/schematic/analyze-boot`, { method: "POST" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw await apiErrorFromResponse(res);
       // Poll every 3s until the file appears (max 60s).
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 3000));
@@ -2326,7 +2457,8 @@ function renderBootTimeline(model) {
       btn.textContent = `↻ ${t("schematic.boot.reanalyze_timeout")}`;
       btn.disabled = false;
     } catch (err) {
-      btn.textContent = t("schematic.boot.reanalyze_failed", { error: err.message });
+      const reason = localizeError("schematic.error", err, err instanceof ApiError ? `HTTP ${err.status}` : err.message);
+      btn.textContent = t("schematic.boot.reanalyze_failed", { error: reason });
       btn.disabled = false;
     }
   });
@@ -2659,7 +2791,7 @@ function populateInspectorChrome(node) {
   if (node.kind === "rail") {
     if (node.voltage_nominal != null) pills.push(pill(tx("schematic.inspector.stat_voltage"), `${node.voltage_nominal} V`, "emerald"));
   } else if (node.role) {
-    pills.push(pill(tx("schematic.inspector.stat_role"), node.role, "cyan"));
+    pills.push(pill(tx("schematic.inspector.stat_role"), roleLabel(node.role), "cyan"));
   }
   if (node.impactPct != null && node.blastRadius != null) {
     const sev = node.impactPct >= 25 ? "crit-hi" : node.impactPct >= 10 ? "crit-mid" : "";
@@ -2739,7 +2871,7 @@ function updateInspector(node) {
     typeBadge.textContent = t("schematic.inspector.type_rail");
     typeBadge.className = "sch-type-badge rail";
     title.textContent = node.label;
-    sub.textContent = (node.voltage_nominal != null ? `${node.voltage_nominal} V` : "n/a") + " · " + (node.source_type || "n/a");
+    sub.textContent = (node.voltage_nominal != null ? `${node.voltage_nominal} V` : naLabel()) + " · " + (node.source_type || naLabel());
 
     const cascade = computeCascade(STATE.model, node.id);
     const casDead = Array.from(cascade).filter(id => id !== node.id);
@@ -2751,9 +2883,9 @@ function updateInspector(node) {
         <h3>${escHtml(t("schematic.inspector.supply"))}</h3>
         <div class="sch-meta-grid">
           <dt>${escHtml(t("schematic.inspector.supply_producer"))}</dt><dd>${node.source_refdes ? `<span class="mono chip cyan clickable" data-id="comp:${escHtml(node.source_refdes)}">${escHtml(node.source_refdes)}</span>` : `<span class='muted'>${escHtml(t("schematic.inspector.supply_external"))}</span>`}</dd>
-          <dt>${escHtml(t("schematic.inspector.supply_type"))}</dt><dd>${escHtml(node.source_type || "n/a")}</dd>
-          <dt>${escHtml(t("schematic.inspector.supply_enable"))}</dt><dd>${node.enable_net ? `<span class="mono">${escHtml(node.enable_net)}</span>` : "n/a"}</dd>
-          <dt>${escHtml(t("schematic.inspector.supply_boot"))}</dt><dd>${node.phase ? `<span class="mono chip amber">Φ${node.phase}</span>` : "n/a"}</dd>
+          <dt>${escHtml(t("schematic.inspector.supply_type"))}</dt><dd>${escHtml(node.source_type || naLabel())}</dd>
+          <dt>${escHtml(t("schematic.inspector.supply_enable"))}</dt><dd>${node.enable_net ? `<span class="mono">${escHtml(node.enable_net)}</span>` : naLabel()}</dd>
+          <dt>${escHtml(t("schematic.inspector.supply_boot"))}</dt><dd>${node.phase ? `<span class="mono chip amber">Φ${node.phase}</span>` : naLabel()}</dd>
         </div>
       </section>
       <section class="sch-insp-section">
@@ -2778,7 +2910,7 @@ function updateInspector(node) {
       </section>
     `;
   } else {
-    typeBadge.textContent = (node.type || "COMP").toUpperCase();
+    typeBadge.textContent = (node.type ? typeLabel(node.type) : t("schematic.inspector.type_comp")).toUpperCase();
     typeBadge.className = `sch-type-badge ${node.role || "component"}`;
     title.textContent = node.refdes;
     const v = node.value && (node.value.primary || node.value.raw);
@@ -2796,12 +2928,12 @@ function updateInspector(node) {
       <section class="sch-insp-section">
         <h3>${escHtml(t("schematic.inspector.metadata"))}</h3>
         <div class="sch-meta-grid">
-          <dt>${escHtml(t("schematic.inspector.meta_role"))}</dt><dd><span class="sch-role-badge role-${node.role}">${escHtml(node.role)}</span></dd>
-          <dt>${escHtml(t("schematic.inspector.meta_type"))}</dt><dd>${escHtml(node.type || "n/a")}</dd>
-          <dt>${escHtml(t("schematic.inspector.meta_pages"))}</dt><dd>${node.pages && node.pages.length ? escHtml(t("schematic.inspector.meta_pages_value", { pages: node.pages.join(", ") })) : "n/a"}</dd>
+          <dt>${escHtml(t("schematic.inspector.meta_role"))}</dt><dd><span class="sch-role-badge role-${node.role}">${escHtml(roleLabel(node.role))}</span></dd>
+          <dt>${escHtml(t("schematic.inspector.meta_type"))}</dt><dd>${escHtml(node.type ? typeLabel(node.type) : naLabel())}</dd>
+          <dt>${escHtml(t("schematic.inspector.meta_pages"))}</dt><dd>${node.pages && node.pages.length ? escHtml(t("schematic.inspector.meta_pages_value", { pages: node.pages.join(", ") })) : naLabel()}</dd>
           <dt>${escHtml(t("schematic.inspector.meta_populated"))}</dt><dd>${node.populated ? escHtml(t("schematic.inspector.meta_populated_yes")) : `<span class='warn'>${escHtml(t("schematic.inspector.meta_populated_no"))}</span>`}</dd>
-          <dt>${escHtml(t("schematic.inspector.meta_mpn"))}</dt><dd>${node.value?.mpn ? `<span class="mono">${escHtml(node.value.mpn)}</span>` : "n/a"}</dd>
-          <dt>${escHtml(t("schematic.inspector.meta_boot"))}</dt><dd>${node.phase ? `<span class="mono chip amber">Φ${node.phase}</span>` : "n/a"}</dd>
+          <dt>${escHtml(t("schematic.inspector.meta_mpn"))}</dt><dd>${node.value?.mpn ? `<span class="mono">${escHtml(node.value.mpn)}</span>` : naLabel()}</dd>
+          <dt>${escHtml(t("schematic.inspector.meta_boot"))}</dt><dd>${node.phase ? `<span class="mono chip amber">Φ${node.phase}</span>` : naLabel()}</dd>
         </div>
       </section>
       ${producesRails.length ? `
@@ -2839,8 +2971,8 @@ function updateInspector(node) {
             <tr>
               <td class="mono">${escHtml(p.number)}</td>
               <td class="mono">${escHtml(p.name || "…")}</td>
-              <td class="mono pin-role">${escHtml(p.role || t("schematic.inspector.pin_unknown_role"))}</td>
-              <td class="mono">${p.net_label ? `<span class="chip emerald">${escHtml(p.net_label)}</span>` : "n/a"}</td>
+              <td class="mono pin-role" title="${escHtml(p.role || "unknown")}">${escHtml(pinRoleLabel(p.role))}</td>
+              <td class="mono">${p.net_label ? `<span class="chip emerald">${escHtml(p.net_label)}</span>` : naLabel()}</td>
             </tr>`).join("")}
           </tbody>
         </table>
@@ -2979,7 +3111,7 @@ function updateInspector(node) {
       let prev = null;
       const rows = recent.map(ev => {
         const ts = (ev.timestamp || "").slice(11, 19);  // HH:MM:SS
-        const val = ev.value != null ? `${ev.value}${ev.unit || ""}` : "n/a";
+        const val = ev.value != null ? `${ev.value}${ev.unit || ""}` : naLabel();
         const ratio = (ev.value != null && ev.nominal)
           ? ` (${((ev.value / ev.nominal) * 100).toFixed(0)}%)`
           : "";
@@ -2993,7 +3125,7 @@ function updateInspector(node) {
           <div class="sim-mh-row">
             <span class="sim-mh-ts">${ts}</span>
             <span class="sim-mh-val">${val}${ratio}</span>
-            <span class="sim-mh-mode sim-mh-mode--${mode}">${mode}</span>
+            <span class="sim-mh-mode sim-mh-mode--${escHtml(mode)}">${escHtml(ev.auto_classified_mode ? modeLabel(mode) : mode)}</span>
             <span class="sim-mh-note">${delta}${note}</span>
           </div>`;
       });
@@ -3331,8 +3463,8 @@ function updateStats(model, graph) {
   el("schStatRegs").textContent   = sourceShown;
   el("schStatPhases").textContent = tot.phases ?? (graph.boot_sequence || []).length;
   const q = graph.quality || {};
-  el("schStatConf").textContent   = q.confidence_global != null ? q.confidence_global.toFixed(2) : "n/a";
-  el("schStatPages").textContent  = q.pages_parsed != null ? `${q.pages_parsed}/${q.total_pages}` : "n/a";
+  el("schStatConf").textContent   = q.confidence_global != null ? q.confidence_global.toFixed(2) : naLabel();
+  el("schStatPages").textContent  = q.pages_parsed != null ? `${q.pages_parsed}/${q.total_pages}` : naLabel();
 
   // Dégradé badge — click to open a detail popover (compiler trigger:
   // confidence_global < 0.7 OR orphan_cross_page > 5).
@@ -3370,7 +3502,7 @@ function wireDegradedPopover(q) {
   const rows = [
     row(tx("schematic.degraded.metric_orphans"), `${q.orphan_cross_page_refs ?? 0}${orphTrig ? "  (> 5)" : ""}`, orphTrig),
     row(tx("schematic.degraded.metric_unresolved"), q.nets_unresolved ?? 0, false),
-    row(tx("schematic.degraded.metric_confidence"), q.confidence_global != null ? q.confidence_global.toFixed(2) : "n/a", confTrig),
+    row(tx("schematic.degraded.metric_confidence"), q.confidence_global != null ? q.confidence_global.toFixed(2) : naLabel(), confTrig),
     row(tx("schematic.degraded.metric_no_value"), q.components_without_value ?? 0, false),
     row(tx("schematic.degraded.metric_no_mpn"), q.components_without_mpn ?? 0, false),
     row(tx("schematic.degraded.metric_untraced"), q.components_untraced ?? 0, false),
@@ -3471,22 +3603,36 @@ function fullRender(graph) {
 // is handled by `window.i18n.applyDom`; this hook covers the imperative
 // renderers driven by `t()` calls in this module.
 let _i18nWired = false;
+let _i18nReady = false;
 function wireSchematicI18n() {
   if (_i18nWired) return;
   if (!window.i18n || typeof window.i18n.onChange !== "function") return;
   _i18nWired = true;
-  window.i18n.onChange(() => {
-    if (!STATE.graph) return;
+  const rerender = () => {
+    if (!STATE.graph) {
+      // applyDom() just reset the empty-state title/detail to their generic
+      // data-i18n text — restore the specific message in the new locale.
+      const sec = el("schematicSection");
+      const empty = el("schEmptyState");
+      if (sec && empty && !sec.classList.contains("hidden") && !empty.classList.contains("hidden")) loadSchematic();
+      return;
+    }
     fullRender(STATE.graph);
     if (STATE.selectedId) {
       const n = STATE.model?.nodeById?.get(STATE.selectedId);
       if (n) updateInspector(n);
     }
     SimulationController.render();
-    if (SimulationController.hypotheses && SimulationController.hypotheses.length) {
+    // Only repaint a panel that is actually open (the user may have closed it).
+    if (document.querySelector(".sim-hypotheses-panel")) {
       SimulationController._renderHypothesesPanel();
     }
-  });
+  };
+  window.i18n.onChange(rerender);
+  // A deep-link can render before the dictionaries land — repaint once ready.
+  if (!_i18nReady && typeof window.i18n.onReady === "function") {
+    window.i18n.onReady(() => { if (!_i18nReady) { _i18nReady = true; rerender(); } });
+  }
 }
 
 export async function loadSchematic() {

@@ -57,7 +57,13 @@
   },
   "prefs": {
     "verbosity": "Verbosity",
-    "language": "Language"
+    "language": "Language",
+    "verbosity_options": {
+      "auto": "Auto",
+      "concise": "Concise",
+      "normal": "Normal",
+      "teaching": "Teaching"
+    }
   },
   "modal": {
     "kicker": "Technician profile",
@@ -73,5 +79,46 @@
     "cancel": "Cancel",
     "save": "Save",
     "save_failed": "Could not save: {error}"
+  },
+  "catalog": {
+    "tools": {
+      "soldering_iron": "Soldering iron",
+      "hot_air": "Hot air",
+      "bga_rework": "BGA rework",
+      "preheater": "Preheater",
+      "microscope": "Microscope",
+      "thermal_camera": "Thermal camera",
+      "uv_lamp": "UV lamp",
+      "multimeter": "Multimeter",
+      "oscilloscope": "Oscilloscope",
+      "bench_psu": "Bench PSU",
+      "reballing_kit": "Reballing kit",
+      "stencil_printer": "Stencil printer"
+    },
+    "skills": {
+      "reflow_bga": "BGA reflow",
+      "reballing": "Reballing",
+      "jumper_wire": "Jumper wires",
+      "microsolder_0201": "0201 microsoldering",
+      "pop_rework": "PoP rework",
+      "trace_repair": "Etched trace repair",
+      "stencil_application": "Stencil application",
+      "short_isolation": "Short isolation",
+      "voltage_probing": "Rail voltage probing",
+      "signal_probing": "Scope signal probing",
+      "thermal_imaging": "Thermal imaging diag",
+      "power_sequencing": "Power sequencing",
+      "flux_cleaning": "Flux / residue cleaning",
+      "cold_joint_rework": "Cold joint rework",
+      "connector_replacement": "Connector replacement"
+    },
+    "specialties": {
+      "apple": "Apple",
+      "android": "Android",
+      "consoles": "Consoles",
+      "laptops": "Laptops",
+      "industriel": "Industrial",
+      "vintage": "Vintage"
+    }
   }
 }

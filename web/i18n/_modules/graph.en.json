@@ -26,7 +26,8 @@
   "controls": {
     "zoom_in": "Zoom in",
     "zoom_out": "Zoom out",
-    "fit": "Fit"
+    "fit": "Fit",
+    "zoom_readout": "zoom {k}×"
   },
   "inspector": {
     "close": "Close inspector",
@@ -42,13 +43,29 @@
     "rules_field": "rules",
     "conf_high": "High confidence: corroborated by multiple sources.",
     "conf_low": "Low confidence: single source or indirect inference.",
-    "conf_medium": "Moderate confidence: partial cross-reference."
+    "conf_medium": "Moderate confidence: partial cross-reference.",
+    "meta": {
+      "package": "package",
+      "role": "role",
+      "nominal": "nominal",
+      "rule_id": "rule",
+      "count": "count"
+    }
   },
   "tooltip": {
     "conf_pct": "conf. {pct}%"
   },
   "subsystem": {
-    "fallback_label": "OTHER"
+    "fallback_label": "OTHER",
+    "power": "POWER",
+    "charge": "CHARGE",
+    "display": "DISPLAY",
+    "usb": "USB",
+    "audio": "AUDIO",
+    "cpu-mem": "CPU / MEMORY",
+    "io": "I/O",
+    "rf": "RF / RADIO",
+    "unknown": "OTHER"
   },
   "type_label": {
     "component": "Component",
@@ -64,5 +81,15 @@
   },
   "stats": {
     "summary": "{n} nodes · {e} edges"
+  },
+  "action_verb": {
+    "jumper": "Jumper {target}",
+    "reball": "Reball {target}",
+    "reflow": "Reflow {target}",
+    "lift": "Lift {target}",
+    "replace": "Replace {target}",
+    "hunt_short": "Hunt short on {target}",
+    "repair": "Repair {target}",
+    "investigate": "Investigate — {target}"
   }
 }

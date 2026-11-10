@@ -14,6 +14,7 @@ const STATE = {
   currentSlug: null,
   pack: null,       // Full payload for currentSlug, or null while loading
   loading: false,
+  emptyMessageFn: null, // () => string while the empty state is shown
 };
 
 function el(id) { return document.getElementById(id); }
@@ -21,6 +22,18 @@ function el(id) { return document.getElementById(id); }
 // Local shortcut that always falls back to the key when i18n hasn't booted.
 function tr(key, params) {
   return (window.t ? window.t(key, params) : key);
+}
+
+// "n/a" placeholder for a value the pack does not carry.
+function na() {
+  return escHtml(tr("memory_bank.common.na"));
+}
+
+// Localized audit status (APPROVED / NEEDS_REVISION / …); raw value on miss.
+function auditStatusLabel(status) {
+  const key = `memory_bank.audit.status.${status}`;
+  const label = tr(key);
+  return label === key ? String(status) : label;
 }
 
 function noneHtml() {
@@ -90,7 +103,7 @@ function renderVerdict() {
       <span class="mb-verdict none" title="${escHtml(tr("memory_bank.verdict.none_title"))}">
         <span class="dot"></span>${escHtml(tr("memory_bank.verdict.none_label"))}
       </span>
-      <span class="mb-score">${escHtml(tr("memory_bank.verdict.consistency"))} <b>n/a</b></span>`;
+      <span class="mb-score">${escHtml(tr("memory_bank.verdict.consistency"))} <b>${na()}</b></span>`;
   } else {
     const cls = v.overall_status === "APPROVED"       ? "approved"
               : v.overall_status === "NEEDS_REVISION" ? "needs-revision"
@@ -102,7 +115,7 @@ function renderVerdict() {
                    :                                         "memory_bank.verdict.unknown_label";
     const label = tr(labelKey);
     const score = (typeof v.consistency_score === "number")
-      ? v.consistency_score.toFixed(2) : "n/a";
+      ? v.consistency_score.toFixed(2) : na();
     verdictHtml = `
       <span class="mb-verdict ${cls}"><span class="dot"></span>${escHtml(label)}</span>
       <span class="mb-score">${escHtml(tr("memory_bank.verdict.consistency"))} <b>${score}</b></span>`;
@@ -178,7 +191,7 @@ function renderRegistry(registry) {
               <td class="mono">${escHtml(s.canonical_name)}</td>
               <td><span class="mb-kind ${escHtml(s.kind || "unknown")}">${escHtml(s.kind || "unknown")}</span></td>
               <td>${(s.aliases || []).map(a => `<span class="mb-alias">${escHtml(a)}</span>`).join("") || noneHtml()}</td>
-              <td class="mono">${s.nominal_voltage !== null && s.nominal_voltage !== undefined ? `<span class="mb-volt">${s.nominal_voltage} V</span>` : '<span class="muted">n/a</span>'}</td>
+              <td class="mono">${s.nominal_voltage !== null && s.nominal_voltage !== undefined ? `<span class="mb-volt">${s.nominal_voltage} V</span>` : `<span class="muted">${na()}</span>`}</td>
             </tr>`).join("")}
         </tbody>
       </table>`}
@@ -239,7 +252,7 @@ function renderRules(rules) {
     const headSym = (r.symptoms && r.symptoms.length > 0)
       ? `<b>${escHtml(r.symptoms[0])}</b>${r.symptoms.length > 1 ? ` <span style="color:var(--text-3)">+${r.symptoms.length - 1}</span>` : ""}`
       : `<span style="color:var(--text-3)">${escHtml(tr("memory_bank.rules.no_symptom"))}</span>`;
-    const conf = typeof r.confidence === "number" ? r.confidence.toFixed(2) : "n/a";
+    const conf = typeof r.confidence === "number" ? r.confidence.toFixed(2) : tr("memory_bank.common.na");
     return `
       <div class="mb-rule" data-rule-idx="${i}" data-search="${escHtml(searchText)}">
         <div class="mb-rule-head">
@@ -339,12 +352,12 @@ function renderAudit(verdict) {
   if (!verdict) {
     block.style.display = "";
     body.innerHTML = `<div class="mb-missing">${escHtml(tr("memory_bank.audit.missing"))}</div>`;
-    el("mbBlockAuditCount").innerHTML = `<b>n/a</b>`;
+    el("mbBlockAuditCount").innerHTML = `<b>${na()}</b>`;
     return;
   }
   block.style.display = "";
   const status = verdict.overall_status || "UNKNOWN";
-  const score  = typeof verdict.consistency_score === "number" ? verdict.consistency_score.toFixed(2) : "n/a";
+  const score  = typeof verdict.consistency_score === "number" ? verdict.consistency_score.toFixed(2) : na();
   const files  = verdict.files_to_rewrite || [];
   const drift  = verdict.drift_report || [];
   const brief  = verdict.revision_brief || "";
@@ -383,7 +396,7 @@ function renderAudit(verdict) {
           </div>`).join("")}
       </div>` : ""}
   `;
-  el("mbBlockAuditCount").innerHTML = `<b>${status}</b>`;
+  el("mbBlockAuditCount").innerHTML = `<b>${escHtml(auditStatusLabel(status))}</b>`;
 }
 
 /* ---------- master rendering ---------- */
@@ -401,14 +414,22 @@ function renderPack() {
   applySearchFilter(el("mbSearch").value || "");
 }
 
-function showEmptyState(message) {
+// `messageFn` (optional) returns the localized body text. It is kept so the
+// empty state can be re-rendered in the new language on a locale switch.
+function showEmptyState(messageFn) {
+  STATE.emptyMessageFn = messageFn || (() => tr("memory_bank.empty.body_default"));
   el("mbBody").style.display = "none";
   const empty = el("mbEmpty");
   empty.classList.remove("hidden");
-  empty.querySelector("p").textContent = message || tr("memory_bank.empty.body_default");
+  const p = empty.querySelector("p");
+  // JS owns the body text — a static data-i18n hook would overwrite a
+  // "could not load" message with the default one on applyDom().
+  p.removeAttribute("data-i18n");
+  p.textContent = STATE.emptyMessageFn();
 }
 
 function hideEmptyState() {
+  STATE.emptyMessageFn = null;
   el("mbBody").style.display = "";
   el("mbEmpty").classList.add("hidden");
 }
@@ -461,7 +482,8 @@ export async function loadMemoryBank() {
     hideEmptyState();
     STATE.pack = await fetchFullPack(STATE.currentSlug);
     if (!STATE.pack) {
-      showEmptyState(tr("memory_bank.empty.load_failed", { slug: STATE.currentSlug }));
+      const failedSlug = STATE.currentSlug;
+      showEmptyState(() => tr("memory_bank.empty.load_failed", { slug: failedSlug }));
       return;
     }
     renderPack();
@@ -476,7 +498,15 @@ export function initMemoryBank() {
   // index.html are refreshed by i18n.applyDom; this hook handles the rest.
   if (window.i18n && typeof window.i18n.onChange === "function") {
     window.i18n.onChange(() => {
+      // Picker placeholder ("(no pack)"), header and empty-state body are
+      // built imperatively too — refresh them even when no pack is loaded.
+      if (el("mbPackSelect")) renderPackPicker();
+      if (STATE.emptyMessageFn && el("mbEmpty")) {
+        const p = el("mbEmpty").querySelector("p");
+        if (p) p.textContent = STATE.emptyMessageFn();
+      }
       if (STATE.pack) renderPack();
+      else if (el("mbDeviceLabel")) renderDeviceLabel();
     });
   }
   const sel = el("mbPackSelect");
@@ -487,7 +517,7 @@ export function initMemoryBank() {
       STATE.currentSlug = slug;
       STATE.pack = await fetchFullPack(slug);
       if (!STATE.pack) {
-        showEmptyState(tr("memory_bank.empty.load_failed", { slug }));
+        showEmptyState(() => tr("memory_bank.empty.load_failed", { slug }));
         return;
       }
       hideEmptyState();

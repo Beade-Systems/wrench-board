@@ -1133,6 +1133,7 @@ body.llm-open .rd-body { grid-template-columns: 1fr; }
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: .4px;
+  text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--panel-2);

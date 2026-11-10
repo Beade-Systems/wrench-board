@@ -93,6 +93,15 @@
     "headline_rejected": "Audit rejected: pack inconsistent, unusable as-is.",
     "headline_unknown": "Unknown audit status.",
     "files_to_rewrite": "Files to rewrite",
-    "drift_heading": "Drift detected ({n})"
+    "drift_heading": "Drift detected ({n})",
+    "status": {
+      "APPROVED": "APPROVED",
+      "NEEDS_REVISION": "NEEDS REVISION",
+      "REJECTED": "REJECTED",
+      "UNKNOWN": "UNKNOWN"
+    }
+  },
+  "common": {
+    "na": "n/a"
   }
 }

@@ -5,6 +5,24 @@ const MAX_ITEMS = 2000;
 const NOTE_MAX_LENGTH = 2000;
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fallback : text;
+};
+
+/** Runs `fn` once dictionaries are loaded and on every locale switch; returns an unsubscribe. */
+function onLocale(fn) {
+  const i18n = window.i18n;
+  if (!i18n) return () => {};
+  let live = true;
+  const run = () => { if (live) fn(); };
+  if (typeof i18n.onReady === 'function') i18n.onReady(run);
+  const off = typeof i18n.onChange === 'function' ? i18n.onChange(run) : null;
+  return () => { live = false; if (typeof off === 'function') off(); };
+}
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -12,12 +30,16 @@ function element(tag, className, text) {
   return node;
 }
 
+function setLabel(node, label) {
+  node.setAttribute('aria-label', label);
+  node.title = label;
+}
+
 function actionButton(action, className, text, label) {
   const node = element('button', className, text);
   node.type = 'button';
   node.dataset.action = action;
-  node.setAttribute('aria-label', label);
-  node.title = label;
+  if (label !== undefined) setLabel(node, label);
   return node;
 }
 
@@ -50,7 +72,13 @@ export class Worklist {
     this._dirty = false;
     this._saves = Promise.resolve();
     this._events = new AbortController();
+    this._statusText = null;
     this._build();
+    this._offLocale = onLocale(() => {
+      this._applyStaticText();
+      this._setStatus(this._statusText);
+      this._render();
+    });
     window.addEventListener('pagehide', () => this.flush({ keepalive: true }), { signal: this._events.signal });
     this._render();
   }
@@ -61,7 +89,7 @@ export class Worklist {
     const generation = this._switchTo(boardId ?? null);
     this._render();
     if (!boardId) return;
-    this._setStatus('Wird geladen …');
+    this._setStatus(['pcb.worklist.status.loading', 'Loading…']);
     try {
       // Reopening a board must not read back a list older than its last edit.
       await saved;
@@ -70,14 +98,15 @@ export class Worklist {
       if (generation !== this._generation) return;
       this.items = sanitize(data?.items);
       this.ready = true;
-      this._setStatus('');
+      this._setStatus(null);
       this._render();
     } catch (error) {
       if (generation !== this._generation) return;
       this.loadFailed = true;
-      this._setStatus('Laden fehlgeschlagen');
+      this._setStatus(['pcb.worklist.status.load_failed', 'Loading failed']);
       this._render();
-      this.notify?.(`Arbeitsliste konnte nicht geladen werden: ${error.message}`, true);
+      this.notify?.(tr('pcb.worklist.load_error', `The worklist could not be loaded: ${error.message}`,
+        { message: error.message }), true);
     }
   }
 
@@ -86,18 +115,18 @@ export class Worklist {
     const name = String(refdes ?? '').trim();
     if (!name) return false;
     if (!this.ready) {
-      this.notify?.('Die Arbeitsliste ist noch nicht geladen.', true);
+      this.notify?.(tr('pcb.worklist.not_ready', 'The worklist has not loaded yet.'), true);
       return false;
     }
     if (this._item(name)) {
       this.current = name;
       this._render();
       this._scrollToCurrent();
-      this.notify?.(`${name} steht bereits auf der Arbeitsliste.`);
+      this.notify?.(tr('pcb.worklist.already_listed', `${name} is already on the worklist.`, { refdes: name }));
       return false;
     }
     if (this.items.length >= MAX_ITEMS) {
-      this.notify?.(`Die Arbeitsliste ist auf ${MAX_ITEMS} Einträge begrenzt.`, true);
+      this.notify?.(tr('pcb.worklist.limit', `The worklist is limited to ${MAX_ITEMS} entries.`, { n: MAX_ITEMS }), true);
       return false;
     }
     this.items.push({ refdes: name, note: '', done: false, pinned: false });
@@ -140,23 +169,25 @@ export class Worklist {
     const boardId = this.boardId;
     const generation = this._generation;
     const body = JSON.stringify({ items: this.items });
-    this._setStatus('Wird gespeichert …');
+    this._setStatus(['pcb.worklist.status.saving', 'Saving…']);
     this._saves = this._saves
       .then(() => this.request(this._path(boardId), { method: 'PUT', headers: JSON_HEADERS, body, ...options }))
       .then(() => {
-        if (generation === this._generation && !this._dirty && this._timer === null) this._setStatus('Gespeichert');
+        if (generation === this._generation && !this._dirty && this._timer === null) this._setStatus(['pcb.worklist.status.saved', 'Saved']);
       }, error => {
         if (generation === this._generation) {
           this._dirty = true;
-          this._setStatus('Nicht gespeichert');
+          this._setStatus(['pcb.worklist.status.not_saved', 'Not saved']);
         }
-        this.notify?.(`Arbeitsliste konnte nicht gespeichert werden: ${error.message}`, true);
+        this.notify?.(tr('pcb.worklist.save_error', `The worklist could not be saved: ${error.message}`,
+          { message: error.message }), true);
       });
     return this._saves;
   }
 
   dispose() {
     this.flush({ keepalive: true });
+    this._offLocale();
     this._events.abort();
     this._generation++;
     this.container.replaceChildren();
@@ -180,7 +211,7 @@ export class Worklist {
     this.loadFailed = false;
     this.current = null;
     this._openNotes.clear();
-    this._setStatus('');
+    this._setStatus(null);
     return ++this._generation;
   }
 
@@ -188,7 +219,7 @@ export class Worklist {
     this._dirty = true;
     clearTimeout(this._timer);
     this._timer = setTimeout(() => this.flush(), SAVE_DELAY_MS);
-    this._setStatus('Ungespeichert');
+    this._setStatus(['pcb.worklist.status.unsaved', 'Unsaved']);
     if (render) this._render();
   }
 
@@ -207,7 +238,7 @@ export class Worklist {
       const candidate = order[(((start + direction * distance) % count) + count) % count];
       if (!candidate.done) { this._jump(candidate.refdes); return; }
     }
-    this.notify?.('Alle Einträge sind erledigt.');
+    this.notify?.(tr('pcb.worklist.all_done', 'All entries are done.'));
   }
 
   _jump(refdes) {
@@ -221,8 +252,24 @@ export class Worklist {
     this.list.querySelector('.wl-row.current')?.scrollIntoView({ block: 'nearest' });
   }
 
-  _setStatus(text) {
-    this.status.textContent = text;
+  /** `status` is a `[key, fallback]` pair, kept so a locale switch can re-translate it. */
+  _setStatus(status) {
+    this._statusText = status || null;
+    this.status.textContent = status ? tr(status[0], status[1]) : '';
+  }
+
+  /** Labels created once in _build(); re-applied when the locale changes. */
+  _applyStaticText() {
+    this.eyebrow.textContent = tr('pcb.worklist.eyebrow', 'WORKLIST');
+    this.input.placeholder = tr('pcb.worklist.add_placeholder', 'Add component, e.g. U7000');
+    this.input.setAttribute('aria-label', tr('pcb.worklist.add_aria', 'Add component to the worklist'));
+    this.addButton.textContent = tr('pcb.worklist.add', 'Add');
+    this.previousButton.textContent = tr('pcb.worklist.previous', '← Previous');
+    setLabel(this.previousButton, tr('pcb.worklist.previous_title', 'Go to the previous open entry'));
+    this.nextButton.textContent = tr('pcb.worklist.next', 'Next →');
+    setLabel(this.nextButton, tr('pcb.worklist.next_title', 'Go to the next open entry'));
+    this.removeAllButton.textContent = tr('pcb.worklist.remove_all', 'Remove all');
+    setLabel(this.removeAllButton, tr('pcb.worklist.remove_all_title', 'Remove all entries'));
   }
 
   _build() {
@@ -231,16 +278,15 @@ export class Worklist {
     this.progress = element('span', 'wl-progress');
     this.status = element('span', 'wl-status');
     this.status.setAttribute('role', 'status');
-    head.append(element('span', 'eyebrow', 'ARBEITSLISTE'), this.progress, this.status);
+    this.eyebrow = element('span', 'eyebrow');
+    head.append(this.eyebrow, this.progress, this.status);
 
     this.form = element('form', 'wl-add');
     this.input = element('input', 'wl-input');
     this.input.type = 'text';
-    this.input.placeholder = 'Bauteil hinzufügen, z. B. U7000';
     this.input.spellcheck = false;
     this.input.autocomplete = 'off';
-    this.input.setAttribute('aria-label', 'Bauteil zur Arbeitsliste hinzufügen');
-    this.addButton = element('button', 'secondary', 'Hinzufügen');
+    this.addButton = element('button', 'secondary');
     this.addButton.type = 'submit';
     this.form.append(this.input, this.addButton);
     this.form.addEventListener('submit', event => {
@@ -249,15 +295,16 @@ export class Worklist {
     });
 
     const nav = element('div', 'wl-nav');
-    this.previousButton = actionButton('previous', 'secondary', '← Vorheriger', 'Zum vorherigen offenen Eintrag');
-    this.nextButton = actionButton('next', 'secondary', 'Nächster →', 'Zum nächsten offenen Eintrag');
-    this.removeAllButton = actionButton('remove-all', 'text-button danger', 'Alle entfernen', 'Alle Einträge entfernen');
+    this.previousButton = actionButton('previous', 'secondary');
+    this.nextButton = actionButton('next', 'secondary');
+    this.removeAllButton = actionButton('remove-all', 'text-button danger');
+    this._applyStaticText();
     nav.append(this.previousButton, this.nextButton, this.removeAllButton);
     nav.addEventListener('click', event => {
       const action = event.target.closest('[data-action]')?.dataset.action;
       if (action === 'previous') this.previous();
       if (action === 'next') this.next();
-      if (action === 'remove-all' && window.confirm('Alle Einträge dieser Arbeitsliste entfernen?')) this.removeAll();
+      if (action === 'remove-all' && window.confirm(tr('pcb.worklist.remove_all_confirm', 'Remove all entries from this worklist?'))) this.removeAll();
     });
 
     this.list = element('ul', 'wl-list');
@@ -325,16 +372,20 @@ export class Worklist {
     done.type = 'checkbox';
     done.checked = item.done;
     done.dataset.action = 'done';
-    done.setAttribute('aria-label', `${item.refdes} als erledigt markieren`);
-    const name = actionButton('jump', 'wl-ref', item.refdes, `Zu ${item.refdes} springen`);
+    done.setAttribute('aria-label', tr('pcb.worklist.mark_done', `Mark ${item.refdes} as done`, { refdes: item.refdes }));
+    const name = actionButton('jump', 'wl-ref', item.refdes,
+      tr('pcb.worklist.jump', `Jump to ${item.refdes}`, { refdes: item.refdes }));
     const preview = element('span', 'wl-preview', item.note.split('\n')[0]);
     const open = this._openNotes.has(item.refdes);
     const pin = actionButton('pin', `wl-icon${item.pinned ? ' active' : ''}`, item.pinned ? '★' : '☆',
-      `${item.refdes} ${item.pinned ? 'nicht mehr anheften' : 'anheften'}`);
+      item.pinned ? tr('pcb.worklist.unpin', `Unpin ${item.refdes}`, { refdes: item.refdes })
+        : tr('pcb.worklist.pin', `Pin ${item.refdes} to the top`, { refdes: item.refdes }));
     pin.setAttribute('aria-pressed', String(item.pinned));
-    const note = actionButton('note', `wl-icon${item.note ? ' active' : ''}`, '✎', `Notiz zu ${item.refdes}`);
+    const noteLabel = tr('pcb.worklist.note', `Note on ${item.refdes}`, { refdes: item.refdes });
+    const note = actionButton('note', `wl-icon${item.note ? ' active' : ''}`, '✎', noteLabel);
     note.setAttribute('aria-expanded', String(open));
-    const remove = actionButton('remove', 'wl-icon', '×', `${item.refdes} entfernen`);
+    const remove = actionButton('remove', 'wl-icon', '×',
+      tr('pcb.worklist.remove', `Remove ${item.refdes}`, { refdes: item.refdes }));
     main.append(done, name, preview, pin, note, remove);
     row.append(main);
     if (open) {
@@ -342,9 +393,9 @@ export class Worklist {
       text.value = item.note;
       text.maxLength = NOTE_MAX_LENGTH;
       text.rows = 3;
-      text.placeholder = 'Messwerte, Befund, nächste Schritte …';
+      text.placeholder = tr('pcb.worklist.note_placeholder', 'Readings, findings, next steps…');
       text.dataset.action = 'note-text';
-      text.setAttribute('aria-label', `Notiz zu ${item.refdes}`);
+      text.setAttribute('aria-label', noteLabel);
       row.append(text);
     }
     return row;
@@ -363,9 +414,10 @@ export class Worklist {
     this.nextButton.disabled = !hasOpen;
     this.removeAllButton.disabled = !this.items.length;
     if (!this.items.length) {
-      this.list.replaceChildren(element('li', 'wl-empty', !this.boardId ? 'Keine Platine geöffnet.'
-        : this.loadFailed ? 'Arbeitsliste nicht verfügbar.'
-        : this.ready ? 'Noch keine Einträge. Füge das erste Bauteil hinzu.' : 'Wird geladen …'));
+      this.list.replaceChildren(element('li', 'wl-empty', !this.boardId ? tr('pcb.worklist.empty_no_board', 'No board open.')
+        : this.loadFailed ? tr('pcb.worklist.empty_unavailable', 'Worklist unavailable.')
+        : this.ready ? tr('pcb.worklist.empty', 'No entries yet. Add the first component.')
+        : tr('pcb.worklist.status.loading', 'Loading…')));
       return;
     }
     this.list.replaceChildren(...this._ordered().map(item => this._renderRow(item)));

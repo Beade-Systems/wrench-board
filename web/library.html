@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Deine PCB-Bibliothek in Wrench Board: Platinen importieren, Bauteile finden und Netze betrachten.">
-  <title>PCB-Bibliothek · Wrench Board</title>
+  <meta name="description" content="Your PCB library in Wrench Board: import boards, find components and inspect nets." data-i18n-attr="content:library.page.description">
+  <title data-i18n="library.page.title">PCB library · Wrench Board</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles/tokens.css">
@@ -12,81 +12,83 @@
   <link rel="stylesheet" href="/styles/pcb_tabs.css">
   <link rel="stylesheet" href="/styles/pcb_worklist.css">
   <link rel="stylesheet" href="/styles/pcb_pdf.css">
+  <!-- i18n.js first and without ?v=: every module shares this one instance. -->
+  <script type="module" src="/js/i18n.js"></script>
   <script type="module" src="/js/pcb_library.js"></script>
 </head>
 <body>
   <header class="app-header">
     <a href="/" class="brand"><span class="brand-mark" aria-hidden="true">▦</span><span>Wrench<span class="muted">Board</span></span></a>
-    <span class="header-divider"></span><span class="page-label">PCB-Bibliothek</span>
-    <div class="header-actions"><a class="secondary" href="/settings.html">Einstellungen</a><button class="secondary" id="browse-catalog" hidden>← Zum Raster</button><span class="storage-label"><i></i> Lokale Sammlung</span><button class="primary" id="import-button"><span aria-hidden="true">＋</span> PCB importieren</button></div>
+    <span class="header-divider"></span><span class="page-label" data-i18n="library.header.label">PCB library</span>
+    <div class="header-actions"><a class="secondary" href="/settings.html" data-i18n="library.header.settings">Settings</a><button class="secondary" id="browse-catalog" hidden data-i18n="library.header.back_to_grid">← Back to grid</button><span class="storage-label" data-i18n-node="library.header.local_collection"><i></i> Local collection</span><button class="primary" id="import-button" data-i18n-node="library.header.import"><span aria-hidden="true">＋</span> Import PCB</button></div>
     <input id="file-input" type="file" multiple hidden>
   </header>
   <main class="catalog-browser" id="catalog-browser">
-    <div class="browser-heading"><div><div class="eyebrow">WRENCH BOARD / DATEIBIBLIOTHEK</div><h1>Deine Platinen. Ein Überblick.</h1><p id="source-description">Die Sammlung aus xzz_downloads wird eingelesen …</p></div><button class="secondary" id="source-refresh">↻ Ordner neu einlesen</button></div>
-    <div class="source-stats" id="source-stats" aria-label="Dateien in der Sammlung"></div>
-    <div class="browser-sources" aria-label="Sammlung"><button id="source-tab" class="active" aria-pressed="true">xzz_downloads</button><button id="imports-tab" aria-pressed="false">Meine Importe <span id="imports-count">0</span></button></div>
-    <div class="browser-filters"><label class="search browser-search"><span aria-hidden="true">⌕</span><input type="search" id="source-search" placeholder="Nach Hersteller, Modell oder Dateiname suchen …" aria-label="Dateiraster durchsuchen"></label><select id="source-kind" aria-label="Dateityp"><option value="board">Boardviews</option><option value="all">Alle Dateien</option><option value="pdf">PDF-Dokumente</option><option value="archive">Archive</option><option value="other">Weitere Dateien</option></select><select id="source-sort" aria-label="Raster sortieren"><option value="name">Name A–Z</option><option value="recent">Zuletzt geändert</option><option value="size">Größe absteigend</option></select></div>
+    <div class="browser-heading"><div><div class="eyebrow" data-i18n="library.catalog.eyebrow">WRENCH BOARD / FILE LIBRARY</div><h1 data-i18n="library.catalog.heading">Your boards. One overview.</h1><p id="source-description" data-i18n="library.catalog.reading">Reading the linked collection …</p></div><button class="secondary" id="source-refresh" data-i18n="library.catalog.rescan">↻ Rescan folder</button></div>
+    <div class="source-stats" id="source-stats" aria-label="Files in the collection" data-i18n-attr="aria-label:library.catalog.stats_aria"></div>
+    <div class="browser-sources" aria-label="Collection" data-i18n-attr="aria-label:library.catalog.sources_aria"><button id="source-tab" class="active" aria-pressed="true" data-i18n="library.catalog.source_default">Linked collection</button><button id="imports-tab" aria-pressed="false" data-i18n-node="library.catalog.my_imports">My imports <span id="imports-count">0</span></button></div>
+    <div class="browser-filters"><label class="search browser-search"><span aria-hidden="true">⌕</span><input type="search" id="source-search" placeholder="Search by manufacturer, model or file name …" aria-label="Search the file grid" data-i18n-attr="placeholder:library.catalog.search_placeholder,aria-label:library.catalog.search_aria"></label><select id="source-kind" aria-label="File type" data-i18n-attr="aria-label:library.catalog.kind_aria"><option value="board" data-i18n="library.catalog.kind.board">Boardviews</option><option value="all" data-i18n="library.catalog.kind.all">All files</option><option value="pdf" data-i18n="library.catalog.kind.pdf">PDF documents</option><option value="archive" data-i18n="library.catalog.kind.archive">Archives</option><option value="other" data-i18n="library.catalog.kind.other">Other files</option></select><select id="source-sort" aria-label="Sort the grid" data-i18n-attr="aria-label:library.catalog.sort_aria"><option value="name" data-i18n="library.catalog.sort.name">Name A–Z</option><option value="recent" data-i18n="library.catalog.sort.recent">Last modified</option><option value="size" data-i18n="library.catalog.sort.size">Size, largest first</option></select></div>
     <div class="browser-layout">
-    <aside class="folder-tree" id="folder-tree" aria-label="Ordnerbaum"></aside>
+    <aside class="folder-tree" id="folder-tree" aria-label="Folder tree" data-i18n-attr="aria-label:library.catalog.tree_aria"></aside>
     <div class="browser-content">
-    <nav class="folder-path" id="folder-path" aria-label="Ordnerpfad"></nav>
+    <nav class="folder-path" id="folder-path" aria-label="Folder path" data-i18n-attr="aria-label:library.catalog.path_aria"></nav>
     <div class="folder-grid" id="folder-grid"></div>
-    <div class="results-heading"><p id="source-results" role="status">Katalog wird geladen …</p><span id="source-hint">Platine anklicken, um sie im Viewer zu öffnen.</span></div>
+    <div class="results-heading"><p id="source-results" role="status" data-i18n="library.catalog.loading">Loading catalog …</p><span id="source-hint" data-i18n="library.catalog.hint_open">Click a board to open it in the viewer.</span></div>
     <div class="file-grid" id="source-grid" aria-busy="true"></div>
-    <div class="grid-empty" id="source-empty" hidden><span aria-hidden="true">⌕</span><h2>Keine passenden Dateien</h2><p id="source-empty-text">Versuche einen anderen Modellnamen oder ändere die Filter.</p><button class="secondary" id="source-reset">Filter zurücksetzen</button></div>
-    <nav class="grid-pagination" id="source-pagination" aria-label="Ergebnisseiten"><button class="secondary" id="source-prev" disabled>← Zurück</button><span id="source-page"></span><button class="secondary" id="source-next" disabled>Weiter →</button></nav>
+    <div class="grid-empty" id="source-empty" hidden><span aria-hidden="true">⌕</span><h2 data-i18n="library.catalog.empty_title">No matching files</h2><p id="source-empty-text" data-i18n="library.catalog.empty_text">Try a different model name or change the filters.</p><button class="secondary" id="source-reset" data-i18n="library.catalog.reset_filters">Reset filters</button></div>
+    <nav class="grid-pagination" id="source-pagination" aria-label="Result pages" data-i18n-attr="aria-label:library.catalog.pagination_aria"><button class="secondary" id="source-prev" disabled data-i18n="library.catalog.prev">← Back</button><span id="source-page"></span><button class="secondary" id="source-next" disabled data-i18n="library.catalog.next">Next →</button></nav>
     </div>
     </div>
   </main>
   <main class="workspace" id="workspace" hidden>
-    <aside class="catalog" aria-label="PCB-Bibliothek">
-      <div class="catalog-heading"><h1>Meine Platinen <span id="board-count">0</span></h1><button class="icon-button" id="refresh" aria-label="Bibliothek aktualisieren" title="Aktualisieren">↻</button></div>
-      <label class="search"><span aria-hidden="true">⌕</span><input type="search" id="library-search" placeholder="Bibliothek durchsuchen …" aria-label="Bibliothek durchsuchen"></label>
-      <div class="catalog-filters"><button class="filter active" id="all-filter" aria-pressed="true">Alle Platinen</button><button class="filter" id="favorites-filter" aria-pressed="false">☆ Favoriten</button></div>
-      <label class="sort-label">Sortieren <select id="sort"><option value="recent">Zuletzt importiert</option><option value="name">Name A–Z</option><option value="parts">Bauteile</option></select></label>
+    <aside class="catalog" aria-label="PCB library" data-i18n-attr="aria-label:library.sidebar.aria">
+      <div class="catalog-heading"><h1 data-i18n-node="library.sidebar.heading">My boards <span id="board-count">0</span></h1><button class="icon-button" id="refresh" aria-label="Refresh library" title="Refresh" data-i18n-attr="aria-label:library.sidebar.refresh_aria,title:library.sidebar.refresh_title">↻</button></div>
+      <label class="search"><span aria-hidden="true">⌕</span><input type="search" id="library-search" placeholder="Search library …" aria-label="Search library" data-i18n-attr="placeholder:library.sidebar.search_placeholder,aria-label:library.sidebar.search_aria"></label>
+      <div class="catalog-filters"><button class="filter active" id="all-filter" aria-pressed="true" data-i18n="library.sidebar.filter_all">All boards</button><button class="filter" id="favorites-filter" aria-pressed="false" data-i18n="library.sidebar.filter_favorites">☆ Favorites</button></div>
+      <label class="sort-label" data-i18n-node="library.sidebar.sort_label">Sort <select id="sort"><option value="recent" data-i18n="library.sidebar.sort.recent">Recently imported</option><option value="name" data-i18n="library.sidebar.sort.name">Name A–Z</option><option value="parts" data-i18n="library.sidebar.sort.parts">Components</option></select></label>
       <div class="board-list" id="board-list" aria-live="polite"></div>
-      <div class="catalog-footer"><span class="tiny-chip">PCB</span><div>Deine Daten, griffbereit.<small id="formats">Formate werden geladen …</small></div></div>
+      <div class="catalog-footer"><span class="tiny-chip">PCB</span><div data-i18n-node="library.sidebar.tagline">Your data, close at hand.<small id="formats" data-i18n="library.sidebar.formats_loading">Loading formats …</small></div></div>
     </aside>
 
-    <section class="board-area" aria-label="Platinenansicht" id="drop-zone">
+    <section class="board-area" aria-label="Board view" data-i18n-attr="aria-label:library.board.area_aria" id="drop-zone">
       <div id="board-tabs"></div>
-      <div class="board-heading"><div><div class="eyebrow">BOARD EXPLORER</div><h2 id="board-title">Dein nächster Blick ins Detail.</h2><p id="board-subtitle">Wähle eine Platine aus deiner Bibliothek.</p></div><button class="secondary" id="offline-save">Offline speichern</button><button class="icon-button" id="favorite" aria-label="Als Favorit markieren" aria-pressed="false" disabled>☆</button></div>
+      <div class="board-heading"><div><div class="eyebrow" data-i18n="library.board.eyebrow">BOARD EXPLORER</div><h2 id="board-title" data-i18n="library.board.title_default">Your next close look.</h2><p id="board-subtitle" data-i18n="library.board.subtitle_default">Pick a board from your library.</p></div><button class="secondary" id="offline-save" data-i18n="library.board.offline_save">Save offline</button><button class="icon-button" id="favorite" aria-label="Mark as favorite" aria-pressed="false" disabled>☆</button></div>
       <p id="import-notes" class="import-notes" role="status" hidden></p>
       <div class="viewer-toolbar">
-        <div class="segmented" aria-label="Platinenseite"><button data-side="3" class="active" aria-pressed="true" disabled>Beide</button><button data-side="1" aria-pressed="false" disabled>Oberseite</button><button data-side="2" aria-pressed="false" disabled>Unterseite</button></div>
-        <div class="view-options"><label><input type="checkbox" id="labels" checked disabled> Labels</label><label><input type="checkbox" id="mirror" disabled> Spiegeln</label><label><input type="checkbox" id="butterfly" disabled> Nebeneinander</label><select id="trace-layer" aria-label="Leiterbahnebene" disabled><option value="">Leiterbahnen aus</option></select><select id="net-walk" aria-label="Nachbarnetze hervorheben" disabled><option value="0">Nachbarnetze aus</option><option value="1">Nachbarnetze: 1 Stufe</option><option value="2">Nachbarnetze: 2 Stufen</option></select><select id="pdf-select" aria-label="Schaltplan öffnen" disabled><option value="">Kein Schaltplan</option></select><button class="text-button" id="pdf-close" hidden>Schaltplan schließen</button></div>
+        <div class="segmented" aria-label="Board side" data-i18n-attr="aria-label:library.toolbar.side_aria"><button data-side="3" class="active" aria-pressed="true" disabled data-i18n="library.toolbar.side_both">Both</button><button data-side="1" aria-pressed="false" disabled data-i18n="library.toolbar.side_top">Top</button><button data-side="2" aria-pressed="false" disabled data-i18n="library.toolbar.side_bottom">Bottom</button></div>
+        <div class="view-options"><label data-i18n-node="library.toolbar.labels"><input type="checkbox" id="labels" checked disabled> Labels</label><label data-i18n-node="library.toolbar.mirror"><input type="checkbox" id="mirror" disabled> Mirror</label><label data-i18n-node="library.toolbar.butterfly"><input type="checkbox" id="butterfly" disabled> Side by side</label><select id="trace-layer" aria-label="Trace layer" data-i18n-attr="aria-label:library.toolbar.trace_aria" disabled><option value="">Traces off</option></select><select id="net-walk" aria-label="Highlight neighboring nets" data-i18n-attr="aria-label:library.toolbar.netwalk_aria" disabled><option value="0" data-i18n="library.toolbar.netwalk_off">Neighboring nets off</option><option value="1" data-i18n="library.toolbar.netwalk_1">Neighboring nets: 1 level</option><option value="2" data-i18n="library.toolbar.netwalk_2">Neighboring nets: 2 levels</option></select><select id="pdf-select" aria-label="Open schematic" data-i18n-attr="aria-label:library.toolbar.schematic_aria" disabled><option value="">No schematic</option></select><button class="text-button" id="pdf-close" hidden data-i18n="library.toolbar.schematic_close">Close schematic</button></div>
       </div>
       <div class="board-split">
       <div class="canvas-wrap" id="canvas-wrap">
-        <canvas id="board-canvas" tabindex="0" aria-label="Interaktive PCB-Ansicht. Ziehen zum Verschieben, Mausrad oder Plus und Minus zum Zoomen, Taste 0 zum Einpassen."></canvas>
+        <canvas id="board-canvas" tabindex="0" aria-label="Interactive PCB view. Drag to pan, use the mouse wheel or plus and minus to zoom, press 0 to fit." data-i18n-attr="aria-label:library.viewer.canvas_aria"></canvas>
         <div class="empty-view" id="empty-view">
           <svg class="empty-board" viewBox="0 0 160 120" fill="none" aria-hidden="true"><rect x="22" y="12" width="116" height="96" rx="10"/><rect x="59" y="37" width="42" height="42" rx="3"/><path d="M69 27v10m11-10v10m11-10v10M69 79v12m11-12v12m11-12v12M48 47h11m-11 11h11m-11 11h11m42-22h11m-11 11h11m-11 11h11M33 93h12V72m82-46h-13v12M36 29h9v18"/><circle cx="33" cy="25" r="3"/><circle cx="127" cy="95" r="3"/></svg>
-          <span class="eyebrow">DEIN PCB-ARCHIV</span><h3>Jede Verbindung.<br>Ein Stück klarer.</h3><p>Ziehe deine PCB-Dateien hierher oder importiere sie in deine persönliche Bibliothek.</p>
-          <button class="primary" id="empty-import">＋ Erste Platine importieren</button>
-          <small>PCB / XZZ · KiCad · BRD und weitere Boardview-Formate</small>
+          <span class="eyebrow" data-i18n="library.viewer.empty_eyebrow">YOUR PCB ARCHIVE</span><h3 data-i18n="library.viewer.empty_heading" data-i18n-html="1">Every connection.<br>A little clearer.</h3><p data-i18n="library.viewer.empty_text">Drop your PCB files here or import them into your personal library.</p>
+          <button class="primary" id="empty-import" data-i18n="library.viewer.empty_import">＋ Import your first board</button>
+          <small data-i18n="library.viewer.empty_formats">PCB / XZZ · KiCad · BRD and other boardview formats</small>
         </div>
-        <div class="canvas-controls"><button id="zoom-in" aria-label="Vergrößern" disabled>＋</button><button id="zoom-out" aria-label="Verkleinern" disabled>−</button><span></span><button id="fit" aria-label="Platine einpassen" title="Einpassen (0)" disabled>⛶</button></div>
-        <div class="drag-overlay" id="drag-overlay" hidden>PCB-Dateien hier ablegen</div>
+        <div class="canvas-controls"><button id="zoom-in" aria-label="Zoom in" data-i18n-attr="aria-label:library.viewer.zoom_in" disabled>＋</button><button id="zoom-out" aria-label="Zoom out" data-i18n-attr="aria-label:library.viewer.zoom_out" disabled>−</button><span></span><button id="fit" aria-label="Fit board to view" title="Fit (0)" data-i18n-attr="aria-label:library.viewer.fit_aria,title:library.viewer.fit_title" disabled>⛶</button></div>
+        <div class="drag-overlay" id="drag-overlay" hidden data-i18n="library.viewer.drop_overlay">Drop PCB files here</div>
       </div>
       <div class="pdf-dock" id="pdf-dock" hidden></div>
       </div>
       <div class="part-compare" id="part-compare"></div>
-      <footer class="viewer-footer"><span><i class="status-dot"></i><span id="viewer-status">Bereit für deine erste Platine</span></span><span id="dimensions">Mausrad: Zoom · Ziehen: Verschieben</span></footer>
-      <div class="board-summary" id="board-summary" hidden><div><span>BAUTEILE</span><strong id="parts-count">—</strong></div><div><span>PINS</span><strong id="pins-count">—</strong></div><div><span>NETZE</span><strong id="nets-count">—</strong></div><div class="summary-format"><span>DATEIFORMAT</span><strong id="source-format">—</strong></div></div>
+      <footer class="viewer-footer"><span><i class="status-dot"></i><span id="viewer-status" data-i18n="library.viewer.status_ready_first">Ready for your first board</span></span><span id="dimensions" data-i18n="library.viewer.hint_controls">Mouse wheel: zoom · Drag: pan</span></footer>
+      <div class="board-summary" id="board-summary" hidden><div><span data-i18n="library.summary.parts">COMPONENTS</span><strong id="parts-count">—</strong></div><div><span data-i18n="library.summary.pins">PINS</span><strong id="pins-count">—</strong></div><div><span data-i18n="library.summary.nets">NETS</span><strong id="nets-count">—</strong></div><div class="summary-format"><span data-i18n="library.summary.format">FILE FORMAT</span><strong id="source-format">—</strong></div></div>
     </section>
 
-    <aside class="inspector" aria-label="Bauteile und Netze">
-      <div class="inspector-heading"><span class="eyebrow">INSPEKTOR</span><span class="tiny-chip">mm</span></div>
-      <div class="entity-tabs"><button class="active" data-tab="parts" aria-pressed="true">Bauteile <span id="parts-tab-count">0</span></button><button data-tab="nets" aria-pressed="false">Netze <span id="nets-tab-count">0</span></button><button data-tab="worklist" aria-pressed="false" title="Arbeitsliste (Alt+L)">Liste</button><button data-tab="colors" aria-pressed="false">Farben</button></div>
-      <label class="search entity-search" id="entity-search-box"><span aria-hidden="true">⌕</span><textarea id="entity-search" rows="1" spellcheck="false" placeholder="Bauteil oder Wert suchen …" title="Jede Zeile filtert weiter, z. B. 20uF, 10V, C12*" aria-label="Bauteile oder Netze durchsuchen, jede Zeile filtert weiter" disabled></textarea></label>
+    <aside class="inspector" aria-label="Components and nets" data-i18n-attr="aria-label:library.inspector.aria">
+      <div class="inspector-heading"><span class="eyebrow" data-i18n="library.inspector.eyebrow">INSPECTOR</span><span class="tiny-chip">mm</span></div>
+      <div class="entity-tabs"><button class="active" data-tab="parts" aria-pressed="true" data-i18n-node="library.inspector.tab_parts">Components <span id="parts-tab-count">0</span></button><button data-tab="nets" aria-pressed="false" data-i18n-node="library.inspector.tab_nets">Nets <span id="nets-tab-count">0</span></button><button data-tab="worklist" aria-pressed="false" title="Worklist (Alt+L)" data-i18n="library.inspector.tab_worklist" data-i18n-attr="title:library.inspector.tab_worklist_title">List</button><button data-tab="colors" aria-pressed="false" data-i18n="library.inspector.tab_colors">Colors</button></div>
+      <label class="search entity-search" id="entity-search-box"><span aria-hidden="true">⌕</span><textarea id="entity-search" rows="1" spellcheck="false" placeholder="Search component or value …" title="Each line narrows the filter, e.g. 20uF, 10V, C12*" aria-label="Search components, each line narrows the filter" data-i18n-attr="title:library.inspector.search_title" disabled></textarea></label>
       <div class="side-panel" id="worklist-panel" hidden></div>
       <div class="side-panel" id="colors-panel" hidden></div>
-      <div class="entity-list" id="entity-list"><p class="placeholder">Importiere eine Platine, um ihre Bauteile und Netze zu erkunden.</p></div>
-      <div class="selection" id="selection" aria-live="polite"><span class="eyebrow">AUSWAHL</span><p class="placeholder">Klicke auf ein Bauteil oder einen Pin, um die Details zu sehen.</p></div>
-      <details class="file-details" id="file-details" hidden><summary>Datei & Notizen</summary><form id="metadata-form"><label>Name<input id="edit-title" required maxlength="160"></label><label>Notizen<textarea id="edit-notes" rows="3" maxlength="10000" placeholder="Revision, Gerät, Reparaturhinweise …"></textarea></label><button type="submit" class="secondary">Speichern</button></form><div class="file-actions"><a id="download" class="text-button">Original herunterladen ↗</a><button class="text-button danger" id="delete">Aus Bibliothek löschen</button></div></details>
+      <div class="entity-list" id="entity-list"><p class="placeholder" data-i18n="library.inspector.placeholder_import">Import a board to explore its components and nets.</p></div>
+      <div class="selection" id="selection" aria-live="polite"><span class="eyebrow" data-i18n="library.selection.eyebrow">SELECTION</span><p class="placeholder" data-i18n="library.selection.placeholder">Click a component or a pin to see its details.</p></div>
+      <details class="file-details" id="file-details" hidden><summary data-i18n="library.file.summary">File &amp; notes</summary><form id="metadata-form"><label data-i18n-node="library.file.name">Name<input id="edit-title" required maxlength="160"></label><label data-i18n-node="library.file.notes">Notes<textarea id="edit-notes" rows="3" maxlength="10000" placeholder="Revision, device, repair notes …" data-i18n-attr="placeholder:library.file.notes_placeholder"></textarea></label><button type="submit" class="secondary" data-i18n="library.file.save">Save</button></form><div class="file-actions"><a id="download" class="text-button" data-i18n="library.file.download">Download original ↗</a><button class="text-button danger" id="delete" data-i18n="library.file.delete">Delete from library</button></div></details>
     </aside>
   </main>
   <div class="notification" id="notification" role="status" hidden></div>
-  <dialog id="delete-dialog"><form method="dialog"><h2>Platine löschen?</h2><p id="delete-description"></p><div class="dialog-actions"><button value="cancel" class="secondary">Abbrechen</button><button value="delete" class="delete-button">Endgültig löschen</button></div></form></dialog>
+  <dialog id="delete-dialog"><form method="dialog"><h2 data-i18n="library.delete.title">Delete board?</h2><p id="delete-description"></p><div class="dialog-actions"><button value="cancel" class="secondary" data-i18n="library.delete.cancel">Cancel</button><button value="delete" class="delete-button" data-i18n="library.delete.confirm">Delete permanently</button></div></form></dialog>
 </body>
 </html>

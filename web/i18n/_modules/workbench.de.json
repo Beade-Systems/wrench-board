@@ -5,6 +5,7 @@
   "landing": {
     "tools_aria": "Werkzeuge",
     "pcb_library": "PCB-Bibliothek",
+    "settings": "Einstellungen",
     "search_devices_aria": "Geräte suchen",
     "disambiguation": "Mehrere Platinen passen: Wähle eine aus und starte die Diagnose erneut."
   },
@@ -22,10 +23,10 @@
     "empty_sub": "Importiere eine Datei über das Reparatur-Dashboard.",
     "load_failed_title": "Boardview konnte nicht geladen werden",
     "load_failed_sub": "Prüfe die ausgewählte Datei und versuche es erneut.",
-    "layer_aria": "Lage",
-    "layer_top": "Top",
+    "layer_aria": "Platinenseite",
+    "layer_top": "Oberseite",
     "layer_both": "Beide",
-    "layer_bottom": "Bottom",
+    "layer_bottom": "Unterseite",
     "rotate_left_title": "Nach links drehen (-90°)",
     "rotate_left": "Nach links drehen",
     "rotate_right_title": "Nach rechts drehen (+90°)",
@@ -61,7 +62,7 @@
   },
   "tweaks": {
     "color_title_signal": "Benannte Netze ohne Sonderrolle (DATA, ENABLE, …), Standard-Fallback.",
-    "color_title_power": "Netze wie PP*, VDD, +V, *_PWR, AVDD, VBAT: Spannungsschienen.",
+    "color_title_power": "Netze wie PP*, VDD, +V, *_PWR, AVDD, VBAT: Versorgungs-Rails.",
     "color_title_ground": "GND, VSS, AGND, DGND, PGND, GROUND.",
     "color_title_clock": "CLK_*, *_CLK, REFCLK, OSC_OUT: Taktsignale.",
     "color_title_reset": "RESET_*, RST_*, NRST, PORST_*: Reset-Leitungen.",
@@ -77,7 +78,27 @@
   "stock": {
     "no_matching_parts": "Keine passenden Bauteile.",
     "all_types": "Alle Typen",
-    "select_type_alert": "Wähle einen Bauteiltyp für die Suche aus."
+    "select_type_alert": "Wähle einen Bauteiltyp für die Suche aus.",
+    "role": {
+      "decoupling": "Entkopplung",
+      "bulk": "Pufferung",
+      "filter": "Filter",
+      "bypass": "Bypass",
+      "ac_coupling": "AC-Kopplung",
+      "tank": "Schwingkreis",
+      "feedback": "Rückkopplung",
+      "pull_up": "Pull-up",
+      "pull_down": "Pull-down",
+      "current_sense": "Strommessung",
+      "damping": "Dämpfung",
+      "series": "Serienelement",
+      "load_switch": "Lastschalter",
+      "level_shifter": "Pegelwandler",
+      "inrush_limiter": "Einschaltstrombegrenzer",
+      "flyback_switch": "Flyback-Schalter",
+      "ic": "IC",
+      "connector": "Steckverbinder"
+    }
   },
   "protocol": {
     "confirm_reject": "Ablehnung bestätigen"

@@ -35,6 +35,30 @@ async function fetchJSON(url, init) {
   return res.json();
 }
 
+// Catalog entries (tools, skills) arrive from the backend with an English
+// label — look the stable id up in the dictionary, keep the label as fallback.
+function catalogLabel(kind, entry) {
+  const key = `profile.catalog.${kind}.${entry.id}`;
+  const label = window.t(key);
+  return label === key ? entry.label : label;
+}
+
+// Specialties are free text; the ones matching a catalog id (apple, consoles…)
+// get their translated label, anything else is shown as typed.
+function specialtyLabel(raw) {
+  const id = String(raw).trim().toLowerCase();
+  if (!/^[a-z0-9_]+$/.test(id)) return raw;
+  const key = `profile.catalog.specialties.${id}`;
+  const label = window.t(key);
+  return label === key ? raw : label;
+}
+
+function verbosityLabels() {
+  const out = {};
+  for (const v of VERBOSITIES) out[v] = window.t(`profile.prefs.verbosity_options.${v}`);
+  return out;
+}
+
 function currentLocale() {
   return (window.i18n && window.i18n.locale) || "en";
 }
@@ -68,7 +92,7 @@ function renderHead() {
   document.querySelector(".prof-head")?.setAttribute("data-level", level);
   document.getElementById("profYears").textContent = fmtYears(id.years_experience);
   document.getElementById("profSpecs").textContent = id.specialties.length
-    ? id.specialties.join(" · ")
+    ? id.specialties.map(specialtyLabel).join(" · ")
     : window.t("profile.head.no_specialty");
   document.getElementById("profUpdated").textContent = fmtUpdated(_state.profile.updated_at);
 }
@@ -131,7 +155,7 @@ function renderTools() {
     const on = !!_state.profile.tools[tool.id];
     const chip = document.createElement("div");
     chip.className = "profile-tool" + (on ? " on" : "");
-    chip.innerHTML = `<span class="dot"></span><span>${escHtml(tool.label)}</span>`;
+    chip.innerHTML = `<span class="dot"></span><span>${escHtml(catalogLabel("tools", tool))}</span>`;
     chip.addEventListener("click", () => toggleTool(tool.id));
     host.appendChild(chip);
   }
@@ -174,7 +198,7 @@ function renderSkills() {
         if (!entry) continue;
         const chip = document.createElement("span");
         chip.className = "profile-skill-chip";
-        chip.textContent = entry.label;
+        chip.textContent = catalogLabel("skills", entry);
         chip.addEventListener("click", () => openDrawer(sid, entry, null));
         chips.appendChild(chip);
       }
@@ -192,7 +216,7 @@ function renderSkills() {
       const card = document.createElement("div");
       card.className = "profile-skill";
       card.innerHTML = `
-        <span class="profile-skill-label">${escHtml(entry.label)}</span>
+        <span class="profile-skill-label">${escHtml(catalogLabel("skills", entry))}</span>
         <div class="profile-skill-meta">
           <div class="profile-skill-bar"><span style="width:${pct}%"></span></div>
           <span class="profile-skill-count">${usages}×</span>
@@ -212,7 +236,7 @@ function renderPrefs() {
   const makeGroup = (label, key, options, labels) => {
     const g = document.createElement("div");
     g.className = "profile-prefs-group";
-    g.innerHTML = `<label>${label}</label><div class="opts"></div>`;
+    g.innerHTML = `<label>${escHtml(label)}</label><div class="opts"></div>`;
     const opts = g.querySelector(".opts");
     for (const v of options) {
       const btn = document.createElement("button");
@@ -224,7 +248,7 @@ function renderPrefs() {
     return g;
   };
 
-  host.appendChild(makeGroup(window.t("profile.prefs.verbosity"), "verbosity", VERBOSITIES));
+  host.appendChild(makeGroup(window.t("profile.prefs.verbosity"), "verbosity", VERBOSITIES, verbosityLabels()));
   host.appendChild(makeGroup(window.t("profile.prefs.language"), "language", LANGUAGES, LANGUAGE_LABELS));
 }
 
@@ -242,10 +266,15 @@ async function changePref(key, value) {
   if (key === "language") await window.i18n?.setLocale(value);
 }
 
+// Skill shown in the evidence drawer (null when closed) — lets a language
+// switch repaint the open drawer instead of waiting for the next open.
+let _drawerSkillId = null;
+
 function openDrawer(sid, entry, rec) {
+  _drawerSkillId = sid;
   const drawer = document.getElementById("profDrawer");
   drawer.classList.remove("hidden");
-  document.getElementById("profDrawerTitle").textContent = entry.label;
+  document.getElementById("profDrawerTitle").textContent = catalogLabel("skills", entry);
   const body = document.getElementById("profDrawerBody");
   body.innerHTML = "";
   const evidences = rec?.evidences || [];
@@ -267,7 +296,20 @@ function openDrawer(sid, entry, rec) {
 function wireDrawerClose() {
   document.getElementById("profDrawerClose").addEventListener("click", () => {
     document.getElementById("profDrawer").classList.add("hidden");
+    _drawerSkillId = null;
   });
+}
+
+function rerenderDrawer() {
+  if (!_drawerSkillId) return;
+  const drawer = document.getElementById("profDrawer");
+  if (!drawer || drawer.classList.contains("hidden")) return;
+  const entry = _state.catalog.skills.find(s => s.id === _drawerSkillId);
+  if (!entry) return;
+  const scrollTop = document.getElementById("profDrawerBody")?.scrollTop || 0;
+  openDrawer(_drawerSkillId, entry, _state.profile.skills[_drawerSkillId] || null);
+  const body = document.getElementById("profDrawerBody");
+  if (body) body.scrollTop = scrollTop;
 }
 
 // ============ Identity edit modal ============
@@ -342,6 +384,7 @@ function rerenderAll() {
   renderTools();
   renderSkills();
   renderPrefs();
+  rerenderDrawer();
 }
 
 export async function initProfileSection() {

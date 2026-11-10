@@ -8,6 +8,7 @@
 
 import { apiFetch } from "./shared/api.js";
 import { escapeHtml as escHtml } from "./shared/dom.js";
+import { localizeCode } from "./shared/errors.js";
 import { connectProgress, fetchPendingKind } from "./services/pipelineSocket.js";
 import { repairHash, seedSlugForRepair } from "./router.js";
 
@@ -59,6 +60,10 @@ const STATE = {
   failed: false,
   paused: false,
   redirectTimer: null,
+  // Last terminal-failure / pause events, kept so their panels can be rebuilt
+  // in the new language on a locale switch.
+  failure: null,
+  pausedEv: null,
 };
 
 function el(id) { return document.getElementById(id); }
@@ -66,10 +71,14 @@ function el(id) { return document.getElementById(id); }
 function fmtElapsed(sec) {
   if (typeof sec !== "number" || !isFinite(sec)) return "…";
   if (sec < 1) return `${(sec * 1000).toFixed(0)} ms`;
-  if (sec < 60) return `${sec.toFixed(1)} s`;
+  if (sec < 60) {
+    // Locale-aware decimal separator ("1.5 s" / "1,5 s").
+    const tag = window.i18n?.intlTag || "en-US";
+    return `${sec.toLocaleString(tag, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+  }
   const m = Math.floor(sec / 60);
   const s = Math.round(sec % 60);
-  return `${m}m ${s}s`;
+  return t("pipeline.step.elapsed_min", { m, s });
 }
 
 function buildDrawer() {
@@ -129,12 +138,15 @@ function openDrawer(deviceLabel) {
     if (sub) {
       const phase = PHASES.find(p => p.key === s.dataset.step);
       if (phase) {
+        delete sub.dataset.counts;
         sub.setAttribute("data-i18n", phase.subKey);
         sub.textContent = _phaseSub(s.dataset.step);
       }
     }
   });
   // Remove any lingering error panel
+  STATE.failure = null;
+  STATE.pausedEv = null;
   document.getElementById("ppErrorDetail")?.remove();
   // Remove any stale device-kind confirmation panel (plain div in ppBody,
   // not a dynamic .pp-step so it survives the loop above).
@@ -178,8 +190,76 @@ function setStepCounts(phaseKey, counts) {
   if (!step) return;
   const sub = step.querySelector(".pp-step-sub");
   if (!sub) return;
-  const parts = Object.entries(counts).map(([k, v]) => `${v} ${k}`);
-  sub.textContent = parts.join(" · ");
+  // The counts replace the static phase blurb: drop its data-i18n hook (so
+  // i18n.applyDom() doesn't put the blurb back on a locale switch) and keep the
+  // raw counts on the node so the onChange hook can re-render them.
+  sub.removeAttribute("data-i18n");
+  sub.dataset.counts = JSON.stringify(counts);
+  sub.textContent = _countsText(counts);
+}
+
+// "12 components · 4 signals" — the count keys come from the backend
+// (phase_finished.counts); known ones are localized, unknown ones fall back to
+// the raw key so a new backend counter still shows.
+function _countsText(counts) {
+  return Object.entries(counts).map(([k, v]) => {
+    const key = `pipeline.counts.${k}`;
+    const label = t(key, { n: v });
+    return label === key ? `${v} ${k}` : label;
+  }).join(" · ");
+}
+
+// Localized name of a pipeline phase (static or dynamic); raw key on miss.
+function _phaseName(phaseKey) {
+  const staticPhase = PHASES.find(p => p.key === phaseKey);
+  if (staticPhase) return t(staticPhase.labelKey);
+  const dyn = DYNAMIC_PHASES[phaseKey];
+  if (dyn) return t(dyn.label);
+  return phaseKey || "";
+}
+
+// Localized audit / pipeline status (APPROVED, NEEDS_REVISION, …); raw on miss.
+function _statusLabel(status) {
+  const key = `pipeline.audit_status.${status}`;
+  const label = t(key);
+  return label === key ? String(status) : label;
+}
+export { _statusLabel as auditStatusLabel };
+
+// Status-line params may carry backend codes instead of resolved text —
+// `{$status: "APPROVED"}` / `{$phase: "scout"}` — so the stored params stay
+// language-neutral and the line re-resolves correctly on a locale switch.
+function _resolveParams(params) {
+  if (!params) return params;
+  const out = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v && typeof v === "object" && "$status" in v) out[k] = escHtml(_statusLabel(v.$status));
+    else if (v && typeof v === "object" && "$phase" in v) out[k] = escHtml(_phaseName(v.$phase));
+    else out[k] = v;
+  }
+  return out;
+}
+
+// Break a `pipeline_failed` event into what the UI shows:
+//   headline — fixed sentence translated by the event's stable `code`
+//              (pipeline.error.*); "" for an uncoded event
+//   raw      — text shown verbatim: the auditor's brief (model-written) or an
+//              exception message; "" when there is nothing beyond the headline
+//   labelKey — i18n key of the caption that introduces `raw`
+export function describePipelineFailure(ev) {
+  const params = { ...(ev.params || {}) };
+  if (params.reason) {
+    params.reason = localizeCode("pipeline.error_reason", params.reason, null, params.reason);
+  }
+  const headline = localizeCode("pipeline.error", ev.code, params, "");
+  if (!headline) {
+    return { headline: "", raw: ev.error || "", labelKey: "pipeline.error_detail.detail_label" };
+  }
+  if (typeof ev.brief === "string") {
+    return { headline, raw: ev.brief, labelKey: "pipeline.error_detail.brief_label" };
+  }
+  const raw = ev.code === "unexpected_error" ? (ev.error || "") : "";
+  return { headline, raw, labelKey: "pipeline.error_detail.technical_label" };
 }
 
 // setStatus accepts pre-resolved HTML text (for paths that interpolate <b>);
@@ -202,7 +282,7 @@ function setStatusKey(key, params, klass) {
   s.dataset.i18nParams = params ? JSON.stringify(params) : "";
   s.dataset.i18nHtml = "1";
   s.removeAttribute("data-i18n");
-  s.innerHTML = t(key, params);
+  s.innerHTML = t(key, _resolveParams(params));
   s.className = "pp-status" + (klass ? " " + klass : "");
 }
 
@@ -212,12 +292,21 @@ function _refreshStatusOnLocaleChange() {
   let params;
   try { params = s.dataset.i18nParams ? JSON.parse(s.dataset.i18nParams) : undefined; }
   catch (_) { params = undefined; }
-  s.innerHTML = t(s.dataset.i18nKey, params);
+  s.innerHTML = t(s.dataset.i18nKey, _resolveParams(params));
 }
 
 if (window.i18n && window.i18n.onChange) {
   window.i18n.onChange(() => {
     _refreshStatusOnLocaleChange();
+    // Failure detail + device-kind panel are built imperatively — rebuild them.
+    if (STATE.failure && document.getElementById("ppErrorDetail")) showFailureDetail(STATE.failure);
+    if (STATE.pausedEv && document.getElementById("ppKindPanel")) {
+      const chosen = document.querySelector('#ppKindPanel input[name="ppKind"]:checked')?.value;
+      renderKindConfirm(STATE.pausedEv);
+      const radio = [...document.querySelectorAll('#ppKindPanel input[name="ppKind"]')]
+        .find((r) => r.value === chosen);
+      if (radio) radio.checked = true;
+    }
     // Re-translate dynamic step time/sub cells whose text follows a known token.
     document.querySelectorAll("#pipelineProgressDrawer .pp-step").forEach(s => {
       const time = s.querySelector('[data-role="time"]');
@@ -227,6 +316,11 @@ if (window.i18n && window.i18n.onChange) {
       // localization drift is tolerable.
       if (s.classList.contains("running")) time.textContent = t("pipeline.step.in_progress");
       else if (s.classList.contains("error")) time.textContent = t("pipeline.step.failed");
+      // Per-phase counts ("12 components · 4 signals") follow the locale too.
+      const sub = s.querySelector(".pp-step-sub");
+      if (sub && sub.dataset.counts) {
+        try { sub.textContent = _countsText(JSON.parse(sub.dataset.counts)); } catch (_) { /* keep */ }
+      }
     });
   });
 }
@@ -240,13 +334,27 @@ function showCta(label, iconPath, primary, onClick) {
   btn.onclick = onClick;
 }
 
-function showErrorDetail(msg) {
-  if (!msg) return;
+// Failure panel: translated headline (by event code), then any verbatim text
+// (auditor brief / exception message) under a translated caption.
+function showFailureDetail(ev) {
   document.getElementById("ppErrorDetail")?.remove();
+  const { headline, raw, labelKey } = describePipelineFailure(ev);
+  if (!headline && !raw) return;
   const div = document.createElement("div");
   div.className = "pp-error-detail";
   div.id = "ppErrorDetail";
-  div.textContent = msg;
+  if (headline) {
+    const head = document.createElement("div");
+    head.textContent = headline;
+    div.appendChild(head);
+  }
+  if (raw) {
+    const body = document.createElement("div");
+    const label = document.createElement("b");
+    label.textContent = t(labelKey);
+    body.append(label, " ", raw);
+    div.appendChild(body);
+  }
   el("ppBody").appendChild(div);
 }
 
@@ -274,7 +382,7 @@ function handleEvent(ev) {
       ensureDynamicStep(ev.phase);
       setStepState(ev.phase, "running");
       setStepTime(ev.phase, t("pipeline.step.in_progress"));
-      setStatusKey("pipeline.status.phase_running", { phase: escHtml(ev.phase || "") });
+      setStatusKey("pipeline.status.phase_running", { phase: { $phase: ev.phase } });
       break;
 
     case "phase_finished":
@@ -286,9 +394,9 @@ function handleEvent(ev) {
     case "pipeline_finished": {
       STATE.done = true;
       const score = typeof ev.consistency_score === "number"
-        ? ev.consistency_score.toFixed(2) : "n/a";
+        ? ev.consistency_score.toFixed(2) : escHtml(t("pipeline.common.na"));
       const status = ev.status || "APPROVED";
-      setStatusKey("pipeline.status.ready", { status: escHtml(status), score }, "ok");
+      setStatusKey("pipeline.status.ready", { status: { $status: status }, score }, "ok");
       showCta(
         t("pipeline.cta.view_memory_bank"),
         '<path d="M5 12h14M13 6l6 6-6 6"/>',
@@ -301,7 +409,12 @@ function handleEvent(ev) {
     }
 
     case "pipeline_failed": {
+      // The background wrapper republishes a generic ERROR after the
+      // orchestrator's own coded failure (REJECTED) — keep the specific one.
+      if (STATE.failed && STATE.failure && STATE.failure.code
+          && STATE.failure.code !== "unexpected_error" && ev.code === "unexpected_error") break;
       STATE.failed = true;
+      STATE.failure = ev;
       // Paint the currently running step as error.
       const running = document.querySelector("#pipelineProgressDrawer .pp-step.running");
       if (running) {
@@ -310,8 +423,8 @@ function handleEvent(ev) {
         running.querySelector('[data-role="time"]').textContent = t("pipeline.step.failed");
       }
       const status = ev.status || "ERROR";
-      setStatusKey("pipeline.status.failed", { status: escHtml(status) }, "err");
-      if (ev.error) showErrorDetail(ev.error);
+      setStatusKey("pipeline.status.failed", { status: { $status: status } }, "err");
+      showFailureDetail(ev);
       showCta(t("pipeline.cta.close"), "", false, closeDrawer);
       break;
     }
@@ -377,6 +490,7 @@ function _kindLabel(k) {
 }
 
 function renderKindConfirm(ev) {
+  STATE.pausedEv = ev;
   document.getElementById("ppKindPanel")?.remove();
   const step = document.querySelector('#pipelineProgressDrawer .pp-step[data-step="device_kind"]');
   if (step) step.classList.add("paused");
@@ -396,11 +510,11 @@ function renderKindConfirm(ev) {
   panel.className = "pp-kind-panel";
   panel.id = "ppKindPanel";
   panel.innerHTML = `
-    <div class="pp-kind-row"><span data-i18n="pipeline.kind.declared">Déclaré</span><b class="mono">${escHtml(_kindLabel(ev.user_declared))}</b></div>
-    <div class="pp-kind-row"><span data-i18n="pipeline.kind.detected">Détecté</span><b class="mono">${escHtml(_kindLabel(ev.graph_inferred))}${conf !== null ? ` ${conf}%` : ""}</b></div>
-    ${ev.evidence ? `<div class="pp-kind-evidence">${escHtml(ev.evidence)}</div>` : ""}
+    <div class="pp-kind-row"><span data-i18n="pipeline.kind.declared">${escHtml(t("pipeline.kind.declared"))}</span><b class="mono">${escHtml(_kindLabel(ev.user_declared))}</b></div>
+    <div class="pp-kind-row"><span data-i18n="pipeline.kind.detected">${escHtml(t("pipeline.kind.detected"))}</span><b class="mono">${escHtml(_kindLabel(ev.graph_inferred))}${conf !== null ? ` ${conf}%` : ""}</b></div>
+    ${ev.evidence ? `<div class="pp-kind-evidence"><span data-i18n="pipeline.kind.evidence_label">${escHtml(t("pipeline.kind.evidence_label"))}</span> ${escHtml(ev.evidence)}</div>` : ""}
     <div class="pp-kind-opts">${radios}</div>
-    <button type="button" class="pp-cta primary" id="ppKindConfirm" data-i18n="pipeline.kind.confirm">Confirmer et reprendre</button>`;
+    <button type="button" class="pp-cta primary" id="ppKindConfirm" data-i18n="pipeline.kind.confirm">${escHtml(t("pipeline.kind.confirm"))}</button>`;
   el("ppBody").appendChild(panel);
   if (window.i18n && window.i18n.applyDom) window.i18n.applyDom(panel);
   document.getElementById("ppKindConfirm").addEventListener("click", () => {
@@ -426,6 +540,8 @@ async function confirmKind(deviceKind) {
     return;
   }
   document.getElementById("ppKindPanel")?.remove();
+  STATE.pausedEv = null;
+  STATE.failure = null;
   const step = document.querySelector('#pipelineProgressDrawer .pp-step[data-step="device_kind"]');
   if (step) { step.classList.remove("paused"); setStepState("device_kind", "done"); }
   setStepTime("device_kind", t("pipeline.kind.confirmed"));

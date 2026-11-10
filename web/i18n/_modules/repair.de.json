@@ -8,13 +8,17 @@
       "phone_logic_board": "Smartphone-Logicboard",
       "desktop_motherboard": "Desktop-Mainboard",
       "sbc_board": "Einplatinencomputer (SBC)",
-      "power_charging_board": "Strom-/Ladeplatine",
+      "power_charging_board": "Netzteil-/Ladeplatine",
       "other": "Sonstige"
     }
   },
   "schematic": {
     "label": "Schaltplan (optional, für ein präziseres Wissenspaket)",
     "cta": "Schaltplan-PDF anhängen",
-    "already_ingested": "Schaltplan bereits eingelesen ✓ (kein Anhang nötig)"
+    "already_ingested": "Schaltplan bereits eingelesen ✓ (Anhängen nicht nötig)"
+  },
+  "dashboard": {
+    "pages_suffix": " · {n} Seiten",
+    "na": "k. A."
   }
 }

@@ -43,7 +43,8 @@
     "switching": "→ switching conversation: {id}",
     "delete_aria": "Delete conversation",
     "delete_confirm": "Delete this conversation?\nMessage history and the linked agent session will be erased. This cannot be undone.",
-    "delete_failed": "Delete failed. Try again."
+    "delete_failed": "Delete failed. Try again.",
+    "switching_new": "→ starting a new conversation"
   },
   "input": {
     "placeholder": "Ask the agent… (Enter to send, Shift+Enter for newline)",
@@ -108,7 +109,30 @@
     "stock_consume": "Consuming <span class=\"refdes\">{refdes}</span> from <span class=\"refdes\">{donor_id}</span>",
     "stock_mark_donor": "Marking <span class=\"refdes\">{device_slug}</span> as donor",
     "stock_unmark_donor": "Removing donor <span class=\"refdes\">{donor_id}</span>",
-    "stock_list_donors": "Listing donors in stock"
+    "stock_list_donors": "Listing donors in stock",
+    "mb_record_measurement": "Recording a measurement",
+    "mb_record_measurement_on": "Recording a measurement on <span class=\"refdes\">{target}</span>",
+    "mb_list_measurements": "Reviewing measurements",
+    "mb_compare_measurements": "Comparing measurements",
+    "mb_observations_from_measurements": "Deriving observations from measurements",
+    "mb_set_observation": "Setting an observation",
+    "mb_set_observation_on": "Setting an observation on <span class=\"refdes\">{target}</span>",
+    "mb_clear_observations": "Clearing observations",
+    "mb_validate_finding": "Validating a finding",
+    "mb_hypothesize": "Working out fault hypotheses",
+    "mb_recall_field_reports": "Recalling findings from past repairs",
+    "mb_search_patterns": "Searching known failure patterns",
+    "mb_search_playbooks": "Searching protocol templates",
+    "mb_record_session_log": "Writing the session log",
+    "bv_propose_protocol": "Proposing a diagnostic protocol",
+    "bv_get_protocol": "Reading the protocol",
+    "bv_update_protocol": "Updating the protocol",
+    "bv_record_step_result": "Recording a step result",
+    "profile_get": "Reading your profile",
+    "profile_check_skills": "Checking your skills",
+    "profile_track_skill": "Updating your skill record",
+    "cam_capture": "Requesting a camera capture",
+    "consult_specialist": "Consulting a specialist"
   },
   "memtool": {
     "read": "Memory read: {path}",
@@ -132,7 +156,8 @@
     "preserved_measurements_one": "{n} measurement",
     "preserved_measurements_many": "{n} measurements",
     "preserved_protocol": "protocol « {title} » ({completed}/{total})",
-    "preserved_outcome": "final outcome"
+    "preserved_outcome": "final outcome",
+    "session_ids": "old=<code>{old}</code> · new=<code>{new}</code>"
   },
   "resume": {
     "title": "Session resume",
@@ -152,7 +177,8 @@
     "context_loaded": "device + symptom context loaded · the agent is waiting for your first message",
     "session_resumed": "session resumed · history and agent memory restored",
     "session_terminated": "session terminated",
-    "interrupt_sent": "interrupt sent · the agent is stopping"
+    "interrupt_sent": "interrupt sent · the agent is stopping",
+    "stream_retry": "the model stream stalled · retrying (attempt {attempt})"
   },
   "image_bubble": {
     "alt": "macro",
@@ -170,7 +196,13 @@
     "unsupported": "unsupported format: {mime} · PNG or JPEG only",
     "socket_closed": "cannot upload: socket not open",
     "failed": "upload failed: {error}",
-    "rejected": "upload rejected · {reason}"
+    "rejected": "upload rejected · {reason}",
+    "reason": {
+      "upload_too_large": "photo too large ({size_mb} MB, max {max_mb} MB)",
+      "upload_unsupported_mime": "unsupported format: {mime}",
+      "upload_invalid_base64": "the image data arrived damaged",
+      "upload_rejected": "the server could not accept the photo"
+    }
   },
   "preview": {
     "select_camera_first": "select a camera in the picker first",
@@ -178,14 +210,44 @@
   },
   "send": {
     "socket_closed": "cannot send: socket not open",
-    "connect_failed": "connection failed: {error}"
+    "connect_failed": "connection failed: {error}",
+    "close_code": "code {code}"
   },
   "error": {
     "generic": "error: {text}",
-    "unknown_reason": "unknown reason"
+    "unknown_reason": "unknown reason",
+    "code": {
+      "api_error": "The model service returned an error. Try again in a moment.",
+      "stream_timeout": "The model stream went silent. The session may have been lost.",
+      "reconnect_exhausted": "The stream dropped and reconnecting failed. The session may be lost.",
+      "missing_api_key": "ANTHROPIC_API_KEY is missing. Set it in .env and restart the server.",
+      "session_already_open": "Another conversation is already open for this repair. Close it before opening a new one.",
+      "managed_agents_not_configured": "The diagnostic agent is not set up on this server yet.",
+      "session_create_failed": "The agent session could not be started. Try again in a moment.",
+      "session_error": "The agent session reported an error.",
+      "internal_error": "Something went wrong on the server.",
+      "protocol_result_rejected": "The step result was not accepted: {reason}",
+      "protocol_abandon_rejected": "The protocol could not be abandoned: {reason}",
+      "forbidden_origin": "This page is not allowed to open an agent connection.",
+      "service_token_required": "The server refused the connection: access token missing."
+    }
   },
   "fix": {
     "validated_one": "Validated ({n} fix)",
     "validated_many": "Validated ({n} fixes)"
+  },
+  "cost": {
+    "total_one": "{cost} · {n} turn",
+    "total_many": "{cost} · {n} turns",
+    "last_delta": " · +{delta} last"
+  },
+  "foot": {
+    "tokens": "{input}→{output} tok",
+    "na": "n/a"
+  },
+  "tier": {
+    "fast": "Fast",
+    "normal": "Normal",
+    "deep": "Deep"
   }
 }

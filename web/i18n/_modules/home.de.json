@@ -54,9 +54,9 @@
       "info_aria": "Tools für {name} anzeigen",
       "info_title": "Wofür diese Quelle dient",
       "desc": {
-        "schematic": "Der elektrische Graph des Geräts: die kompilierte Topologie (Spannungsschienen, ICs, Boot-Sequenz), auf der Simulator und Rückwärtsdiagnose arbeiten. Verfügbar, sobald der Graph aufgelöst ist (in der Cloud kann er per PDF-Hash aus der gemeinsamen Datenbank kommen, ohne dass ein Schaltplan neu importiert wird).",
+        "schematic": "Der elektrische Graph des Geräts: die kompilierte Topologie (Rails, ICs, Boot-Sequenz), auf der Simulator und Rückwärtsdiagnose arbeiten. Verfügbar, sobald der Graph aufgelöst ist (in der Cloud kann er per PDF-Hash aus der gemeinsamen Datenbank kommen, ohne dass ein Schaltplan neu importiert wird).",
         "boardview": "Das Platinenlayout (Boardview). Schaltet die visuellen Tools frei: Hervorheben, Fokussieren, Pfeile, Anmerkungen und geführte Prüfabläufe auf der Platine.",
-        "graph": "Der analysierte Schaltplan, verdichtet zu einem Kausalgraphen, der auf die Schlussfolgerungen des Agenten optimiert ist: Bauteile, Spannungsschienen und Symptome, verbunden durch Ursache-Wirkungs-Kanten (Symptom → verdächtiges Bauteil → zu messende Spannungsschiene), ergänzt um Diagnoseregeln und das Wörterbuch. Schaltet die Regelsuche und die Refdes-Validierung frei.",
+        "graph": "Der analysierte Schaltplan, verdichtet zu einem Kausalgraphen, der auf die Schlussfolgerungen des Agenten optimiert ist: Bauteile, Rails und Symptome, verbunden durch Ursache-Wirkungs-Kanten (Symptom → verdächtiges Bauteil → zu messende Rail), ergänzt um Diagnoseregeln und das Glossar. Schaltet die Regelsuche und die Refdes-Validierung frei.",
         "memory": "Der Reparatur-Wissensspeicher des Geräts. Schaltet das Erfassen von Befunden, Sitzungslogs und Messungen frei, die über mehrere Sitzungen hinweg wiederverwendet werden.",
         "stock": "Der Bestand an Spenderplatinen. Schaltet die Suche nach direktem Ersatz und die Spenderverwaltung frei."
       },
@@ -66,7 +66,7 @@
         "boardview_label": "Boardview",
         "boardview_on": "12 bv_*-Tools",
         "graph_label": "Kausalgraph",
-        "graph_on": "Regeln + Wörterbuch",
+        "graph_on": "Regeln + Glossar",
         "memory_label": "Wissensspeicher",
         "memory_on": "mb_*-Tools",
         "stock_label": "Lager",
@@ -141,7 +141,7 @@
       "state_approved": "freigegeben",
       "state_building": "wird erstellt",
       "state_empty": "leer",
-      "meta_complete": "Registry + Graph + Regeln + Wörterbuch + Prüfung. Bereit für die Diagnose.",
+      "meta_complete": "Registry + Graph + Regeln + Glossar + Prüfung. Bereit für die Diagnose.",
       "meta_building": "Pipeline läuft. Der Agent nutzt den Graphen, sobald sie fertig ist.",
       "meta_off": "Wird beim Start der Reparatur automatisch erstellt.",
       "open_graph": "Graph ansehen"

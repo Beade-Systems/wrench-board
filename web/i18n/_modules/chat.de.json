@@ -6,10 +6,10 @@
     "aria": "Diagnose-Agent",
     "badge": "Agent",
     "title": "Diagnose",
-    "subline_empty": "(inaktiv)"
+    "subline_empty": "(bereit)"
   },
   "header": {
-    "camera_chip_title": "Kamera für cam_capture (Flow B)",
+    "camera_chip_title": "Kamera für Agent-Aufnahmen (cam_capture, Flow B)",
     "camera_chip_none": "(keine)",
     "camera_preview_title": "Kameravorschau ein-/ausblenden",
     "camera_preview_aria": "Kameravorschau umschalten",
@@ -20,7 +20,7 @@
     "close_aria": "Panel schließen"
   },
   "status": {
-    "idle": "inaktiv",
+    "idle": "bereit",
     "connecting": "verbinde · {slug} · {tier}",
     "connected": "verbunden · {slug} · {tier}",
     "closed": "geschlossen",
@@ -43,7 +43,8 @@
     "switching": "→ Unterhaltung wird gewechselt: {id}",
     "delete_aria": "Unterhaltung löschen",
     "delete_confirm": "Diese Unterhaltung löschen?\nDer Nachrichtenverlauf und die verknüpfte Agent-Sitzung werden gelöscht. Das kann nicht rückgängig gemacht werden.",
-    "delete_failed": "Löschen fehlgeschlagen. Versuch es noch einmal."
+    "delete_failed": "Löschen fehlgeschlagen. Versuch es noch einmal.",
+    "switching_new": "→ neue Unterhaltung wird gestartet"
   },
   "input": {
     "placeholder": "Frag den Agenten… (Enter zum Senden, Umschalt+Enter für neue Zeile)",
@@ -67,7 +68,7 @@
   },
   "step": {
     "expand_title": "Rohdaten anzeigen",
-    "no_result": "(Ergebnis nicht verfügbar: von der Laufzeit nicht geliefert)"
+    "no_result": "(Ergebnis nicht verfügbar: von der Laufzeitumgebung nicht übermittelt)"
   },
   "tool": {
     "mb_get_component": "<span class=\"refdes\">{refdes}</span> wird nachgeschlagen",
@@ -91,7 +92,7 @@
     "bv_measure": "Messung zwischen <span class=\"refdes\">{a}</span> und <span class=\"refdes\">{b}</span> wird durchgeführt",
     "bv_show_pin": "Pin {pin} von <span class=\"refdes\">{refdes}</span> wird angezeigt",
     "bv_dim_unrelated": "Nicht relevante Elemente werden abgedunkelt",
-    "bv_layer_visibility": "Sichtbarkeit von Lage {layer} wird geändert",
+    "bv_layer_visibility": "Sichtbarkeit von Layer {layer} wird geändert",
     "bv_scene_empty": "Szene wird aufgebaut (leer)",
     "bv_scene": "Szene wird aufgebaut: {parts}",
     "scene_highlight_one": "{n} Hervorhebung",
@@ -108,7 +109,30 @@
     "stock_consume": "<span class=\"refdes\">{refdes}</span> wird aus <span class=\"refdes\">{donor_id}</span> entnommen",
     "stock_mark_donor": "<span class=\"refdes\">{device_slug}</span> wird als Spender markiert",
     "stock_unmark_donor": "Spender <span class=\"refdes\">{donor_id}</span> wird entfernt",
-    "stock_list_donors": "Spender im Lager werden aufgelistet"
+    "stock_list_donors": "Spender im Lager werden aufgelistet",
+    "mb_record_measurement": "Messung wird gespeichert",
+    "mb_record_measurement_on": "Messung an <span class=\"refdes\">{target}</span> wird gespeichert",
+    "mb_list_measurements": "Messungen werden durchgesehen",
+    "mb_compare_measurements": "Messungen werden verglichen",
+    "mb_observations_from_measurements": "Beobachtungen werden aus Messungen abgeleitet",
+    "mb_set_observation": "Beobachtung wird gesetzt",
+    "mb_set_observation_on": "Beobachtung für <span class=\"refdes\">{target}</span> wird gesetzt",
+    "mb_clear_observations": "Beobachtungen werden zurückgesetzt",
+    "mb_validate_finding": "Befund wird bestätigt",
+    "mb_hypothesize": "Fehlerhypothesen werden ermittelt",
+    "mb_recall_field_reports": "Befunde aus früheren Reparaturen werden abgerufen",
+    "mb_search_patterns": "Bekannte Fehlermuster werden durchsucht",
+    "mb_search_playbooks": "Prüfablauf-Vorlagen werden durchsucht",
+    "mb_record_session_log": "Sitzungslog wird geschrieben",
+    "bv_propose_protocol": "Prüfablauf wird vorgeschlagen",
+    "bv_get_protocol": "Prüfablauf wird gelesen",
+    "bv_update_protocol": "Prüfablauf wird aktualisiert",
+    "bv_record_step_result": "Schrittergebnis wird gespeichert",
+    "profile_get": "Dein Profil wird gelesen",
+    "profile_check_skills": "Deine Fähigkeiten werden geprüft",
+    "profile_track_skill": "Dein Fähigkeitsprofil wird aktualisiert",
+    "cam_capture": "Kameraaufnahme wird angefordert",
+    "consult_specialist": "Spezialist wird hinzugezogen"
   },
   "memtool": {
     "read": "Speicher wird gelesen: {path}",
@@ -125,14 +149,15 @@
     "title": "Gesprächsverlauf verloren",
     "reason_ma_empty": "Die vorherige Sitzung wurde vom Managed-Agents-Backend archiviert (events.list leer), und es ist kein lokales JSONL-Backup vorhanden.",
     "reason_generic": "Die vorherige Sitzung konnte nicht wiederhergestellt werden, und es konnte keine Zusammenfassung erstellt werden.",
-    "preserved_label": "Von der Festplatte wiederhergestellt und dem Agenten erneut übergeben",
+    "preserved_label": "Lokal wiederhergestellt und erneut an den Agenten übergeben",
     "preserved_none": "Für diese Reparatur wurde nichts Dauerhaftes gefunden (keine Messungen, kein Prüfablauf, kein Endergebnis).",
-    "context_reinject": "Gerät, Symptom und dein Profil werden unten automatisch erneut übergeben: Der Agent weiß, woran du arbeitest.",
+    "context_reinject": "Gerät, Symptom und dein Profil werden unten automatisch erneut an den Agenten übergeben: Er weiß, woran du arbeitest.",
     "lost_explainer": "Verloren bleibt der <strong>Gesprächsfaden</strong> (Überlegungen des Agenten, aufgeworfene Hypothesen, freier Austausch). Wenn du Ansätze besprochen oder Entscheidungen außerhalb des Prüfablaufs getroffen hast, fass sie in einer Zeile zusammen, damit er sich neu ausrichten kann.",
     "preserved_measurements_one": "{n} Messung",
     "preserved_measurements_many": "{n} Messungen",
     "preserved_protocol": "Prüfablauf „{title}“ ({completed}/{total})",
-    "preserved_outcome": "Endergebnis"
+    "preserved_outcome": "Endergebnis",
+    "session_ids": "alt=<code>{old}</code> · neu=<code>{new}</code>"
   },
   "resume": {
     "title": "Wiederaufnahme der Sitzung",
@@ -145,14 +170,15 @@
     "subline_with_repair": "{model} · {mode} · Reparatur {repair}",
     "device_label_simple": "{slug}",
     "device_label_with_repair": "{slug} · {repair}",
-    "tier_auto_align": "→ automatische Anpassung an die Stufe dieser Unterhaltung: {tier}",
+    "tier_auto_align": "→ Stufe wird automatisch an diese Unterhaltung angepasst: {tier}",
     "tier_switch": "→ Stufe wird gewechselt: {tier}. Neue Unterhaltung.",
     "replay_count": "Wiedergabe · {n} frühere Ereignisse",
-    "replay_done": "Wiedergabe beendet, mach dort weiter, wo du aufgehört hast",
+    "replay_done": "Wiedergabe beendet, mach da weiter, wo du aufgehört hast",
     "context_loaded": "Geräte- und Symptomkontext geladen · der Agent wartet auf deine erste Nachricht",
     "session_resumed": "Sitzung fortgesetzt · Verlauf und Agent-Speicher wiederhergestellt",
     "session_terminated": "Sitzung beendet",
-    "interrupt_sent": "Unterbrechung gesendet · der Agent stoppt"
+    "interrupt_sent": "Unterbrechung gesendet · der Agent stoppt",
+    "stream_retry": "Der Modell-Stream hängt · neuer Versuch (Versuch {attempt})"
   },
   "image_bubble": {
     "alt": "Makrofoto",
@@ -160,7 +186,7 @@
     "capture_caption": "Aufnahme · {label}"
   },
   "capture": {
-    "no_camera": "Agent hat eine Aufnahme angefordert, aber es ist keine Kamera ausgewählt",
+    "no_camera": "Der Agent hat eine Aufnahme angefordert, aber es ist keine Kamera ausgewählt",
     "requested": "Aufnahme vom Agenten angefordert · {reason}",
     "no_reason": "kein Grund angegeben",
     "failed": "Aufnahme fehlgeschlagen: {error}"
@@ -170,22 +196,58 @@
     "unsupported": "nicht unterstütztes Format: {mime} · nur PNG oder JPEG",
     "socket_closed": "Hochladen nicht möglich: Socket nicht offen",
     "failed": "Hochladen fehlgeschlagen: {error}",
-    "rejected": "Hochladen abgelehnt · {reason}"
+    "rejected": "Hochladen abgelehnt · {reason}",
+    "reason": {
+      "upload_too_large": "Foto zu groß ({size_mb} MB, max. {max_mb} MB)",
+      "upload_unsupported_mime": "nicht unterstütztes Format: {mime}",
+      "upload_invalid_base64": "die Bilddaten sind beschädigt angekommen",
+      "upload_rejected": "der Server konnte das Foto nicht annehmen"
+    }
   },
   "preview": {
-    "select_camera_first": "Wähle zuerst eine Kamera in der Auswahl aus",
+    "select_camera_first": "Wähle zuerst eine Kamera in der Kameraauswahl",
     "open_failed": "Vorschau konnte nicht geöffnet werden, prüfe die Berechtigungen"
   },
   "send": {
     "socket_closed": "Senden nicht möglich: Socket nicht offen",
-    "connect_failed": "Verbindung fehlgeschlagen: {error}"
+    "connect_failed": "Verbindung fehlgeschlagen: {error}",
+    "close_code": "Code {code}"
   },
   "error": {
     "generic": "Fehler: {text}",
-    "unknown_reason": "unbekannter Grund"
+    "unknown_reason": "unbekannter Grund",
+    "code": {
+      "api_error": "Der Modelldienst hat einen Fehler gemeldet. Versuch es gleich noch einmal.",
+      "stream_timeout": "Der Modell-Stream ist verstummt. Die Sitzung ist möglicherweise verloren.",
+      "reconnect_exhausted": "Der Stream ist abgebrochen und die Wiederverbindung ist fehlgeschlagen. Die Sitzung ist möglicherweise verloren.",
+      "missing_api_key": "ANTHROPIC_API_KEY fehlt. Trag ihn in .env ein und starte den Server neu.",
+      "session_already_open": "Für diese Reparatur ist bereits eine andere Unterhaltung geöffnet. Schließ sie, bevor du eine neue öffnest.",
+      "managed_agents_not_configured": "Der Diagnose-Agent ist auf diesem Server noch nicht eingerichtet.",
+      "session_create_failed": "Die Agent-Sitzung konnte nicht gestartet werden. Versuch es gleich noch einmal.",
+      "session_error": "Die Agent-Sitzung hat einen Fehler gemeldet.",
+      "internal_error": "Auf dem Server ist etwas schiefgelaufen.",
+      "protocol_result_rejected": "Das Schrittergebnis wurde nicht angenommen: {reason}",
+      "protocol_abandon_rejected": "Der Prüfablauf konnte nicht abgebrochen werden: {reason}",
+      "forbidden_origin": "Diese Seite darf keine Agent-Verbindung öffnen.",
+      "service_token_required": "Der Server hat die Verbindung abgelehnt: Zugriffstoken fehlt."
+    }
   },
   "fix": {
     "validated_one": "Bestätigt ({n} Lösung)",
     "validated_many": "Bestätigt ({n} Lösungen)"
+  },
+  "cost": {
+    "total_one": "{cost} · {n} Runde",
+    "total_many": "{cost} · {n} Runden",
+    "last_delta": " · zuletzt +{delta}"
+  },
+  "foot": {
+    "tokens": "{input}→{output} Token",
+    "na": "k. A."
+  },
+  "tier": {
+    "fast": "Schnell",
+    "normal": "Normal",
+    "deep": "Gründlich"
   }
 }

@@ -5,6 +5,7 @@
   "landing": {
     "tools_aria": "Tools",
     "pcb_library": "PCB Library",
+    "settings": "Settings",
     "search_devices_aria": "Search devices",
     "disambiguation": "Several boards match: pick one, then run the diagnostic again."
   },
@@ -77,7 +78,27 @@
   "stock": {
     "no_matching_parts": "No matching parts.",
     "all_types": "All types",
-    "select_type_alert": "Select a component type to search."
+    "select_type_alert": "Select a component type to search.",
+    "role": {
+      "decoupling": "decoupling",
+      "bulk": "bulk",
+      "filter": "filter",
+      "bypass": "bypass",
+      "ac_coupling": "ac_coupling",
+      "tank": "tank",
+      "feedback": "feedback",
+      "pull_up": "pull_up",
+      "pull_down": "pull_down",
+      "current_sense": "current_sense",
+      "damping": "damping",
+      "series": "series",
+      "load_switch": "load_switch",
+      "level_shifter": "level_shifter",
+      "inrush_limiter": "inrush_limiter",
+      "flyback_switch": "flyback_switch",
+      "ic": "ic",
+      "connector": "connector"
+    }
   },
   "protocol": {
     "confirm_reject": "Confirm rejection"

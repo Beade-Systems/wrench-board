@@ -54,6 +54,60 @@ function relLabel(rel) {
   const t = window.t || ((k) => k);
   return t(`graph.rel_label.${rel}`);
 }
+// t() with a raw-value fallback: backend enums / labels that have no
+// translation render as sent instead of showing an i18n key.
+function tOr(key, fallback, params) {
+  const t = window.t || ((k) => k);
+  const val = t(key, params);
+  return val === key ? fallback : val;
+}
+// Subsystem bubble caption — the backend sends an English label plus a stable
+// key (power / charge / display / …); localize by key.
+function subsystemLabel(s) {
+  return tOr(`graph.subsystem.${s.key}`, s.label);
+}
+// Edge caption: the backend labels plain structural edges with the relation
+// name itself ("powers", "resolves", …) — localize those; free-text labels
+// (failure mechanisms from the pack) pass through untouched.
+function edgeLabel(e) {
+  return tOr(`graph.rel_label.${e.label}`, e.label);
+}
+// Synthesized action nodes are labelled "<Verb> <refdes>" by the backend
+// (api/pipeline/graph_transform.py), which also sends the stable `verb` code
+// and `target`. Re-compose them through i18n so the verb follows the UI
+// language; anything that doesn't match passes through.
+const ACTION_VERBS = [
+  ["Hunt short on ", "hunt_short"],
+  ["Investigate — ", "investigate"],
+  ["Jumper ", "jumper"],
+  ["Reball ", "reball"],
+  ["Reflow ", "reflow"],
+  ["Lift ", "lift"],
+  ["Replace ", "replace"],
+  ["Repair ", "repair"],
+];
+function nodeLabel(d) {
+  const label = d.label || "";
+  if (d.type !== "action") return label;
+  // Preferred: the stable verb code + target the backend sends next to the
+  // English label. The prefix matching below only serves older payloads.
+  if (d.verb && d.target != null) {
+    return tOr(`graph.action_verb.${d.verb}`, label, { target: d.target });
+  }
+  for (const [prefix, key] of ACTION_VERBS) {
+    if (label.startsWith(prefix)) {
+      return tOr(`graph.action_verb.${key}`, label, { target: label.slice(prefix.length) });
+    }
+  }
+  return label;
+}
+// Re-localize hook for the mounted graph — set by initGraphWithData(), invoked
+// on locale switch (the SVG captions and the open inspector are built
+// imperatively, so i18n.applyDom() alone can't refresh them).
+let _relocalizeGraph = null;
+if (window.i18n && typeof window.i18n.onChange === "function") {
+  window.i18n.onChange(() => { if (_relocalizeGraph) _relocalizeGraph(); });
+}
 // Strict L→R diagnostic narrative reading problem-first:
 // symptom → net → component → action. The forceX layout below uses this
 // order to keep nodes drifting toward their column rather than freely.
@@ -86,6 +140,10 @@ if (avgConfEl && DATA.nodes.length > 0) {
 }
 
 function nodeSize(n){ return 18 + n.confidence*8; }
+function shortNodeLabel(d) {
+  const full = nodeLabel(d);
+  return full.length > 22 ? full.slice(0, 20) + "…" : full;
+}
 
 // degrees + neighbors
 const neighbors={};
@@ -125,7 +183,7 @@ const bubbles = SUBSYSTEMS.map(s => {
   // k tunes the bubble "scale" relative to canvas — tune if canvas feels too sparse/crammed.
   const k = 12;
   const radius = Math.max(36, Math.sqrt(nodes.length) * k);
-  return { key: s.key, label: s.label, nodes, radius };
+  return { key: s.key, label: s.label, nodes, radius };  // label localized at render (subsystemLabel)
 }).filter(Boolean);
 
 // Pack nodes inside each bubble via d3.hierarchy + d3.pack, two levels
@@ -201,7 +259,7 @@ for (const b of bubbles) {
     .attr("class", "band-label")
     .attr("x", b.x).attr("y", b.y - b.radius - 10)
     .attr("text-anchor", "middle")
-    .text(b.label);
+    .text(subsystemLabel(b));
 }
 
 /* ---------- FORCE SIM — gentle, mostly positional ---------- */
@@ -230,7 +288,7 @@ const linkLabelSel = d3.select("#layerLinkLabels").selectAll("text")
   .data(DATA.edges)
   .join("text")
   .attr("class","link-label")
-  .text(d => d.label);
+  .text(d => edgeLabel(d));
 
 /* ---------- NODES ---------- */
 const nodeSel = d3.select("#layerNodes").selectAll("g.node")
@@ -262,8 +320,7 @@ nodeSel.each(function(d){
   // hover/focus via the .node-label rule (see graph.css bubble block).
   // Positioned ABOVE the node — the cursor tooltip sits below+right of the
   // cursor, so putting the label on the opposite side keeps it visible.
-  const shortLabel = d.label.length > 22 ? d.label.slice(0, 20) + "…" : d.label;
-  g.append("text").attr("class","node-label").attr("dy", -(r + 6)).text(shortLabel);
+  g.append("text").attr("class","node-label").attr("dy", -(r + 6)).text(shortNodeLabel(d));
 
   if (d.type === "action" && d.meta && d.meta.count > 1) {
     g.append("text")
@@ -303,7 +360,7 @@ const zoom = d3.zoom().scaleExtent([0.3,3])
     const zp = document.getElementById("zoomPct");
     if (zp) zp.textContent = Math.round(e.transform.k*100)+"%";
     const zr = document.getElementById("zoomReadout");
-    if (zr) zr.textContent = `zoom ${e.transform.k.toFixed(2)}×`;
+    if (zr) zr.textContent = (window.t || ((k) => k))("graph.controls.zoom_readout", { k: e.transform.k.toFixed(2) });
   });
 svg.call(zoom).on("dblclick.zoom", null);
 document.getElementById("zoomIn").onclick  = () => svg.transition().duration(200).call(zoom.scaleBy, 1.3);
@@ -338,7 +395,7 @@ nodeSel
 
     tooltip.classList.add("show");
     document.getElementById("ttType").textContent = typeLabel(d.type);
-    document.getElementById("ttLabel").textContent = d.label;
+    document.getElementById("ttLabel").textContent = nodeLabel(d);
     document.getElementById("ttDesc").textContent  = (d.description||"").length>130 ? d.description.slice(0,130)+"…" : d.description;
     document.getElementById("ttId").textContent    = d.id;
     document.getElementById("ttConf").textContent  = (window.t || ((k) => k))("graph.tooltip.conf_pct", { pct: (d.confidence*100).toFixed(0) });
@@ -382,7 +439,7 @@ function selectNode(d){
   const badge = document.getElementById("inspBadge");
   badge.className = "type-badge " + d.type;
   document.getElementById("inspBadgeText").textContent = typeLabel(d.type);
-  document.getElementById("inspTitle").textContent = d.label;
+  document.getElementById("inspTitle").textContent = nodeLabel(d);
   document.getElementById("inspId").textContent = t("graph.inspector.id_label", { id: d.id });
   const pct = Math.round(d.confidence*100);
   document.getElementById("confFill").style.width = pct + "%";
@@ -397,7 +454,7 @@ function selectNode(d){
   const entries = Object.entries(d.meta || {});
   document.getElementById("metaSection").style.display = entries.length ? "" : "none";
   entries.forEach(([k,v]) => {
-    const dt=document.createElement("dt"); dt.textContent=k;
+    const dt=document.createElement("dt"); dt.textContent=tOr(`graph.inspector.meta.${k}`, k);
     const dd=document.createElement("dd"); dd.textContent=v;
     mg.appendChild(dt); mg.appendChild(dd);
   });
@@ -419,12 +476,12 @@ function selectNode(d){
     const other = outgoing ? e.target : e.source;
     const row = document.createElement("div"); row.className="edge-item";
     const arrow = outgoing ? t("graph.inspector.edge_outgoing") : t("graph.inspector.edge_incoming");
-    const sub = t("graph.inspector.edge_weight", { label: escHtml(e.label), weight: (e.weight||1).toFixed(2) });
+    const sub = t("graph.inspector.edge_weight", { label: escHtml(edgeLabel(e)), weight: (e.weight||1).toFixed(2) });
     row.innerHTML = `
       <span class="rel ${escHtml(e.relation)}">${escHtml(relLabel(e.relation) || e.relation)}</span>
       <span class="arrow">${arrow}</span>
       <div class="edge-target">
-        <div>${escHtml(other.label)}</div>
+        <div>${escHtml(nodeLabel(other))}</div>
         <div class="edge-sub">${sub}</div>
       </div>`;
     row.onclick = () => selectNode(other);
@@ -441,6 +498,19 @@ function closeInspector(){
   inspector.classList.remove("open");
 }
 document.getElementById("inspectorClose").onclick = closeInspector;
+
+// Locale switch: refresh every imperatively-built caption of the mounted graph.
+_relocalizeGraph = () => {
+  bandLayer.selectAll("text.band-label").data(bubbles).text(b => subsystemLabel(b));
+  linkLabelSel.text(d => edgeLabel(d));
+  nodeSel.select("text.node-label").text(d => shortNodeLabel(d));
+  document.getElementById("counts")?.replaceChildren(document.createTextNode(
+    (window.t || ((k) => k))("graph.stats.summary", { n: DATA.nodes.length, e: DATA.edges.length })
+  ));
+  // i18n.applyDom() reset the inspector badge to its static default —
+  // re-render the open inspector for the selected node.
+  if (selected) selectNode(selected);
+};
 
 /* ---------- PARTICLES on "powers" edges ---------- */
 let particleSpeed = 1;
@@ -507,7 +577,7 @@ const searchInput = document.getElementById("searchInput");
 searchInput.addEventListener("input", () => {
   const q = searchInput.value.trim().toLowerCase();
   if (!q) { nodeSel.style("opacity", null); return; }
-  nodeSel.style("opacity", n => (n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) ? 1 : 0.15);
+  nodeSel.style("opacity", n => (n.label.toLowerCase().includes(q) || nodeLabel(n).toLowerCase().includes(q) || n.id.toLowerCase().includes(q)) ? 1 : 0.15);
 });
 document.addEventListener("keydown", e => {
   if ((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); searchInput.focus(); searchInput.select(); }

@@ -14,10 +14,12 @@
 //         {type: "message", role: "assistant", text}
 //         {type: "tool_use", name, input}
 //         {type: "thinking", text}                 (managed mode only)
-//         {type: "error", text}
+//         {type: "error", text, code?, params?, detail?}
+//         {type: "stream_error", error, code?, params?, message}
+//         {type: "stream_retry", attempt, code?, params?, message}
 //         {type: "session_terminated"}
 //         {type: "server.capture_request", request_id, tool_use_id, reason}
-//         {type: "server.upload_macro_error", reason}
+//         {type: "server.upload_macro_error", reason, code?, params?}
 //         {type: "protocol_pending_confirmation", tool_use_id, title, …}
 //         {type: "protocol_confirmation_timeout", tool_use_id}
 //
@@ -35,6 +37,7 @@ import {
 } from './camera_preview.js';
 import { mountMascot, setMascotState } from './mascot.js';
 import { escapeHtml as escapeHTML } from './shared/dom.js';
+import { localizeCode } from './shared/errors.js';
 import { getDeviceSlug, getRepairId } from './shared/context.js';
 import { connectDiagnostic } from './services/diagnosticSocket.js';
 // Same ?v=quest4 query main.js uses — ESM keys modules by URL, so a bare
@@ -65,7 +68,8 @@ import {
 } from './features/repair/diagnostic/filesVision.js';
 import {
   logMessage,
-  logSys,
+  logSysKey,
+  relabelLog,
   renderContextLost,
   renderResumeSummary,
   appendProtocolSystemEvent,
@@ -163,7 +167,91 @@ function statusTone(tone, label) {
   const s = el("llmStatus");
   s.classList.remove("connecting", "connected", "closed", "error");
   if (tone) s.classList.add(tone);
-  el("llmStatusText").textContent = label;
+  const txt = el("llmStatusText");
+  // JS owns this node from now on — drop the static data-i18n hook so
+  // i18n.applyDom() doesn't reset a live status back to "idle".
+  txt.removeAttribute("data-i18n");
+  txt.textContent = label;
+}
+
+// Status pill by i18n key. Remembers the key + params so the label can be
+// re-resolved when the locale changes (see the onChange hook in initLLMPanel).
+// `params` may be a function, for values that are themselves localised (tier).
+let _statusI18n = null;
+function statusText() {
+  if (!_statusI18n) return "";
+  const { key, params } = _statusI18n;
+  return t(key, typeof params === "function" ? params() : params);
+}
+function statusKey(tone, key, params) {
+  _statusI18n = { key, params };
+  statusTone(tone, statusText());
+}
+
+// Display name of a model tier (fast / normal / deep). Unknown ids fall back
+// to the raw id so a new backend tier still renders.
+function tierLabel(tier) {
+  return localizeCode('chat.tier', tier, null, tier);
+}
+
+// Paint the tier chip + popover selection from `currentTier`. The chip keeps
+// its upper-cased "workshop label" look, in the active locale.
+function renderTierChip() {
+  const chip = el("llmTierChip");
+  if (chip) {
+    chip.dataset.tier = currentTier;
+    const label = chip.querySelector(".tier-label");
+    if (label) label.textContent = tierLabel(currentTier).toLocaleUpperCase();
+  }
+  document.querySelectorAll(".llm-tier-popover button[data-tier]").forEach(btn => {
+    btn.classList.toggle("on", btn.dataset.tier === currentTier);
+  });
+}
+
+// Last session_ready facts shown in the header subline — kept so the subline
+// can be re-rendered in the new language on a locale switch.
+let _sublineState = null;
+function renderSubline() {
+  const sub = el("llmSubline");
+  if (!sub || !_sublineState) return;
+  const { model, mode, repair } = _sublineState;
+  sub.removeAttribute("data-i18n");
+  sub.textContent = repair
+    ? t('chat.session.subline_with_repair', { model, mode, repair })
+    : t('chat.session.subline', { model, mode });
+}
+
+// Backend error frames carry a stable machine code next to their prose
+// (`code` on "error"; `code` or legacy `error` on "stream_error"), plus
+// optional `params` and a raw `detail` (exception text). When we know the
+// code, show the localized sentence instead of the server's English one;
+// unknown codes fall back to whatever the server sent. The row re-resolves on
+// a locale switch; `detail` is shown after the sentence, untranslated.
+function logBackendError(code, fallback, params, detail) {
+  const known = () => !!code && localizeCode('chat.error.code', code, params, "") !== "";
+  const text = () => {
+    const p = { ...(params || {}) };
+    // Protocol rejections carry the tool-layer reason code — localise it too.
+    if (p.reason != null) p.reason = localizeCode('protocol.reject_reason', p.reason, null, p.reason);
+    return localizeCode('chat.error.code', code, p, fallback || t('chat.error.unknown_reason'));
+  };
+  // The raw detail only adds something next to a translated sentence — with an
+  // unknown code the fallback already IS the server text.
+  const extra = detail && known() && detail !== fallback ? String(detail) : "";
+  logSysKey('chat.error.generic', () => ({ text: text() }), true, extra);
+}
+
+// WS close reasons are fixed English strings set by the server (the close
+// frame has no room for a structured payload) — map the known ones to codes.
+const _CLOSE_REASON_CODES = {
+  "session already open": "session_already_open",
+  "Forbidden origin": "forbidden_origin",
+  "Forbidden: service token required": "service_token_required",
+};
+function closeReasonText(ev) {
+  const reason = ev.reason || "";
+  const fallback = reason || t('chat.send.close_code', { code: ev.code });
+  return localizeCode('chat.error.code', _CLOSE_REASON_CODES[reason], null, fallback);
 }
 
 function safeJSON(v) {
@@ -190,7 +278,7 @@ function setSendEnabled(enabled) {
 // the tech can keep typing right after without reconnecting.
 function interruptAgent() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  logSys(t('chat.session.interrupt_sent'));
+  logSysKey('chat.session.interrupt_sent');
   try {
     ws.send(JSON.stringify({ type: "interrupt" }));
   } catch (err) {
@@ -213,8 +301,8 @@ function connect({ isRetry = false } = {}) {
   // protect quota/credits). Don't even dial — surface a notice instead of a
   // silent failed socket. Defense-in-depth; the security boundary is the cloud.
   if (repairId && String(repairId).startsWith("example-")) {
-    statusTone("closed", t('chat.status.idle'));
-    logSys(t('chat.demo.read_only'));
+    statusKey("closed", 'chat.status.idle');
+    logSysKey('chat.demo.read_only');
     setSendEnabled(false);
     return;
   }
@@ -225,6 +313,9 @@ function connect({ isRetry = false } = {}) {
   const title = el("llmTitle");
   if (title) {
     const human = slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    // Device name replaces the static "Diagnostic" heading — drop its
+    // data-i18n hook so a locale switch doesn't overwrite it.
+    title.removeAttribute("data-i18n");
     title.textContent = human;
   }
   // New connection = new cost scope. Replayed history doesn't re-bill so we
@@ -243,7 +334,9 @@ function connect({ isRetry = false } = {}) {
   updateCostTotal();
   const conv = pendingConvParam;
   pendingConvParam = null;  // consume after this connect
-  statusTone("connecting", t('chat.status.connecting', { slug, tier: currentTier }));
+  const dialTier = currentTier;
+  const statusParams = () => ({ slug, tier: tierLabel(dialTier) });
+  statusKey("connecting", 'chat.status.connecting', statusParams);
 
   try {
     wsScope = { slug, repairId: repairId || null };
@@ -255,7 +348,7 @@ function connect({ isRetry = false } = {}) {
           // Don't reset the attempt counter here: a server that accepts then
           // immediately closes would otherwise retry forever. The counter is
           // reset on the first real frame (see the message listener below).
-          statusTone("connected", t('chat.status.connected', { slug, tier: currentTier }));
+          statusKey("connected", 'chat.status.connected', statusParams);
           setSendEnabled(true);
           // Files+Vision : announce camera availability so the backend gates
           // cam_capture in the manifest (runtime_direct) and can short-circuit
@@ -263,7 +356,7 @@ function connect({ isRetry = false } = {}) {
           sendCapabilities();
         },
         onClose: (ev) => {
-          statusTone("closed", t('chat.status.closed'));
+          statusKey("closed", 'chat.status.closed');
           setSendEnabled(false);
           setPanelMascot("idle");
           // Reconnect only if THIS is still the live socket (a voluntary close
@@ -272,23 +365,23 @@ function connect({ isRetry = false } = {}) {
           if (ev && ev.target === ws) {
             if (_isFatalClose(ev.code)) {
               _clearReconnect();
-              statusTone("error", t('chat.status.error_socket'));
-              logSys(t('chat.send.connect_failed', { error: ev.reason || `code ${ev.code}` }), true);
+              statusKey("error", 'chat.status.error_socket');
+              logSysKey('chat.send.connect_failed', () => ({ error: closeReasonText(ev) }), true);
             } else {
               scheduleReconnect();
             }
           }
         },
         onError: () => {
-          statusTone("error", t('chat.status.error_socket'));
+          statusKey("error", 'chat.status.error_socket');
           setSendEnabled(false);
           setPanelMascot("error");
         },
       },
     );
   } catch (err) {
-    statusTone("error", t('chat.status.url_invalid'));
-    logSys(t('chat.send.connect_failed', { error: err.message }), true);
+    statusKey("error", 'chat.status.url_invalid');
+    logSysKey('chat.send.connect_failed', { error: err.message }, true);
     return;
   }
 
@@ -317,11 +410,13 @@ function scheduleReconnect() {
   if (_reconnectAttempts >= _RECONNECT_DELAYS_MS.length) {
     // Out of attempts — leave the tech on the socket error so a manual reload
     // is the clear next step.
-    statusTone("error", t('chat.status.error_socket'));
+    statusKey("error", 'chat.status.error_socket');
     return;
   }
   const delay = _RECONNECT_DELAYS_MS[_reconnectAttempts++];
-  statusTone("connecting", t('chat.status.connecting', { slug: currentDeviceSlug(), tier: currentTier }));
+  const retrySlug = currentDeviceSlug();
+  const retryTier = currentTier;
+  statusKey("connecting", 'chat.status.connecting', () => ({ slug: retrySlug, tier: tierLabel(retryTier) }));
   _reconnectT = setTimeout(() => {
     _reconnectT = null;
     // Resume the same thread; connect() consumes pendingConvParam then resets
@@ -419,15 +514,10 @@ export function handleDiagnosticFrame(payload) {
         const model = payload.model || "claude";
         const mode = payload.mode || "managed";
         const repairShort = payload.repair_id ? payload.repair_id.slice(0, 8) : null;
-        const sub = el("llmSubline");
-        if (sub) {
-          sub.textContent = repairShort
-            ? t('chat.session.subline_with_repair', { model, mode, repair: repairShort })
-            : t('chat.session.subline', { model, mode });
-        }
-        logSys(repairShort
-          ? t('chat.session.ready_with_repair', { mode, model, repair: repairShort })
-          : t('chat.session.ready', { mode, model }));
+        _sublineState = { model, mode, repair: repairShort };
+        renderSubline();
+        if (repairShort) logSysKey('chat.session.ready_with_repair', { mode, model, repair: repairShort });
+        else logSysKey('chat.session.ready', { mode, model });
         currentConvId = payload.conv_id || null;
         loadConversations();
         // Auto-align tier with the resumed conv when the tech hasn't
@@ -443,19 +533,11 @@ export function handleDiagnosticFrame(payload) {
           !userPickedTier &&
           ["fast", "normal", "deep"].includes(convTier)
         ) {
-          logSys(t('chat.session.tier_auto_align', { tier: convTier }));
+          logSysKey('chat.session.tier_auto_align', () => ({ tier: tierLabel(convTier) }));
           // Mirror switchTier logic but skip the "user-chose" mark so a
           // future explicit tier pick still gates this auto-align.
           currentTier = convTier;
-          const chip = el("llmTierChip");
-          if (chip) {
-            chip.dataset.tier = convTier;
-            const label = chip.querySelector(".tier-label");
-            if (label) label.textContent = convTier.toUpperCase();
-          }
-          document.querySelectorAll(".llm-tier-popover button[data-tier]").forEach(btn => {
-            btn.classList.toggle("on", btn.dataset.tier === convTier);
-          });
+          renderTierChip();
           if (ws && ws.readyState <= 1) {
             try { ws.close(); } catch (_) { /* ignore */ }
           }
@@ -468,18 +550,18 @@ export function handleDiagnosticFrame(payload) {
       }
       case "history_replay_start":
         el("llmLog").classList.add("replay");
-        logSys(t('chat.session.replay_count', { n: payload.count }));
+        logSysKey('chat.session.replay_count', { n: payload.count });
         break;
       case "history_replay_end":
         el("llmLog").classList.remove("replay");
-        logSys(t('chat.session.replay_done'));
+        logSysKey('chat.session.replay_done');
         closeTurn();
         break;
       case "context_loaded":
-        logSys(t('chat.session.context_loaded'));
+        logSysKey('chat.session.context_loaded');
         break;
       case "session_resumed":
-        logSys(t('chat.session.session_resumed'));
+        logSysKey('chat.session.session_resumed');
         break;
       case "session_resumed_summary":
         renderResumeSummary(payload);
@@ -511,8 +593,10 @@ export function handleDiagnosticFrame(payload) {
                      name.startsWith("stock_") ? "stock" :
                      name.startsWith("mb_") ? "mb" : "mb";
         const renderer = TOOL_PHRASES[name];
-        const { icon, phraseHTML, group } = renderer ? renderer(payload.input || {}) : toolFallback(name);
-        const step = appendStep(turn, kind, `${icon}${phraseHTML}`, group);
+        // The paraphrase is re-resolved on a locale switch (chatLog keeps the
+        // closure on the step); `group` is language-neutral, computed once.
+        const phrase = () => (renderer ? renderer(payload.input || {}) : toolFallback(name));
+        const step = appendStep(turn, kind, () => { const r = phrase(); return `${r.icon}${r.phraseHTML}`; }, phrase().group);
         const payloadJSON = {
           args: payload.input || {},
           ...(payload.result != null ? { result: payload.result } : {}),
@@ -533,8 +617,8 @@ export function handleDiagnosticFrame(payload) {
         }
         const name = payload.name || "?";
         const renderer = MEMORY_TOOL_PHRASES[name];
-        const { icon, phraseHTML, group } = renderer ? renderer(payload.input || {}) : memToolFallback(name);
-        const step = appendStep(turn, "mem", `${icon}${phraseHTML}`, group);
+        const phrase = () => (renderer ? renderer(payload.input || {}) : memToolFallback(name));
+        const step = appendStep(turn, "mem", () => { const r = phrase(); return `${r.icon}${r.phraseHTML}`; }, phrase().group);
         addExpandToStep(step, { args: payload.input || {} });
         setPanelMascot("working");
         break;
@@ -558,7 +642,7 @@ export function handleDiagnosticFrame(payload) {
         break;
       }
       case "error":
-        logSys(t('chat.error.generic', { text: payload.text }), true);
+        logBackendError(payload.code, payload.text, payload.params, payload.detail);
         // If the dashboard fix button is pending, clear its spinner so the
         // tech can retry instead of staring at "… Claude valide" forever.
         // The dashboard subscribes to this store key (it owns the button).
@@ -571,13 +655,19 @@ export function handleDiagnosticFrame(payload) {
         // Without this the "thinking" mascot spins forever (the symptom Alex
         // hit). Surface the message, close the turn, settle the indicator.
         // The engine sends `message` (not `text`); fall back across both.
-        logSys(t('chat.error.generic', { text: payload.message || payload.text || '' }), true);
+        logBackendError(payload.code || payload.error, payload.message || payload.text, payload.params, payload.detail);
         store.set("fixButtonReset", true);
         closeTurn();
         setPanelMascot("error");
         break;
+      case "stream_retry":
+        // Non-terminal: the engine is re-streaming the same turn after a stall.
+        logSysKey('chat.session.stream_retry', {
+          attempt: payload.params?.attempt ?? payload.attempt ?? 1,
+        });
+        break;
       case "session_terminated":
-        logSys(t('chat.session.session_terminated'), true);
+        logSysKey('chat.session.session_terminated', null, true);
         closeTurn();
         setPanelMascot("idle");
         break;
@@ -589,7 +679,12 @@ export function handleDiagnosticFrame(payload) {
         });
         break;
       case "server.upload_macro_error":
-        logSys(t('chat.upload.rejected', { reason: payload.reason || t('chat.error.unknown_reason') }), true);
+        // Reason by code (size / format / payload); the server sentence is
+        // the fallback for codes this build doesn't know.
+        logSysKey('chat.upload.rejected', () => ({
+          reason: localizeCode('chat.upload.reason', payload.code, payload.params,
+            payload.reason || t('chat.error.unknown_reason')),
+        }), true);
         break;
       case "turn_complete":
         // Internal signal for benchmarks (end of an agent tech-turn). UI
@@ -693,16 +788,8 @@ function switchTier(newTier) {
   // session_ready otherwise applies on default landings.
   userPickedTier = true;
   currentTier = newTier;
-  const chip = el("llmTierChip");
-  if (chip) {
-    chip.dataset.tier = newTier;
-    const label = chip.querySelector(".tier-label");
-    if (label) label.textContent = newTier.toUpperCase();
-  }
-  document.querySelectorAll(".llm-tier-popover button[data-tier]").forEach(btn => {
-    btn.classList.toggle("on", btn.dataset.tier === newTier);
-  });
-  logSys(t('chat.session.tier_switch', { tier: newTier }));
+  renderTierChip();
+  logSysKey('chat.session.tier_switch', () => ({ tier: tierLabel(newTier) }));
   if (ws && ws.readyState <= 1) {
     try { ws.close(); } catch (_) { /* ignore */ }
   }
@@ -750,11 +837,11 @@ async function deleteConvFromPanel(convId) {
       { method: "DELETE" },
     );
   } catch (_) {
-    logSys(t('chat.conv.delete_failed'));
+    logSysKey('chat.conv.delete_failed');
     return;
   }
   if (!res.ok) {
-    logSys(t('chat.conv.delete_failed'));
+    logSysKey('chat.conv.delete_failed');
     return;
   }
   const wasCurrent = convId === currentConvId;
@@ -803,7 +890,7 @@ function renderConvItems() {
     open.className = "conv-item-open";
     open.innerHTML =
       `<span class="conv-item-head">` +
-        `<span class="conv-item-tier t-${tier}">${tier.toUpperCase()}</span>` +
+        `<span class="conv-item-tier t-${escapeHTML(tier)}">${escapeHTML(tierLabel(tier).toLocaleUpperCase())}</span>` +
         `<span class="conv-item-title">${title}</span>` +
       `</span>` +
       `<span class="conv-item-meta">` +
@@ -854,7 +941,8 @@ function humanAgo(iso) {
 
 export function switchConv(convIdOrNew) {
   if (convIdOrNew === currentConvId) return;
-  logSys(t('chat.conv.switching', { id: convIdOrNew }));
+  if (convIdOrNew === "new") logSysKey('chat.conv.switching_new');
+  else logSysKey('chat.conv.switching', { id: convIdOrNew });
   if (ws && ws.readyState <= 1) {
     try { ws.close(); } catch (_) {}
   }
@@ -927,6 +1015,8 @@ export async function initLLMPanel() {
   if (!mounted) return;
 
   panelMascot = mountMascot(el("llmMascot"), { size: "sm", state: "idle" });
+  // The fragment ships a static chip label — repaint it in the active locale.
+  renderTierChip();
 
   // Re-render imperative bits (status pill, conv chip) on locale switch.
   // The static markup is handled by `data-i18n` + i18n.applyDom; everything
@@ -936,20 +1026,19 @@ export async function initLLMPanel() {
     window.i18n.onChange(() => {
       // Conv chip (label + items) reads localized strings on every render.
       renderConvItems();
-      // Status text — only refresh the current tone's label so we don't
-      // overwrite an active "connecting" with a stale "idle".
-      const statusEl = el("llmStatus");
-      if (statusEl) {
-        const txt = el("llmStatusText");
-        if (txt && statusEl.classList.contains("connected")) {
-          const slug = currentDeviceSlug();
-          if (slug) txt.textContent = t('chat.status.connected', { slug, tier: currentTier });
-        } else if (txt && !statusEl.classList.contains("connecting") &&
-                   !statusEl.classList.contains("closed") &&
-                   !statusEl.classList.contains("error")) {
-          txt.textContent = t('chat.status.idle');
-        }
-      }
+      // Status text — re-resolve the last key the panel set (whatever its
+      // tone), so a live "connecting" / "closed" / "error" is translated too
+      // instead of being left in the previous language.
+      const txt = el("llmStatusText");
+      if (txt && _statusI18n) txt.textContent = statusText();
+      // Header subline (model · mode · repair) and the running cost chip.
+      renderSubline();
+      updateCostTotal();
+      // Tier chip label, then everything UI-authored already printed in the
+      // log: system lines, tool-step phrases, role labels, card chrome.
+      // Model-authored message text is not touched.
+      renderTierChip();
+      relabelLog();
     });
   }
 
@@ -1046,7 +1135,7 @@ export async function initLLMPanel() {
     const text = (input?.value || "").trim();
     if (!text) return;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      logSys(t('chat.send.socket_closed'), true);
+      logSysKey('chat.send.socket_closed', null, true);
       return;
     }
     logMessage("user", text);
@@ -1106,12 +1195,12 @@ export async function initLLMPanel() {
     }
     const id = selectedCameraDeviceId();
     if (!id) {
-      logSys(t('chat.preview.select_camera_first'), true);
+      logSysKey('chat.preview.select_camera_first', null, true);
       return;
     }
     const ok = await openPreview(id, selectedCameraLabel());
     if (!ok) {
-      logSys(t('chat.preview.open_failed'), true);
+      logSysKey('chat.preview.open_failed', null, true);
     }
     syncPreviewBtn();
   });

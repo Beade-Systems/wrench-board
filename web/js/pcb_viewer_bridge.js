@@ -11,6 +11,7 @@ import { PCBViewerOptimized } from "./pcb_viewer.js";
 
 import { apiFetch } from "./shared/api.js";
 import { getDeviceSlug } from "./shared/context.js";
+import { describeServerError } from "./pcb_library_errors.js";
 
 let viewer = null;
 let boardPayload = null;
@@ -42,7 +43,14 @@ async function fetchPayload(slug, signal) {
   console.log("[pcb_viewer_bridge] fetching", url);
   const res = await apiFetch(url, { cache: "no-store", signal });
   console.log("[pcb_viewer_bridge] render status", res.status);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // Keep the server's coded answer so the empty state can say why, in the
+    // reader's language (see showLoadFailure).
+    const error = new Error("Boardview could not be loaded.");
+    error.status = res.status;
+    error.body = await res.json().catch(() => null);
+    throw error;
+  }
   const payload = await res.json();
   console.log(
     "[pcb_viewer_bridge] payload",
@@ -59,6 +67,7 @@ async function ensureViewerAndLoad(slug, signal) {
   const payload = await fetchPayload(slug, signal);
   if (signal.aborted) return false;
   if (!payload) throw new Error("Boardview could not be loaded.");
+  _loadFailure = null;
 
   if (typeof THREE === "undefined") {
     console.error("[pcb_viewer_bridge] THREE missing");
@@ -112,6 +121,40 @@ async function ensureViewerAndLoad(slug, signal) {
   return true;
 }
 
+// Last load failure shown in the empty state; re-rendered on a locale switch.
+let _loadFailure = null;
+
+function showLoadFailure(error) {
+  const empty = document.getElementById('no-file-message');
+  if (!empty) return;
+  _loadFailure = error;
+  empty.classList.remove('hidden');
+  // data-i18n keeps the error text correct across a locale switch.
+  const setEmptyText = (selector, key, fallback) => {
+    const el = empty.querySelector(selector);
+    if (!el) return null;
+    const text = window.t ? window.t(key) : key;
+    el.setAttribute('data-i18n', key);
+    el.textContent = text === key ? fallback : text;
+    return el;
+  };
+  setEmptyText('.brd-empty-title', 'workbench.boardview.load_failed_title', 'Boardview could not be loaded');
+  const sub = setEmptyText('.brd-empty-sub', 'workbench.boardview.load_failed_sub', 'Check the selected file and try again.');
+  // A coded server answer (parse error, unsupported format, …) replaces the
+  // generic hint. It depends on the response, so this module re-renders it
+  // itself instead of leaving it to applyDom().
+  const reason = describeServerError(error && error.body, '');
+  if (sub && reason) {
+    sub.removeAttribute('data-i18n');
+    sub.textContent = reason;
+  }
+}
+
+window.i18n?.onChange?.(() => {
+  const empty = document.getElementById('no-file-message');
+  if (_loadFailure && empty && !empty.classList.contains('hidden')) showLoadFailure(_loadFailure);
+});
+
 console.log(
   "[pcb_viewer_bridge] module loaded — THREE:",
   typeof THREE,
@@ -147,19 +190,7 @@ window.initBoardview = async function bridgedInit(_containerEl) {
     .catch(error => {
       if (error.name === 'AbortError' || pending.controller.signal.aborted) return false;
       console.error('[pcb_viewer_bridge] board load failed', error);
-      const empty = document.getElementById('no-file-message');
-      if (empty) {
-        empty.classList.remove('hidden');
-        // data-i18n keeps the error text correct across a locale switch.
-        const setEmptyText = (selector, key, fallback) => {
-          const el = empty.querySelector(selector);
-          const text = window.t ? window.t(key) : key;
-          el.setAttribute('data-i18n', key);
-          el.textContent = text === key ? fallback : text;
-        };
-        setEmptyText('.brd-empty-title', 'workbench.boardview.load_failed_title', 'Boardview could not be loaded');
-        setEmptyText('.brd-empty-sub', 'workbench.boardview.load_failed_sub', 'Check the selected file and try again.');
-      }
+      showLoadFailure(error);
       return false;
     })
     .finally(() => { if (_loading === pending) _loading = null; });
@@ -575,10 +606,13 @@ _pending.forEach((ev) => {
 });
 
 // Re-populate the open inspector so its translated labels follow a locale switch.
+// Also runs once dictionaries finish loading, in case a part was selected before.
 if (window.i18n && typeof window.i18n.onChange === "function") {
-  window.i18n.onChange(() => {
+  const refreshInspector = () => {
     if (viewer?.selectedItem) viewer.selectItem(viewer.selectedItem);
-  });
+  };
+  window.i18n.onChange(refreshInspector);
+  if (typeof window.i18n.onReady === "function") window.i18n.onReady(refreshInspector);
 }
 
 // Keep bfcache pages intact; release GPU resources on a real page departure.

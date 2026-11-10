@@ -12,11 +12,11 @@
     "no_pdf_detail": "Das Original-PDF des Schaltplans wurde für diese Reparatur nicht gespeichert."
   },
   "surface": {
-    "aria_label": "Anzeigefläche",
+    "aria_label": "Ansicht",
     "graph": "Graph",
     "pdf": "PDF",
     "graph_title": "Graph: Rails, Verbraucher, Boot-Phasen (abgeleitete Ansichten)",
-    "pdf_title": "PDF: der Original-Schaltplan pro Seite, wie vom Hersteller gezeichnet"
+    "pdf_title": "PDF: der Original-Schaltplan Seite für Seite, wie vom Hersteller gezeichnet"
   },
   "stats": {
     "comps": "Bauteile",
@@ -37,16 +37,16 @@
     "aria_label": "Anzeigemodus des Graphen",
     "railfocus": "Rail-Fokus",
     "powertree": "Versorgungsbaum",
-    "grid": "Phase × V-Raster",
-    "railfocus_title": "Rail-Fokus: Rail-Seitenleiste, die Fläche zeigt jeweils eine Rail (übersichtlich, kein Spaghetti)",
+    "grid": "Raster Phase × V",
+    "railfocus_title": "Rail-Fokus: Rail-Seitenleiste, die Fläche zeigt jeweils eine Rail (übersichtlich, kein Leitungsgewirr)",
     "powertree_title": "Versorgungsbaum: alle Rails gestapelt mit ihren Verbrauchern",
     "grid_title": "Raster Phase × Spannung: Spalten = Boot-Phasen, Zeilen = Spannungspegel"
   },
   "toggles": {
     "passives": "Signal-Passive",
-    "passives_title": "Reine Signal-R/C/L anzeigen (nicht an einer Spannungsschiene)",
+    "passives_title": "Reine Signal-R/C/L anzeigen (nicht an einer Rail)",
     "signals": "Signale",
-    "signals_title": "Signalkanten anzeigen (Enable, Reset, Clock, Bus)",
+    "signals_title": "Signalverbindungen anzeigen (Enable, Reset, Clock, Bus)",
     "all_pins": "Alle Pins",
     "all_pins_title": "Jeden IC-Pin anzeigen (nicht nur versorgungsrelevante)"
   },
@@ -97,7 +97,7 @@
     "supply_boot": "Boot",
     "consumers": "Verbraucher ({count})",
     "consumers_none": "Keine.",
-    "decoupling": "Abblockkondensatoren ({count})",
+    "decoupling": "Entkopplung ({count})",
     "decoupling_none": "Keine.",
     "cascade_rail": "Kaskade bei Ausfall dieser Rail ({count} betroffen)",
     "cascade_rail_none": "Nichts nachgelagert.",
@@ -115,7 +115,7 @@
     "meta_boot": "Boot",
     "produces": "Erzeugt ({count})",
     "consumes": "Verbraucht ({count})",
-    "decouples": "Blockt ab",
+    "decouples": "Entkoppelt",
     "pins": "Pins ({count})",
     "pin_col_number": "#",
     "pin_col_name": "Name",
@@ -148,7 +148,8 @@
     "action_copied": "Kopiert",
     "diag_title": "Messdiagnose",
     "diag_hint": "Markiere, was du misst. Die Rückwärtsanalyse grenzt die Ursache ein.",
-    "faults_title": "Fehlersimulation"
+    "faults_title": "Fehlersimulation",
+    "type_comp": "BAUTEIL"
   },
   "boot": {
     "empty": "Keine boot_sequence im Wissenspaket.",
@@ -159,7 +160,7 @@
     "reanalyze": "Mit Opus neu analysieren",
     "reanalyze_title": "Opus-Analyse starten (~0,25 $, ~15 s)",
     "reanalyzing": "Analyse läuft…",
-    "reanalyze_timeout": "Zeitüberschreitung, erneut versuchen",
+    "reanalyze_timeout": "Zeitüberschreitung – erneut versuchen",
     "reanalyze_failed": "Fehlgeschlagen: {error}",
     "phase_pre_boot": "Vor dem Boot",
     "phase_default_name": "Phase {n}",
@@ -193,14 +194,15 @@
     "blocked_default": "Kaskade",
     "hypotheses_title": "Hypothesen (Top {count})",
     "hyp_close_title": "Schließen",
-    "hyp_score": "Wertung {score}",
+    "hyp_score": "Score {score}",
     "hyp_contradicts": "widerspricht",
     "hyp_does_not_cover": "deckt nicht ab",
-    "hyp_predicted": "{target} beob. {observed} → vorhergesagt {predicted}"
+    "hyp_predicted": "{target} beob. {observed} → vorhergesagt {predicted}",
+    "hyp_failed_title": "Diagnose fehlgeschlagen"
   },
   "rail_focus": {
     "select_hint": "← Wähle eine Rail aus der Liste",
-    "select_sub": "Übersichtliche Ansicht: jeweils eine Rail, kein Spaghetti.",
+    "select_sub": "Übersichtliche Ansicht: jeweils eine Rail, kein Leitungsgewirr.",
     "zone_upstream": "VORGELAGERT",
     "zone_source": "QUELLE",
     "zone_rail": "RAIL",
@@ -208,7 +210,7 @@
     "external_supply": "Externe Versorgung"
   },
   "powertree": {
-    "orphan_strip": "SIGNAL / SONSTIGE: {count} Bauteile ohne Anbindung an eine Spannungsschiene"
+    "orphan_strip": "SIGNAL / SONSTIGE: {count} Bauteile ohne Anbindung an eine Rail"
   },
   "degraded": {
     "title": "Eingeschränkter Modus aktiv: Die Ansicht ist nutzbar, aber einige Schaltplaninfos konnten nicht automatisch seitenübergreifend abgeglichen werden.\n\n• {reasons}\n\nEingelesene Seiten: {parsed}/{total}",
@@ -246,6 +248,73 @@
     "layout_tree": "Baum",
     "layout_grid": "Raster",
     "passives": "Passive",
-    "passives_title": "Abblockkondensatoren / Messwiderstände anzeigen (Baum und Raster)"
+    "passives_title": "Entkopplungskondensatoren / Messwiderstände anzeigen (Baum und Raster)"
+  },
+  "common": {
+    "na": "k. A."
+  },
+  "grid": {
+    "row_signals": "Signale"
+  },
+  "roles": {
+    "source": "Quelle",
+    "consumer": "Verbraucher",
+    "decoupling": "Entkopplung"
+  },
+  "narrative": {
+    "head_dead": "Wenn {refdes} ausfällt: {rails}",
+    "head_anomalous": "Wenn {refdes} fehlerhaft arbeitet (falscher Ausgang): {rails}",
+    "head_hot": "Wenn {refdes} ungewöhnlich heiß wird: {rails}",
+    "head_shorted": "Wenn {refdes} gegen GND kurzschließt: {rails}",
+    "head_default": "Wenn {refdes} versagt: {rails}",
+    "head_multi": "Wenn {parts} gleichzeitig versagen: {rails} → {count} nachgelagerte(s) Bauteil(e) ausgefallen.",
+    "multi_part": "{refdes} ({mode})",
+    "multi_joiner": " UND ",
+    "list_sep": ", ",
+    "no_rail": "keine Rail",
+    "dead_downstream": " → {count} nachgelagerte(s) Bauteil(e) ausgefallen",
+    "anomalous_downstream": ", {count} nachgelagerte(s) Bauteil(e) auffällig",
+    "coverage": "Erklärt {tp}/{total} Beobachtungen, {fp} Widerspruch/Widersprüche.",
+    "measurements": "Messungen: {list}.",
+    "measurement_item": "{target} bei {value}{unit}",
+    "contradicts": "Widerspricht: {list}.",
+    "contradiction_item": "{target} beobachtet {observed}, vorhergesagt {predicted}",
+    "not_covered": "Deckt nicht ab: {list}."
+  },
+  "pin_roles": {
+    "power_in": "Versorgungseingang",
+    "power_out": "Versorgungsausgang",
+    "switch_node": "Schaltknoten",
+    "enable_in": "Enable-Eingang",
+    "enable_out": "Enable-Ausgang",
+    "power_good_out": "Power-Good-Ausgang",
+    "reset_in": "Reset-Eingang",
+    "reset_out": "Reset-Ausgang",
+    "clock_in": "Takteingang",
+    "clock_out": "Taktausgang",
+    "ground": "Masse",
+    "feedback_in": "Feedback-Eingang",
+    "bus_pin": "Bus-Pin",
+    "signal_in": "Signaleingang",
+    "signal_out": "Signalausgang",
+    "signal_inout": "Signal bidirektional",
+    "terminal": "Anschluss",
+    "no_connect": "nicht verbunden",
+    "unknown": "unbekannt"
+  },
+  "error": {
+    "no_pack": "Kein Wissenspaket für {slug}.",
+    "no_schematic": "Für {slug} wurde noch kein Schaltplan eingelesen.",
+    "no_schematic_pdf": "Kein Schaltplan-PDF für {slug} vorhanden.",
+    "no_pages_rendered": "Für {slug} konnten keine Seiten gerendert werden.",
+    "page_not_found": "Seite {page} für {slug} nicht gefunden.",
+    "malformed_graph": "Der elektrische Graph für {slug} ist beschädigt. Lies den Schaltplan neu ein.",
+    "missing_api_key": "ANTHROPIC_API_KEY ist auf dem Server nicht gesetzt.",
+    "unknown_refdes": "Unbekanntes Bauteil: {refdes}",
+    "unknown_rail": "Unbekannte Rail: {rails}",
+    "invalid_observations": "Diese Beobachtungen passen nicht zusammen: {detail}",
+    "pdf_path_forbidden": "Das PDF muss unter board_assets/ oder im Memory-Verzeichnis liegen.",
+    "pdf_not_found": "PDF nicht gefunden: {pdf_path}",
+    "pdf_bad_suffix": "Die Datei muss ein .pdf sein (erhalten: {suffix})."
   }
 }

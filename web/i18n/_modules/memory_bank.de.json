@@ -8,7 +8,7 @@
   },
   "search": {
     "placeholder": "Wissenspaket filtern (Refdes, Symptom, Mechanismus…)",
-    "esc_hint": "ESC löscht"
+    "esc_hint": "ESC leert das Feld"
   },
   "blocks": {
     "registry_heading": "Kanonisches Vokabular",
@@ -24,7 +24,7 @@
   },
   "verdict": {
     "none_title": "Für dieses Wissenspaket liegt noch keine Prüfung vor.",
-    "none_label": "PRÜFUNG · offen",
+    "none_label": "PRÜFUNG · ausstehend",
     "approved_label": "PRÜFUNG · bestanden",
     "needs_revision_label": "PRÜFUNG · Überarbeitung",
     "rejected_label": "PRÜFUNG · abgelehnt",
@@ -90,9 +90,18 @@
     "missing": "audit_verdict.json fehlt. Die Pipeline hat dieses Wissenspaket noch nicht geprüft.",
     "headline_approved": "Prüfung bestanden: Das Wissenspaket stimmt mit der Registry überein.",
     "headline_needs_revision": "Prüfung: Überarbeitung angefordert. Abweichungen erkannt, Korrekturen erforderlich.",
-    "headline_rejected": "Prüfung abgelehnt: Wissenspaket inkonsistent, so nicht verwendbar.",
+    "headline_rejected": "Prüfung nicht bestanden: Wissenspaket inkonsistent, so nicht verwendbar.",
     "headline_unknown": "Unbekannter Prüfstatus.",
     "files_to_rewrite": "Neu zu schreibende Dateien",
-    "drift_heading": "Abweichungen erkannt ({n})"
+    "drift_heading": "Abweichungen erkannt ({n})",
+    "status": {
+      "APPROVED": "BESTANDEN",
+      "NEEDS_REVISION": "ÜBERARBEITUNG",
+      "REJECTED": "ABGELEHNT",
+      "UNKNOWN": "UNBEKANNT"
+    }
+  },
+  "common": {
+    "na": "k. A."
   }
 }

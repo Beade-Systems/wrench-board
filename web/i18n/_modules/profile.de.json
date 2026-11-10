@@ -5,18 +5,18 @@
     "no_name": "Ohne Namen",
     "no_specialty": "Kein Spezialgebiet",
     "edit_identity": "Identität bearbeiten",
-    "years_one": "{n} Jahr Erf.",
-    "years_other": "{n} Jahre Erf.",
-    "years_zero": "0 Jahre",
-    "updated": "Aktualisiert {date}"
+    "years_one": "{n} Jahr Erfahrung",
+    "years_other": "{n} Jahre Erfahrung",
+    "years_zero": "0 Jahre Erfahrung",
+    "updated": "Aktualisiert am {date}"
   },
   "ribbon": {
     "tag": "Fortschritt",
     "title": "Stufe {level}",
     "default_blurb": "Die Stufe ergibt sich aus der Anzahl geübter Fähigkeiten.",
     "blurbs": {
-      "beginner": "Du fängst gerade erst an. Der Agent erklärt jeden Schritt, bevor er dich handeln lässt.",
-      "intermediate": "Du machst Fortschritte. Der Agent erklärt weniger und lässt dich öfter führen.",
+      "beginner": "Du fängst gerade erst an. Der Agent erklärt jeden Schritt, bevor du etwas tust.",
+      "intermediate": "Du machst Fortschritte. Der Agent erklärt weniger und überlässt dir öfter die Führung.",
       "confirmed": "Du bist erfahren. Der Agent überlässt dir Entscheidungen und bestätigt deine Hypothesen.",
       "expert": "Du bist Experte. Der Agent bleibt knapp und folgt dir bei komplexen Fehlern."
     },
@@ -33,7 +33,7 @@
     "tag_learning": "wird gelernt",
     "tag_tools": "Ausstattung",
     "sub_skills": "von {total} erfassten Fähigkeiten",
-    "sub_tools": "von {total} Katalog-Werkzeugen",
+    "sub_tools": "von {total} Werkzeugen im Katalog",
     "block_skills_total": "{n} Fähigkeiten",
     "block_tools_total": "{on} / {total} aktiv"
   },
@@ -57,7 +57,13 @@
   },
   "prefs": {
     "verbosity": "Ausführlichkeit",
-    "language": "Sprache"
+    "language": "Sprache",
+    "verbosity_options": {
+      "auto": "Automatisch",
+      "concise": "Knapp",
+      "normal": "Normal",
+      "teaching": "Lehrmodus"
+    }
   },
   "modal": {
     "kicker": "Technikerprofil",
@@ -73,5 +79,46 @@
     "cancel": "Abbrechen",
     "save": "Speichern",
     "save_failed": "Speichern fehlgeschlagen: {error}"
+  },
+  "catalog": {
+    "tools": {
+      "soldering_iron": "Lötkolben",
+      "hot_air": "Heißluftstation",
+      "bga_rework": "BGA-Rework",
+      "preheater": "Vorheizplatte",
+      "microscope": "Mikroskop",
+      "thermal_camera": "Wärmebildkamera",
+      "uv_lamp": "UV-Lampe",
+      "multimeter": "Multimeter",
+      "oscilloscope": "Oszilloskop",
+      "bench_psu": "Labornetzteil",
+      "reballing_kit": "Reballing-Kit",
+      "stencil_printer": "Schablonendrucker"
+    },
+    "skills": {
+      "reflow_bga": "BGA-Reflow",
+      "reballing": "Reballing",
+      "jumper_wire": "Drahtbrücken",
+      "microsolder_0201": "0201-Mikrolöten",
+      "pop_rework": "PoP-Rework",
+      "trace_repair": "Leiterbahnreparatur",
+      "stencil_application": "Schablonendruck",
+      "short_isolation": "Kurzschluss-Eingrenzung",
+      "voltage_probing": "Rail-Spannungen messen",
+      "signal_probing": "Signale mit dem Oszilloskop messen",
+      "thermal_imaging": "Diagnose per Wärmebild",
+      "power_sequencing": "Power-Sequencing",
+      "flux_cleaning": "Flussmittel / Rückstände reinigen",
+      "cold_joint_rework": "Kalte Lötstellen nacharbeiten",
+      "connector_replacement": "Steckverbinder tauschen"
+    },
+    "specialties": {
+      "apple": "Apple",
+      "android": "Android",
+      "consoles": "Konsolen",
+      "laptops": "Laptops",
+      "industriel": "Industrie",
+      "vintage": "Vintage"
+    }
   }
 }

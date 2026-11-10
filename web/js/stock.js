@@ -1,9 +1,10 @@
 // Stock section — donor management + search.
 // See docs/superpowers/specs/2026-05-08-stock-inventory-design.md §11.
 
-import { t } from "./i18n.js";
+import i18n, { t, onChange } from "./i18n.js";
 import { escapeHtml } from "./shared/dom.js";
-import { apiFetch, apiGet } from "./shared/api.js";
+import { apiFetch, apiGet, ApiError } from "./shared/api.js";
+import { localizeError } from "./shared/errors.js";
 import { openInfoModal } from "./info_modal.js";
 
 const STOCK_INFO_FLAG = "wb_stock_info_seen";
@@ -60,24 +61,67 @@ const _harvestState = {
 async function fetchJson(path, opts) {
   const r = await apiFetch(API + path, opts);
   if (!r.ok) {
-    throw new Error(`${r.status} ${r.statusText}`);
+    // Keep the parsed body so the coded `{detail, code, params}` can be localised.
+    let body = null;
+    try { body = await r.json(); } catch { /* non-JSON error body */ }
+    const detail = body && typeof body.detail === "string" ? body.detail : "";
+    throw new ApiError(r.status, detail || `${r.status} ${r.statusText}`.trim(), body);
   }
   return r.json();
 }
 
+// Backend failure → sentence in the UI language (server text as fallback).
+// `e.message` is the fallback for bodies without a code (e.g. a 422 validation list).
+const errorText = (e) => localizeError("stock.error", e, e && e.message);
+
+function reportActionError(e) {
+  alert(t("stock.action_error", { error: errorText(e) }));
+}
+
+// Re-run `paint` on every language switch while an overlay is open, keeping
+// the focused field (and its caret) across the rebuild. Returns the unsubscribe.
+function repaintOnLocaleChange(overlay, paint) {
+  const stop = onChange(() => {
+    if (!overlay.isConnected) { stop(); return; }
+    const active = overlay.contains(document.activeElement) ? document.activeElement : null;
+    const focusId = active && active.id;
+    let caret = null;
+    try { caret = active ? [active.selectionStart, active.selectionEnd] : null; } catch { /* not a text field */ }
+    paint();
+    const again = focusId ? overlay.querySelector(`#${CSS.escape(focusId)}`) : null;
+    if (!again) return;
+    again.focus();
+    try { if (caret && caret[0] != null) again.setSelectionRange(caret[0], caret[1]); } catch { /* ignore */ }
+  });
+  return stop;
+}
+
+// Localised label for a backend enum value (part type, role, criticality,
+// donor condition). Falls back to the raw value when no key exists.
+function enumLabel(prefix, value) {
+  if (!value) return "";
+  const key = `${prefix}${value}`;
+  const label = t(key);
+  return label === key ? String(value) : label;
+}
+const typeName = (type) => enumLabel("stock.type_", type);
+const roleName = (role) => enumLabel("workbench.stock.role.", role);
+const critName = (crit) => enumLabel("stock.crit_", crit);
+const conditionName = (cond) => enumLabel("stock.condition_", cond);
+
 function typeChip(type) {
   const label = TYPE_LABEL[type] || "?";
   const family = TYPE_FAMILY[type] || "other";
-  return `<span class="type-chip type-${family}" title="${escapeHtml(type)}">${label}</span>`;
+  return `<span class="type-chip type-${family}" title="${escapeHtml(typeName(type))}">${label}</span>`;
 }
 
 function roleChip(role, safety) {
-  if (!role) return `<span class="role-chip role-unknown" title="${t("stock.col_role")}">${escapeHtml(t("workbench.common.none"))}</span>`;
-  return `<span class="role-chip safety-${safety || "exact_only"}">${escapeHtml(role)}</span>`;
+  if (!role) return `<span class="role-chip role-unknown" title="${escapeHtml(t("stock.col_role"))}">${escapeHtml(t("workbench.common.none"))}</span>`;
+  return `<span class="role-chip safety-${safety || "exact_only"}">${escapeHtml(roleName(role))}</span>`;
 }
 
 function critDot(crit) {
-  return `<span class="crit-dot crit-${crit}" title="${escapeHtml(crit)}"></span>`;
+  return `<span class="crit-dot crit-${crit}" title="${escapeHtml(critName(crit))}"></span>`;
 }
 
 // A donor card. `pending` = the device has no parts_index yet (graph not
@@ -86,13 +130,13 @@ function critDot(crit) {
 function donorCard(d, pending) {
   const head = pending
     ? `<span class="donor-pending-badge mono">${escapeHtml(t("stock.pending_badge"))}</span>`
-    : `<span class="donor-condition mono">${escapeHtml(d.condition)}</span>`;
+    : `<span class="donor-condition mono">${escapeHtml(conditionName(d.condition))}</span>`;
   const stats = pending
     ? `<span class="donor-pending-hint">${escapeHtml(t("stock.pending_hint"))}</span>`
-    : `<b>${d.parts_available}</b> / ${d.parts_total} ${t("stock.available").toLowerCase()}`;
+    : t("stock.parts_available", { available: `<b>${Number(d.parts_available)}</b>`, total: Number(d.parts_total) });
   const harvestBtn = pending
     ? ""
-    : `<button class="btn-sm" data-action="harvest" data-donor="${escapeHtml(d.donor_id)}">${t("stock.harvest")}</button>`;
+    : `<button class="btn-sm" data-action="harvest" data-donor="${escapeHtml(d.donor_id)}">${escapeHtml(t("stock.harvest"))}</button>`;
   return `
     <div class="donor-card${pending ? " pending" : ""}">
       <div class="donor-head">
@@ -103,7 +147,7 @@ function donorCard(d, pending) {
       <div class="donor-stats mono">${stats}</div>
       <div class="donor-actions">
         ${harvestBtn}
-        <button class="btn-sm btn-danger" data-action="unmark" data-donor="${escapeHtml(d.donor_id)}">${t("stock.remove")}</button>
+        <button class="btn-sm btn-danger" data-action="unmark" data-donor="${escapeHtml(d.donor_id)}">${escapeHtml(t("stock.remove"))}</button>
       </div>
     </div>
   `;
@@ -122,6 +166,9 @@ function donorGroup(titleKey, donors, pending) {
 
 async function loadDonors() {
   const list = document.getElementById("stock-donors-list");
+  // Never paint before the dictionaries are in (a deep-link to #stock would
+  // otherwise render raw keys / English fallbacks that nothing repaints).
+  if (i18n.ready) await i18n.ready;
   let donors;
   try {
     ({ donors } = await fetchJson("/donors"));
@@ -171,8 +218,12 @@ async function loadDonors() {
     if (!btn) return;
     const donorId = btn.dataset.donor;
     if (btn.dataset.action === "unmark") {
-      if (!confirm(`${t("stock.remove")} ${donorId}?`)) return;
-      await fetchJson(`/donors/${donorId}`, { method: "DELETE" });
+      if (!confirm(t("stock.remove_confirm", { donor: donorId }))) return;
+      try {
+        await fetchJson(`/donors/${donorId}`, { method: "DELETE" });
+      } catch (e) {
+        reportActionError(e);
+      }
       await loadDonors();
     } else if (btn.dataset.action === "harvest") {
       openHarvestMode(donorId);
@@ -235,7 +286,13 @@ function _renderHarvestRows() {
 }
 
 async function openHarvestMode(donorId) {
-  const { parts } = await fetchJson(`/donors/${donorId}/parts`);
+  let parts;
+  try {
+    ({ parts } = await fetchJson(`/donors/${donorId}/parts`));
+  } catch (e) {
+    reportActionError(e);
+    return;
+  }
   _harvestState.donorId = donorId;
   _harvestState.parts = parts;
   _harvestState.filter = "";
@@ -247,31 +304,36 @@ async function openHarvestMode(donorId) {
   const typeCounts = {};
   for (const p of parts) typeCounts[p.type] = (typeCounts[p.type] || 0) + 1;
   const orderedTypes = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a]);
-  const typeOpts = [`<option value="">${escapeHtml(t("workbench.stock.all_types"))}</option>`]
-    .concat(orderedTypes.map(t => `<option value="${escapeHtml(t)}">${TYPE_LABEL[t] || "?"} · ${escapeHtml(t)} (${typeCounts[t]})</option>`))
-    .join("");
 
   const overlay = document.createElement("div");
   overlay.className = "harvest-overlay";
-  overlay.innerHTML = `
+
+  // Full (re)build of the panel in the current language. Filter / type / sort
+  // live in _harvestState, so a repaint on a language switch keeps them.
+  function paint() {
+    const typeOpts = [`<option value="">${escapeHtml(t("workbench.stock.all_types"))}</option>`]
+      .concat(orderedTypes.map(ty => `<option value="${escapeHtml(ty)}">${TYPE_LABEL[ty] || "?"} · ${escapeHtml(typeName(ty))} (${typeCounts[ty]})</option>`))
+      .join("");
+    const scrollTop = overlay.querySelector(".harvest-table-wrap")?.scrollTop || 0;
+    overlay.innerHTML = `
     <div class="harvest-panel glass">
       <header class="harvest-head">
         <div class="harvest-title">
-          <h3>${t("stock.harvest_title")}</h3>
+          <h3>${escapeHtml(t("stock.harvest_title"))}</h3>
           <span class="mono dim">${escapeHtml(donorId)}</span>
         </div>
-        <button class="btn-sm" data-close>${t("stock.close")}</button>
+        <button class="btn-sm" data-close>${escapeHtml(t("stock.close"))}</button>
       </header>
       <div class="harvest-controls">
         <input class="harvest-filter" id="harvest-filter" type="search"
-               placeholder="${t("stock.filter_donor_placeholder")}">
+               placeholder="${escapeHtml(t("stock.filter_donor_placeholder"))}">
         <select class="harvest-type-filter" id="harvest-type-filter">${typeOpts}</select>
         <select class="harvest-sort" id="harvest-sort">
-          <option value="refdes">↕ Refdes</option>
-          <option value="type">↕ Type</option>
-          <option value="value">↕ Value</option>
-          <option value="role">↕ Role</option>
-          <option value="crit">↕ Criticality</option>
+          <option value="refdes">↕ ${escapeHtml(t("stock.col_refdes"))}</option>
+          <option value="type">↕ ${escapeHtml(t("stock.col_type"))}</option>
+          <option value="value">↕ ${escapeHtml(t("stock.col_value"))}</option>
+          <option value="role">↕ ${escapeHtml(t("stock.col_role"))}</option>
+          <option value="crit">↕ ${escapeHtml(t("stock.sort_crit"))}</option>
         </select>
         <span class="mono dim" id="harvest-row-count"></span>
       </div>
@@ -284,7 +346,7 @@ async function openHarvestMode(donorId) {
               <th>${t("stock.col_type")}</th>
               <th>${t("stock.col_value")}</th>
               <th>${t("stock.col_pkg")}</th>
-              <th>MPN</th>
+              <th>${escapeHtml(t("stock.col_mpn"))}</th>
               <th>${t("stock.col_role")}</th>
               <th>${t("stock.col_crit")}</th>
               <th>${t("stock.col_page")}</th>
@@ -295,39 +357,57 @@ async function openHarvestMode(donorId) {
       </div>
     </div>
   `;
+    overlay.querySelector("#harvest-filter").value = _harvestState.filter;
+    overlay.querySelector("#harvest-type-filter").value = _harvestState.typeFilter;
+    overlay.querySelector("#harvest-sort").value = _harvestState.sort;
+    _renderHarvestRows();
+    const wrap = overlay.querySelector(".harvest-table-wrap");
+    if (wrap) wrap.scrollTop = scrollTop;
+  }
+
   document.body.appendChild(overlay);
-  _renderHarvestRows();
+  paint();
+  const stopLocaleRepaint = repaintOnLocaleChange(overlay, paint);
+  const close = () => { stopLocaleRepaint(); overlay.remove(); };
 
-  overlay.querySelector("[data-close]").onclick = () => overlay.remove();
+  // Delegated on the overlay itself — paint() replaces everything inside it.
   overlay.addEventListener("click", (ev) => {
-    if (ev.target === overlay) overlay.remove();
+    if (ev.target === overlay || ev.target.closest("[data-close]")) close();
   });
-
-  document.getElementById("harvest-filter").addEventListener("input", (ev) => {
+  overlay.addEventListener("input", (ev) => {
+    if (ev.target.id !== "harvest-filter") return;
     _harvestState.filter = ev.target.value;
-    _renderHarvestRows();
-  });
-  document.getElementById("harvest-type-filter").addEventListener("change", (ev) => {
-    _harvestState.typeFilter = ev.target.value;
-    _renderHarvestRows();
-  });
-  document.getElementById("harvest-sort").addEventListener("change", (ev) => {
-    _harvestState.sort = ev.target.value;
     _renderHarvestRows();
   });
 
   overlay.addEventListener("change", async (ev) => {
+    if (ev.target.id === "harvest-type-filter") {
+      _harvestState.typeFilter = ev.target.value;
+      _renderHarvestRows();
+      return;
+    }
+    if (ev.target.id === "harvest-sort") {
+      _harvestState.sort = ev.target.value;
+      _renderHarvestRows();
+      return;
+    }
     const cb = ev.target.closest('input[type="checkbox"][data-refdes]');
     if (!cb) return;
     const ref = cb.dataset.refdes;
-    if (cb.checked) {
-      await fetchJson(`/donors/${donorId}/consume`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refdes: ref }),
-      });
-    } else {
-      await fetchJson(`/donors/${donorId}/consume/${ref}`, { method: "DELETE" });
+    try {
+      if (cb.checked) {
+        await fetchJson(`/donors/${donorId}/consume`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refdes: ref }),
+        });
+      } else {
+        await fetchJson(`/donors/${donorId}/consume/${ref}`, { method: "DELETE" });
+      }
+    } catch (e) {
+      cb.checked = !cb.checked;
+      reportActionError(e);
+      return;
     }
     // Update local state so the row's class / sort survives a re-render.
     const part = _harvestState.parts.find(p => p.refdes === ref);
@@ -348,26 +428,54 @@ async function runSearch() {
     alert(t("workbench.stock.select_type_alert"));
     return;
   }
-  const res = await fetchJson("/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetchJson("/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    _lastSearch = null;
+    const out = document.getElementById("stock-results");
+    if (out) out.innerHTML = `<div class="empty stock-error">${escapeHtml(t("stock.search_error", { error: errorText(e) }))}</div>`;
+    return;
+  }
   renderSearchResults(res);
 }
 
+// The search endpoint reports why a result is empty as a stable
+// `empty_reason_code` (+ params) next to the English `empty_reason` sentence.
+// Translate by code (`stock.empty_reason_<code>`); the sentence map only
+// serves responses that carry no code.
+const EMPTY_REASON_CODES = {
+  "no donors in stock": "no_donors",
+  "no matching parts available": "no_match",
+};
+function emptyReasonLabel(res) {
+  const code = res.empty_reason_code || EMPTY_REASON_CODES[res.empty_reason];
+  if (!code) return res.empty_reason;
+  const key = `stock.empty_reason_${String(code).replace(/-/g, "_")}`;
+  const label = t(key, res.empty_reason_params || undefined);
+  return label === key ? res.empty_reason : label;
+}
+
+// Last search response, kept so a locale switch can repaint the results.
+let _lastSearch = null;
+
 function renderSearchResults(res) {
+  _lastSearch = res;
   const out = document.getElementById("stock-results");
   out.innerHTML = "";
   if (res.empty_reason) {
-    out.innerHTML = `<div class="empty">${escapeHtml(res.empty_reason)}</div>`;
+    out.innerHTML = `<div class="empty">${escapeHtml(emptyReasonLabel(res))}</div>`;
     return;
   }
   const section = (titleKey, matches, kind) => {
     if (!matches.length) return "";
     return `
       <div class="result-group result-${kind}">
-        <h3>${t(titleKey)} <span class="dim mono">(${matches.length})</span></h3>
+        <h3>${escapeHtml(t(titleKey))} <span class="dim mono">(${matches.length})</span></h3>
         <table class="result-table">
           <thead>
             <tr>
@@ -393,7 +501,7 @@ function renderSearchResults(res) {
                 <td>${critDot(m.criticality_in_donor)}</td>
                 <td><button class="btn-sm" data-mark-consumed
                             data-donor="${escapeHtml(m.donor_id)}"
-                            data-refdes="${escapeHtml(m.refdes)}">${t("stock.mark_consumed")}</button></td>
+                            data-refdes="${escapeHtml(m.refdes)}">${escapeHtml(t("stock.mark_consumed"))}</button></td>
               </tr>
             `).join("")}
           </tbody>
@@ -405,11 +513,16 @@ function renderSearchResults(res) {
   out.onclick = async (ev) => {
     const btn = ev.target.closest("[data-mark-consumed]");
     if (!btn) return;
-    await fetchJson(`/donors/${btn.dataset.donor}/consume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refdes: btn.dataset.refdes }),
-    });
+    try {
+      await fetchJson(`/donors/${btn.dataset.donor}/consume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refdes: btn.dataset.refdes }),
+      });
+    } catch (e) {
+      reportActionError(e);
+      return;
+    }
     btn.disabled = true;
     btn.textContent = t("stock.consumed");
     await loadDonors();
@@ -468,7 +581,15 @@ async function showAddDonorDialog() {
     loadError = true;
   }
 
-  const state = { kind: "", brand: "", query: "", slug: null, label: null };
+  // Everything the user typed or picked lives here (not only in the DOM), so
+  // paint() can rebuild the panel in another language without losing it.
+  const state = {
+    kind: "", brand: "", query: "", slug: null, label: null,
+    labelText: "",          // donor label field
+    labelAuto: true,        // label still is our own suggestion (re-suggested on repaint)
+    condition: "donor_only",
+    error: null,            // () => message, re-evaluated in the current language
+  };
 
   // Labels shared by >1 pack (e.g. a bench/variant pack with the same human
   // label but a different slug). For those, show the slug to disambiguate.
@@ -481,7 +602,13 @@ async function showAddDonorDialog() {
 
   const overlay = document.createElement("div");
   overlay.className = "add-donor-overlay";
-  overlay.innerHTML = `
+  // Assigned by paint() — the panel's DOM is rebuilt on a language switch.
+  let kindSel, brandSel, searchInput, resultsEl, labelInput, conditionSel, submitBtn, errorEl;
+  let submitting = false;
+
+  function paint() {
+    const scrollTop = overlay.querySelector("#dn-results")?.scrollTop || 0;
+    overlay.innerHTML = `
     <div class="add-donor-panel glass">
       <header class="add-donor-head">
         <div class="add-donor-head-text">
@@ -542,21 +669,39 @@ async function showAddDonorDialog() {
       </footer>
     </div>
   `;
-  document.body.appendChild(overlay);
+    kindSel = overlay.querySelector("#dn-kind");
+    brandSel = overlay.querySelector("#dn-brand");
+    searchInput = overlay.querySelector("#dn-search");
+    resultsEl = overlay.querySelector("#dn-results");
+    labelInput = overlay.querySelector("#dn-label");
+    conditionSel = overlay.querySelector("#dn-condition");
+    submitBtn = overlay.querySelector("#dn-submit");
+    errorEl = overlay.querySelector("#dn-error");
 
-  const kindSel = overlay.querySelector("#dn-kind");
-  const brandSel = overlay.querySelector("#dn-brand");
-  const searchInput = overlay.querySelector("#dn-search");
-  const resultsEl = overlay.querySelector("#dn-results");
-  const labelInput = overlay.querySelector("#dn-label");
-  const conditionSel = overlay.querySelector("#dn-condition");
-  const submitBtn = overlay.querySelector("#dn-submit");
-  const errorEl = overlay.querySelector("#dn-error");
+    // Board-type options from the kinds actually present in the taxonomy.
+    kindSel.innerHTML = `<option value="">${escapeHtml(t("stock.all_kinds"))}</option>`
+      + kindsPresent.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(_kindLabel(k))}</option>`).join("");
+    kindSel.value = state.kind;
+    rebuildBrands();
+    searchInput.value = state.query;
+    // An untouched suggestion carries a translated suffix — refresh it; a label
+    // the user edited is theirs and is restored verbatim.
+    if (state.slug && state.labelAuto) state.labelText = suggestLabel(state.label);
+    labelInput.value = state.labelText;
+    conditionSel.value = state.condition;
+    submitBtn.disabled = submitting || !state.slug;
+    if (state.slug) {
+      const sel = overlay.querySelector("#dn-selection");
+      sel.textContent = state.label;
+      sel.classList.add("active");
+    }
+    if (state.error) { errorEl.textContent = state.error(); errorEl.hidden = false; }
+    renderResults();
+    resultsEl.scrollTop = scrollTop;
+    wire();
+  }
 
-  // Board-type options from the kinds actually present in the taxonomy.
   const kindsPresent = [...new Set(entries.map(e => e.device_kind).filter(k => k && k !== "unknown"))].sort();
-  kindSel.innerHTML = `<option value="">${escapeHtml(t("stock.all_kinds"))}</option>`
-    + kindsPresent.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(_kindLabel(k))}</option>`).join("");
 
   function rebuildBrands() {
     const pool = entries.filter(e => !state.kind || e.device_kind === state.kind);
@@ -622,7 +767,10 @@ async function showAddDonorDialog() {
   function selectDevice(slug, label) {
     state.slug = slug;
     state.label = label;
-    labelInput.value = suggestLabel(label);
+    state.labelText = suggestLabel(label);
+    state.labelAuto = true;
+    state.error = null;
+    labelInput.value = state.labelText;
     submitBtn.disabled = false;
     errorEl.hidden = true;
     const sel = overlay.querySelector("#dn-selection");
@@ -630,32 +778,41 @@ async function showAddDonorDialog() {
     renderResults();
   }
 
-  function showError(msg) {
-    errorEl.textContent = msg;
+  // `msgFn` (not a string) so an error still on screen follows a language switch.
+  function showError(msgFn) {
+    state.error = msgFn;
+    errorEl.textContent = msgFn();
     errorEl.hidden = false;
   }
 
+  let stopLocaleRepaint = () => {};
   function close() {
     document.removeEventListener("keydown", onKey);
+    stopLocaleRepaint();
     overlay.remove();
   }
   function onKey(ev) {
     if (ev.key === "Escape") close();
   }
 
-  kindSel.onchange = () => { state.kind = kindSel.value; rebuildBrands(); renderResults(); };
-  brandSel.onchange = () => { state.brand = brandSel.value; renderResults(); };
-  searchInput.oninput = () => { state.query = searchInput.value; renderResults(); };
-  resultsEl.onclick = (ev) => {
-    const opt = ev.target.closest(".dn-option");
-    if (opt) selectDevice(opt.dataset.slug, opt.dataset.label);
-  };
-  overlay.querySelectorAll("[data-close]").forEach(b => { b.onclick = close; });
-  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
-  document.addEventListener("keydown", onKey);
+  // Handlers for the nodes paint() just created.
+  function wire() {
+    kindSel.onchange = () => { state.kind = kindSel.value; rebuildBrands(); renderResults(); };
+    brandSel.onchange = () => { state.brand = brandSel.value; renderResults(); };
+    searchInput.oninput = () => { state.query = searchInput.value; renderResults(); };
+    labelInput.oninput = () => { state.labelText = labelInput.value; state.labelAuto = false; };
+    conditionSel.onchange = () => { state.condition = conditionSel.value; };
+    resultsEl.onclick = (ev) => {
+      const opt = ev.target.closest(".dn-option");
+      if (opt) selectDevice(opt.dataset.slug, opt.dataset.label);
+    };
+    overlay.querySelectorAll("[data-close]").forEach(b => { b.onclick = close; });
+    submitBtn.onclick = submit;
+  }
 
-  submitBtn.onclick = async () => {
-    if (!state.slug) { showError(t("stock.select_device_first")); return; }
+  async function submit() {
+    if (!state.slug) { showError(() => t("stock.select_device_first")); return; }
+    submitting = true;
     submitBtn.disabled = true;
     try {
       await fetchJson("/donors", {
@@ -663,24 +820,44 @@ async function showAddDonorDialog() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           device_slug: state.slug,
-          label: labelInput.value.trim() || state.label,
-          condition: conditionSel.value,
+          label: state.labelText.trim() || state.label,
+          condition: state.condition,
         }),
       });
       close();
       await loadDonors();
     } catch (e) {
+      submitting = false;
       submitBtn.disabled = false;
-      showError(e.message);
+      showError(() => t("stock.create_error", { error: errorText(e) }));
     }
-  };
+  }
 
-  rebuildBrands();
-  renderResults();
+  document.body.appendChild(overlay);
+  paint();
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
+  document.addEventListener("keydown", onKey);
+  stopLocaleRepaint = repaintOnLocaleChange(overlay, paint);
   requestAnimationFrame(() => searchInput.focus());
 }
 
+// Donor cards and search results are rendered imperatively through t() —
+// repaint them when the user switches language. Open overlays (harvest,
+// add-donor) subscribe on their own — see repaintOnLocaleChange().
+let _localeHookWired = false;
+function wireStockI18n() {
+  if (_localeHookWired) return;
+  _localeHookWired = true;
+  onChange(() => {
+    const section = document.getElementById("stock");
+    if (!section || section.classList.contains("hidden")) return;
+    loadDonors();
+    if (_lastSearch) renderSearchResults(_lastSearch);
+  });
+}
+
 export function initStockSection() {
+  wireStockI18n();
   document.getElementById("stock-search-btn").onclick = runSearch;
   document.getElementById("stock-add-donor-btn").onclick = showAddDonorDialog;
   const back = document.getElementById("stock-back-btn");

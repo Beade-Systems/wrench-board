@@ -4,6 +4,25 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_MAX_LOADED = 8;
 
+// Falls back to the English literal when i18n is absent or dictionaries aren't loaded.
+const fill = (text, params) => (params ? text.replace(/\{(\w+)\}/g, (match, name) => (name in params ? String(params[name]) : match)) : text);
+const tr = (key, fallback, params) => {
+  const translate = window.i18n?.t ?? window.t;
+  const text = typeof translate === 'function' ? translate(key, params) : key;
+  return text === key ? fill(fallback, params) : text;
+};
+
+/** Runs `fn` once dictionaries are loaded and on every locale switch; returns an unsubscribe. */
+function onLocale(fn) {
+  const i18n = window.i18n;
+  if (!i18n) return () => {};
+  let live = true;
+  const run = () => { if (live) fn(); };
+  if (typeof i18n.onReady === 'function') i18n.onReady(run);
+  const off = typeof i18n.onChange === 'function' ? i18n.onChange(run) : null;
+  return () => { live = false; if (typeof off === 'function') off(); };
+}
+
 export function closeIcon() {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 12 12');
@@ -50,7 +69,8 @@ export class BoardTabs {
     this._events = new AbortController();
     container.classList.add('pbt-strip');
     container.setAttribute('role', 'tablist');
-    container.setAttribute('aria-label', 'Geöffnete Platinen');
+    container.setAttribute('aria-label', tr('pcb.tabs.strip_aria', 'Open boards'));
+    this._offLocale = onLocale(() => this._sync());
     container.addEventListener('wheel', event => this._onWheel(event),
       { passive: false, signal: this._events.signal });
     container.addEventListener('keydown', event => this._onStripKey(event),
@@ -185,6 +205,7 @@ export class BoardTabs {
   }
 
   destroy() {
+    this._offLocale();
     this._events.abort();
     this._activation += 1;
     this._tabs.clear();
@@ -205,7 +226,7 @@ export class BoardTabs {
   _load(tab) {
     if (this._pending.has(tab.id)) return this._pending.get(tab.id);
     if (typeof this.loadBoard !== 'function') {
-      tab.error = new Error('Kein Lader für diese Platine vorhanden.');
+      tab.error = new Error(tr('pcb.tabs.no_loader', 'No loader available for this board.'));
       this._sync();
       return Promise.resolve(null);
     }
@@ -216,7 +237,7 @@ export class BoardTabs {
       .then(result => {
         if (this._tabs.get(tab.id) !== tab) return null;
         const board = result?.board ?? result;
-        if (!board) throw new Error('Der Server hat keine Platine geliefert.');
+        if (!board) throw new Error(tr('pcb.tabs.no_board', 'The server returned no board.'));
         tab.board = board;
         if (result?.metadata) tab.metadata = result.metadata;
         tab.error = null;
@@ -268,8 +289,8 @@ export class BoardTabs {
     close.type = 'button';
     close.className = 'pbt-close';
     close.tabIndex = -1;
-    close.setAttribute('aria-label', 'Tab schließen');
-    close.title = 'Tab schließen';
+    close.setAttribute('aria-label', tr('pcb.tabs.close', 'Close tab'));
+    close.title = tr('pcb.tabs.close', 'Close tab');
     close.append(closeIcon());
     wrapper.append(label, close);
     label.addEventListener('click', () => this.activate(tab.id));
@@ -285,10 +306,12 @@ export class BoardTabs {
       this.close(tab.id);
     });
     this.container.append(wrapper);
-    return { wrapper, label, title };
+    return { wrapper, label, title, close };
   }
 
   _sync() {
+    this.container.setAttribute('aria-label', tr('pcb.tabs.strip_aria', 'Open boards'));
+    const closeLabel = tr('pcb.tabs.close', 'Close tab');
     for (const tab of this._tabs.values()) {
       const element = this._elements.get(tab.id);
       if (!element) continue;
@@ -300,8 +323,12 @@ export class BoardTabs {
       element.wrapper.classList.toggle('failed', Boolean(tab.error));
       element.label.setAttribute('aria-selected', String(active));
       element.label.tabIndex = active || (this._activeId === null && tab === this.all[0]) ? 0 : -1;
-      element.label.title = tab.error ? `${tab.title} — Laden fehlgeschlagen, klicken zum Wiederholen`
-        : !tab.board && !tab.loading ? `${tab.title} — wird beim Öffnen neu geladen` : tab.title;
+      element.close.setAttribute('aria-label', closeLabel);
+      element.close.title = closeLabel;
+      element.label.title = tab.error
+        ? tr('pcb.tabs.title_failed', '{title} — loading failed, click to retry', { title: tab.title })
+        : !tab.board && !tab.loading
+          ? tr('pcb.tabs.title_evicted', '{title} — reloads when opened', { title: tab.title }) : tab.title;
     }
   }
 

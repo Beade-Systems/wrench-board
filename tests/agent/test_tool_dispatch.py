@@ -207,3 +207,20 @@ async def test_mb_expand_knowledge_allowed_when_capable(tmp_path: Path, monkeypa
     )
     assert result.get("reason") != "plan_gated"
     assert result["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_raising_handler_returns_structured_error(tmp_path: Path, monkeypatch):
+    async def _boom(payload, ctx):
+        raise KeyError("donor_id")
+
+    monkeypatch.setitem(_HANDLERS, "mb_get_component", _boom)
+    result = await dispatch_tool("mb_get_component", {}, _ctx(tmp_path))
+    assert result["ok"] is False
+    assert result["reason"] == "handler-exception"
+
+
+@pytest.mark.asyncio
+async def test_stock_tool_missing_keys_does_not_raise(tmp_path: Path):
+    result = await dispatch_tool("stock_consume", {}, _ctx(tmp_path))
+    assert result["ok"] is False

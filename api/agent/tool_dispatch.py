@@ -549,7 +549,39 @@ _HANDLERS: dict[str, ToolHandler] = {
 }
 
 
+def handler_exception_result(name: str, exc: Exception) -> dict:
+    """Structured tool error for a handler that raised.
+
+    A raising handler must never escape the tool loop: in direct mode it
+    killed the session and left messages.jsonl ending on a ``tool_use`` with
+    no ``tool_result`` (the conversation could not be resumed); in managed
+    mode no ``custom_tool_result`` was sent and the session stalled in
+    ``requires_action``. The agent gets an error it can recover from instead.
+    """
+    import logging
+
+    logging.getLogger("wrench_board.agent.dispatch").exception(
+        "tool handler %s raised", name,
+    )
+    return {
+        "ok": False,
+        "found": False,
+        "reason": "handler-exception",
+        "error": f"{type(exc).__name__}: invalid arguments or internal error in {name}",
+    }
+
+
 async def dispatch_tool(name: str, payload: dict, ctx: ToolContext) -> dict:
+    """Run ``name`` via ``_dispatch_tool_unguarded``; never raises (see above)."""
+    if not isinstance(payload, dict):
+        payload = {}
+    try:
+        return await _dispatch_tool_unguarded(name, payload, ctx)
+    except Exception as exc:  # noqa: BLE001 — tool loop must always get a result
+        return handler_exception_result(name, exc)
+
+
+async def _dispatch_tool_unguarded(name: str, payload: dict, ctx: ToolContext) -> dict:
     """Resolve ``name`` against the dispatch table and run the matching handler.
 
     Resolution order matches the legacy ``_dispatch_tool`` waterfall:

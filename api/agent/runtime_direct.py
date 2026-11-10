@@ -54,6 +54,7 @@ from api.agent.runtime_direct_tools import (
 )
 from api.agent.sanitize import sanitize_agent_text
 from api.agent.session_caps import set_can_expand
+from api.agent.tool_dispatch import handler_exception_result
 from api.config import get_settings
 from api.session.state import SessionState
 
@@ -400,72 +401,75 @@ async def _run_agent_turn(
             if block.type != "tool_use":
                 continue
             await ws.send_json({"type": "tool_use", "name": block.name, "input": block.input})
-            if block.name == "bv_propose_protocol":
-                # Pattern-4: park for the tech's accept/reject before the
-                # protocol touches disk (parity with runtime_managed).
-                result = await _propose_protocol_with_confirmation(
-                    ws=ws,
-                    block=block,
-                    device_slug=device_slug,
-                    memory_root=memory_root,
-                    session=session,
-                    repair_id=repair_id,
-                    conv_id=conv_id,
-                )
-            elif block.name == "cam_capture":
-                # Flow B: request a camera frame, await it, and feed the image
-                # back as the tool_result (parity with runtime_managed).
-                result = await _dispatch_cam_capture_direct(
-                    ws=ws,
-                    client=client,
-                    memory_root=memory_root,
-                    device_slug=device_slug,
-                    repair_id=repair_id,
-                    block=block,
-                )
-            elif block.name in (
-                "bv_update_protocol",
-                "bv_record_step_result", "bv_get_protocol",
-            ):
-                result = await _dispatch_protocol_tool(
-                    block.name,
-                    block.input or {},
-                    device_slug,
-                    memory_root,
-                    session,
-                    repair_id=repair_id,
-                    conv_id=conv_id,
-                )
-            elif block.name.startswith("bv_"):
-                # Same pre-dispatch refresh as the managed runtime's
-                # dispatch_tool: a boardview switched mid-turn (re-upload
-                # while the agent is in a tool loop) reloads before the
-                # refdes validation runs. Cheap no-op when unchanged.
-                session.refresh_board_if_changed()
-                result = dispatch_bv(session, block.name, block.input or {})
-            elif block.name.startswith("profile_"):
-                result = _dispatch_profile_tool(block.name, block.input or {}, session=session)
-            elif block.name.startswith("stock_"):
-                # Donor inventory / salvage tools. Parity with the managed
-                # runtime (tool_dispatch._dispatch_stock) — without this branch
-                # they fell into _dispatch_mb_tool's "unknown mb_* tool" else,
-                # so the agent could never mark/search/consume donors in direct
-                # mode (the prod default). owner_ref scoping is already bound
-                # via set_owner_ref() at session open; the stock tools read the
-                # ContextVar internally.
-                result = _dispatch_stock_tool(block.name, block.input or {})
-            else:
-                result = await _dispatch_mb_tool(
-                    block.name,
-                    block.input or {},
-                    device_slug,
-                    memory_root,
-                    client,
-                    session,
-                    session_id=repair_id,
-                    repair_id=repair_id,
-                    conv_id=conv_id,
-                )
+            try:
+                if block.name == "bv_propose_protocol":
+                    # Pattern-4: park for the tech's accept/reject before the
+                    # protocol touches disk (parity with runtime_managed).
+                    result = await _propose_protocol_with_confirmation(
+                        ws=ws,
+                        block=block,
+                        device_slug=device_slug,
+                        memory_root=memory_root,
+                        session=session,
+                        repair_id=repair_id,
+                        conv_id=conv_id,
+                    )
+                elif block.name == "cam_capture":
+                    # Flow B: request a camera frame, await it, and feed the image
+                    # back as the tool_result (parity with runtime_managed).
+                    result = await _dispatch_cam_capture_direct(
+                        ws=ws,
+                        client=client,
+                        memory_root=memory_root,
+                        device_slug=device_slug,
+                        repair_id=repair_id,
+                        block=block,
+                    )
+                elif block.name in (
+                    "bv_update_protocol",
+                    "bv_record_step_result", "bv_get_protocol",
+                ):
+                    result = await _dispatch_protocol_tool(
+                        block.name,
+                        block.input or {},
+                        device_slug,
+                        memory_root,
+                        session,
+                        repair_id=repair_id,
+                        conv_id=conv_id,
+                    )
+                elif block.name.startswith("bv_"):
+                    # Same pre-dispatch refresh as the managed runtime's
+                    # dispatch_tool: a boardview switched mid-turn (re-upload
+                    # while the agent is in a tool loop) reloads before the
+                    # refdes validation runs. Cheap no-op when unchanged.
+                    session.refresh_board_if_changed()
+                    result = dispatch_bv(session, block.name, block.input or {})
+                elif block.name.startswith("profile_"):
+                    result = _dispatch_profile_tool(block.name, block.input or {}, session=session)
+                elif block.name.startswith("stock_"):
+                    # Donor inventory / salvage tools. Parity with the managed
+                    # runtime (tool_dispatch._dispatch_stock) — without this branch
+                    # they fell into _dispatch_mb_tool's "unknown mb_* tool" else,
+                    # so the agent could never mark/search/consume donors in direct
+                    # mode (the prod default). owner_ref scoping is already bound
+                    # via set_owner_ref() at session open; the stock tools read the
+                    # ContextVar internally.
+                    result = _dispatch_stock_tool(block.name, block.input or {})
+                else:
+                    result = await _dispatch_mb_tool(
+                        block.name,
+                        block.input or {},
+                        device_slug,
+                        memory_root,
+                        client,
+                        session,
+                        session_id=repair_id,
+                        repair_id=repair_id,
+                        conv_id=conv_id,
+                    )
+            except Exception as exc:  # noqa: BLE001 — every tool_use needs a tool_result
+                result = handler_exception_result(block.name, exc)
             # Tools may return either `event` (single) for atomic ops or
             # `events` (list) for composites like bv_scene. Both paths fan
             # out individual WS frames so the frontend stays oblivious.

@@ -960,3 +960,47 @@ async def test_sanitizer_logs_unknown_refdes_and_wraps_text(
     # The warning is structural — without it, silent corruption would be
     # invisible in production logs.
     assert any("sanitizer wrapped" in rec.getMessage() for rec in caplog.records)
+
+
+async def test_raising_tool_handler_still_yields_tool_result(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """A handler that raises (bad arg types from the model) must not kill the
+    session: the agent gets a structured handler-exception tool_result and the
+    loop continues to the next turn."""
+    _stub_session(monkeypatch)
+    _patch_settings(monkeypatch, memory_root=tmp_path)
+
+    import api.agent.runtime_direct as rt
+
+    async def _boom(*_a, **_kw):
+        raise AttributeError("'NoneType' object has no attribute 'strip'")
+
+    monkeypatch.setattr(rt, "_dispatch_mb_tool", _boom)
+    captured: list[list[dict]] = []
+    iter_scripted = iter([
+        _stream_tool_use("mb_get_component", {"refdes": None}),
+        _stream_text("Recovered."),
+    ])
+    client = MagicMock()
+
+    def _stream_factory(**kwargs):
+        captured.append(list(kwargs["messages"]))
+        events, final = next(iter_scripted)
+        return _FakeStream(events, final)
+    client.messages.stream = _stream_factory
+    monkeypatch.setattr(rt, "AsyncAnthropic", lambda **_kw: client)
+
+    ws = FakeWS(["look up a part"])
+    await rt.run_diagnostic_session_direct(ws, "demo-pi", tier="fast")
+
+    assert len(captured) == 2
+    tool_results = [
+        block
+        for msg in captured[1]
+        for block in (msg.get("content") if isinstance(msg.get("content"), list) else [])
+        if isinstance(block, dict) and block.get("type") == "tool_result"
+    ]
+    decoded = json.loads(tool_results[0]["content"])
+    assert decoded["ok"] is False
+    assert decoded["reason"] == "handler-exception"

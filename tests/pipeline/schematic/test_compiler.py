@@ -791,3 +791,39 @@ def test_rail_label_colliding_with_component_refdes_is_not_a_rail():
     elec = compile_electrical_graph(graph)
     assert "SW1" not in elec.power_rails
     assert "+5V" in elec.power_rails
+
+
+def test_shared_cap_pin_does_not_merge_rails_with_distinct_producers():
+    """A cap pin on two power nets whose rails already have DIFFERENT producers
+    is a cross-sheet refdes collision (the merger fused two physical caps that
+    reuse one refdes), not an alias — one physical rail has one source. MNT
+    Reform: C11/C12 on p2 VOUT (U2 buck) and p6 USBH_1V1 (U13); merging dropped
+    VOUT and its producer U2."""
+    components = {
+        "U_A": ComponentNode(
+            refdes="U_A", type="ic", pages=[2],
+            pins=[PagePin(number="1", role="power_out", net_label="VOUT")],
+        ),
+        "U_B": ComponentNode(
+            refdes="U_B", type="ic", pages=[6],
+            pins=[PagePin(number="1", role="power_out", net_label="RAIL_1V1")],
+        ),
+        "C11": ComponentNode(refdes="C11", type="capacitor", pages=[2, 6]),
+    }
+    nets = {
+        "VOUT": NetNode(label="VOUT", is_power=True, pages=[2],
+                        connects=["U_A.1", "C11.1"]),
+        "RAIL_1V1": NetNode(label="RAIL_1V1", is_power=True, pages=[6],
+                            connects=["U_B.1", "C11.1", "C99.1"]),
+    }
+    edges = [
+        TypedEdge(src="U_A", dst="VOUT", kind="powers", page=2),
+        TypedEdge(src="U_B", dst="RAIL_1V1", kind="powers", page=6),
+    ]
+    graph = SchematicGraph(
+        device_slug="refdes-collision", source_pdf="x.pdf", page_count=6,
+        components=components, nets=nets, typed_edges=edges,
+    )
+    elec = compile_electrical_graph(graph)
+    assert elec.power_rails["VOUT"].source_refdes == "U_A"
+    assert elec.power_rails["RAIL_1V1"].source_refdes == "U_B"

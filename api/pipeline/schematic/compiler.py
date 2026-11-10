@@ -1243,6 +1243,9 @@ def _coalesce_rails_via_shared_cap_pins(
       voltages (Δ > 0.05V), skip the cluster (mismatch is more likely a
       vision OCR error than a real alias). When only one side parses, the
       other is treated as compatible.
+    - Producer coherence guard: never union two clusters already attributed
+      to different `source_refdes` — that shared cap pin is a cross-sheet
+      refdes collision, not an alias.
     - Canonical preference per cluster (deterministic):
         1. has `source_refdes` (so source-attribution work isn't lost),
         2. higher `len(net.connects)` (richer underlying capture),
@@ -1308,10 +1311,23 @@ def _coalesce_rails_via_shared_cap_pins(
             cur = nxt
         return root
 
+    # Distinct producers per cluster root. One physical rail has one source:
+    # two sub-rails already attributed to DIFFERENT producers are two rails,
+    # whatever a shared cap pin says. That shared pin is then evidence of a
+    # refdes collision, not an alias — the merger fuses two physical caps that
+    # reuse one refdes on different sheets (MNT Reform C11/C12 on p2 VOUT and
+    # p6 USBH_1V1), and merging would drop one rail and its producer.
+    cluster_sources: dict[str, set[str]] = {}
+
     def _union(a: str, b: str) -> None:
         ra, rb = _find(a), _find(b)
-        if ra != rb:
-            parent[ra] = rb
+        if ra == rb:
+            return
+        merged = cluster_sources.get(ra, set()) | cluster_sources.get(rb, set())
+        if len(merged) > 1:
+            return
+        parent[ra] = rb
+        cluster_sources[rb] = merged
 
     for _pin, labels in cap_pin_to_rails.items():
         if len(labels) < 2:
@@ -1329,6 +1345,8 @@ def _coalesce_rails_via_shared_cap_pins(
         for lbl in sorted_labels:
             if lbl not in parent:
                 parent[lbl] = lbl
+                src = rails[lbl].source_refdes
+                cluster_sources[lbl] = {src} if src else set()
         for lbl in sorted_labels[1:]:
             _union(sorted_labels[0], lbl)
 

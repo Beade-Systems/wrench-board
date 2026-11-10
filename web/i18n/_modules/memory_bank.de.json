@@ -1,0 +1,98 @@
+{
+  "title": "Wissensspeicher",
+  "subtitle": "Deterministisches Wissenspaket aus der V2-Pipeline. Durchsuche Registry, Wissensgraph, Diagnoseregeln, Bauteilblätter und Prüfergebnis.",
+  "title_with_device": "Wissensspeicher <span class=\"sub\" style=\"color:var(--text-3);font-weight:400;font-size:14px;margin-left:10px\">· {device}</span>{form}",
+  "picker": {
+    "label": "Paket",
+    "empty_option": "(kein Paket)"
+  },
+  "search": {
+    "placeholder": "Wissenspaket filtern (Refdes, Symptom, Mechanismus…)",
+    "esc_hint": "ESC löscht"
+  },
+  "blocks": {
+    "registry_heading": "Kanonisches Vokabular",
+    "graph_heading": "Wissensgraph",
+    "rules_heading": "Diagnoseregeln",
+    "dictionary_heading": "Bauteilblätter",
+    "audit_heading": "Prüfergebnis"
+  },
+  "empty": {
+    "title": "Kein Wissenspaket verfügbar",
+    "body_default": "Es ist kein Wissenspaket verfügbar. Starte die Pipeline, um eines zu erstellen.",
+    "load_failed": "Wissenspaket „{slug}“ konnte nicht geladen werden."
+  },
+  "verdict": {
+    "none_title": "Für dieses Wissenspaket liegt noch keine Prüfung vor.",
+    "none_label": "PRÜFUNG · offen",
+    "approved_label": "PRÜFUNG · bestanden",
+    "needs_revision_label": "PRÜFUNG · Überarbeitung",
+    "rejected_label": "PRÜFUNG · abgelehnt",
+    "unknown_label": "PRÜFUNG · unbekannt",
+    "consistency": "Konsistenz"
+  },
+  "counts": {
+    "components": "Bauteile",
+    "signals": "Signale",
+    "nodes": "Knoten",
+    "edges": "Kanten",
+    "rules": "Regeln",
+    "sheets": "Blätter",
+    "rules_count": "<b>{n}</b> Regeln",
+    "rules_count_zero": "<b>0</b> Regeln",
+    "sheets_count": "<b>{n}</b> Blätter",
+    "sheets_count_zero": "<b>0</b> Blätter",
+    "registry_count": "<b>{c}</b> Bauteile · <b>{s}</b> Signale",
+    "graph_count": "<b>{n}</b> Knoten · <b>{e}</b> Kanten"
+  },
+  "registry": {
+    "missing": "registry.json fehlt. Pipeline wurde nicht ausgeführt.",
+    "components_heading": "Bauteile ({n})",
+    "signals_heading": "Signale ({n})",
+    "no_components": "Keine Bauteile.",
+    "no_signals": "Keine Signale.",
+    "th_refdes": "Refdes",
+    "th_type": "Typ",
+    "th_aliases": "Aliasse",
+    "th_description": "Beschreibung",
+    "th_canonical": "Kanonischer Name",
+    "th_nominal_voltage": "Sollspannung"
+  },
+  "graph": {
+    "missing": "knowledge_graph.json fehlt.",
+    "no_edges": "Keine Kanten im Graphen.",
+    "stat_symptoms": "Symptome",
+    "stat_components": "Bauteile",
+    "stat_nets": "Netze",
+    "stat_edges": "Kanten"
+  },
+  "rules": {
+    "missing": "rules.json fehlt.",
+    "none": "Keine Diagnoseregeln.",
+    "no_symptom": "(kein Symptom)",
+    "h_symptoms": "Symptome",
+    "h_likely_causes": "Wahrscheinliche Ursachen",
+    "h_diagnostic_steps": "Diagnoseschritte",
+    "h_sources": "Quellen",
+    "expected": "erwartet {value}",
+    "conf_label": "Konf. {value}"
+  },
+  "dictionary": {
+    "missing": "dictionary.json fehlt.",
+    "none": "Keine Bauteilblätter.",
+    "th_refdes": "Refdes",
+    "th_role": "Funktion",
+    "th_package": "Gehäuse",
+    "th_failure_modes": "Fehlerbilder",
+    "th_notes": "Notizen"
+  },
+  "audit": {
+    "missing": "audit_verdict.json fehlt. Die Pipeline hat dieses Wissenspaket noch nicht geprüft.",
+    "headline_approved": "Prüfung bestanden: Das Wissenspaket stimmt mit der Registry überein.",
+    "headline_needs_revision": "Prüfung: Überarbeitung angefordert. Abweichungen erkannt, Korrekturen erforderlich.",
+    "headline_rejected": "Prüfung abgelehnt: Wissenspaket inkonsistent, so nicht verwendbar.",
+    "headline_unknown": "Unbekannter Prüfstatus.",
+    "files_to_rewrite": "Neu zu schreibende Dateien",
+    "drift_heading": "Abweichungen erkannt ({n})"
+  }
+}

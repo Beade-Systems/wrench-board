@@ -1,0 +1,20 @@
+{
+  "device_kind": {
+    "label": "Platinentyp (optional)",
+    "none": "(nicht angegeben)",
+    "options": {
+      "gpu_card": "Grafikkarte (GPU)",
+      "laptop_logic_board": "Laptop-Logicboard",
+      "phone_logic_board": "Smartphone-Logicboard",
+      "desktop_motherboard": "Desktop-Mainboard",
+      "sbc_board": "Einplatinencomputer (SBC)",
+      "power_charging_board": "Strom-/Ladeplatine",
+      "other": "Sonstige"
+    }
+  },
+  "schematic": {
+    "label": "Schaltplan (optional, für ein präziseres Wissenspaket)",
+    "cta": "Schaltplan-PDF anhängen",
+    "already_ingested": "Schaltplan bereits eingelesen ✓ (kein Anhang nötig)"
+  }
+}

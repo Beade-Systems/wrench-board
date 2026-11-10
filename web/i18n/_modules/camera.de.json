@@ -1,0 +1,11 @@
+{
+  "picker": {
+    "none": "(keine)",
+    "device_fallback": "Kamera {id}…"
+  },
+  "preview": {
+    "title_prefix": "Kamera",
+    "label_fallback": "Kamera",
+    "close_aria": "Vorschau schließen"
+  }
+}

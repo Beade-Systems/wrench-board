@@ -1,0 +1,67 @@
+{
+  "empty": {
+    "title": "Kein Graph geladen",
+    "body": "Starte die Erstellungs-Pipeline für ein Gerät: Der Graph wird aus dem resultierenden Wissenspaket aufgebaut."
+  },
+  "legend": {
+    "types_heading": "Typen",
+    "type_symptom": "Symptom",
+    "type_symptom_desc": "was der Kunde beobachtet",
+    "type_net": "Netz / Rail",
+    "type_net_desc": "Signal oder Versorgung",
+    "type_component": "Bauteil",
+    "type_component_desc": "Chip, Steckverbinder",
+    "type_action": "Aktion",
+    "type_action_desc": "mögliche Reparatur",
+    "relations_heading": "Beziehungen",
+    "rel_causes": "verursacht",
+    "rel_causes_desc": "kausale Verbindung",
+    "rel_powers": "versorgt",
+    "rel_powers_desc": "Stromfluss",
+    "rel_connected": "verbunden mit",
+    "rel_connected_desc": "Bus / Masse",
+    "rel_resolves": "behebt",
+    "rel_resolves_desc": "Korrekturmaßnahme"
+  },
+  "controls": {
+    "zoom_in": "Vergrößern",
+    "zoom_out": "Verkleinern",
+    "fit": "Einpassen"
+  },
+  "inspector": {
+    "type_inferred": "· vom Modell abgeleitet",
+    "id_label": "ID: {id}",
+    "confidence": "Konfidenz",
+    "description": "Beschreibung",
+    "metadata": "Metadaten",
+    "relations": "Beziehungen",
+    "edge_weight": "{label} · Gewicht {weight}",
+    "edge_outgoing": "→",
+    "edge_incoming": "←",
+    "rules_field": "Regeln",
+    "conf_high": "Hohe Konfidenz: durch mehrere Quellen belegt.",
+    "conf_low": "Niedrige Konfidenz: einzelne Quelle oder indirekte Ableitung.",
+    "conf_medium": "Mittlere Konfidenz: teilweise abgeglichen."
+  },
+  "tooltip": {
+    "conf_pct": "Konf. {pct}%"
+  },
+  "subsystem": {
+    "fallback_label": "SONSTIGE"
+  },
+  "type_label": {
+    "component": "Bauteil",
+    "symptom": "Symptom",
+    "net": "Netz / Rail",
+    "action": "Aktion"
+  },
+  "rel_label": {
+    "causes": "verursacht",
+    "powers": "versorgt",
+    "connected_to": "verbunden mit",
+    "resolves": "behebt"
+  },
+  "stats": {
+    "summary": "{n} Knoten · {e} Kanten"
+  }
+}

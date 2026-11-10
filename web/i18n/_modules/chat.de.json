@@ -1,0 +1,191 @@
+{
+  "demo": {
+    "read_only": "Demo-Modus: Das Beispielgerät ist schreibgeschützt. Erstelle deine eigene Diagnose, um dem Agenten echte Fragen zu stellen."
+  },
+  "panel": {
+    "aria": "Diagnose-Agent",
+    "badge": "Agent",
+    "title": "Diagnose",
+    "subline_empty": "(inaktiv)"
+  },
+  "header": {
+    "camera_chip_title": "Kamera für cam_capture (Flow B)",
+    "camera_chip_none": "(keine)",
+    "camera_preview_title": "Kameravorschau ein-/ausblenden",
+    "camera_preview_aria": "Kameravorschau umschalten",
+    "tier_title": "Modellstufe",
+    "tier_fast": "Schnell · Haiku 4.5",
+    "tier_normal": "Normal · Sonnet 4.6",
+    "tier_deep": "Gründlich · Opus 4.8",
+    "close_aria": "Panel schließen"
+  },
+  "status": {
+    "idle": "inaktiv",
+    "connecting": "verbinde · {slug} · {tier}",
+    "connected": "verbunden · {slug} · {tier}",
+    "closed": "geschlossen",
+    "error_socket": "Socket-Fehler",
+    "url_invalid": "ungültige URL"
+  },
+  "conv": {
+    "title": "Unterhaltungen",
+    "label_empty": "CHAT 0/0",
+    "label_count": "CHAT {idx}/{total}",
+    "new": "Neue Unterhaltung",
+    "default_title": "Unterhaltung {idx}",
+    "turns_one": "{n} Runde",
+    "turns_many": "{n} Runden",
+    "ago_seconds": "vor {n} s",
+    "ago_minutes": "vor {n} Min.",
+    "ago_hours": "vor {n} Std.",
+    "ago_days": "vor {n} Tg.",
+    "ago_unknown": "unbekannt",
+    "switching": "→ Unterhaltung wird gewechselt: {id}",
+    "delete_aria": "Unterhaltung löschen",
+    "delete_confirm": "Diese Unterhaltung löschen?\nDer Nachrichtenverlauf und die verknüpfte Agent-Sitzung werden gelöscht. Das kann nicht rückgängig gemacht werden.",
+    "delete_failed": "Löschen fehlgeschlagen. Versuch es noch einmal."
+  },
+  "input": {
+    "placeholder": "Frag den Agenten… (Enter zum Senden, Umschalt+Enter für neue Zeile)",
+    "upload_title": "Makrofoto hochladen (PNG/JPEG, max. 5 MB)",
+    "upload_aria": "Makrofoto hochladen",
+    "stop_title": "Agent unterbrechen (Esc)",
+    "stop_aria": "Stoppen",
+    "send_title": "Senden (Enter)",
+    "send_aria": "Senden"
+  },
+  "dropzone": {
+    "label": "Foto hier ablegen"
+  },
+  "roles": {
+    "user": "Du",
+    "agent": "Agent",
+    "replay_suffix": " · Wiedergabe"
+  },
+  "pending": {
+    "thinking": "der Agent denkt nach"
+  },
+  "step": {
+    "expand_title": "Rohdaten anzeigen",
+    "no_result": "(Ergebnis nicht verfügbar: von der Laufzeit nicht geliefert)"
+  },
+  "tool": {
+    "mb_get_component": "<span class=\"refdes\">{refdes}</span> wird nachgeschlagen",
+    "mb_get_rules_for_symptoms": "Regeln für „{symptoms}“ werden gelesen",
+    "mb_list_findings": "Befunde werden durchgesehen",
+    "mb_list_findings_for": "Befunde für <span class=\"refdes\">{device}</span> werden durchgesehen",
+    "mb_record_finding": "Befund wird gespeichert",
+    "mb_expand_knowledge": "Wissenspaket wird erweitert",
+    "mb_expand_knowledge_scope": "Wissenspaket wird erweitert: {scope}",
+    "mb_schematic_graph": "Schaltplan-Graph wird gelesen",
+    "bv_highlight": "<span class=\"refdes\">{refdes}</span> wird hervorgehoben",
+    "bv_focus": "<span class=\"refdes\">{refdes}</span> wird fokussiert",
+    "bv_reset_view": "Ansicht wird zurückgesetzt",
+    "bv_highlight_net": "Netz <span class=\"net\">{net}</span> wird hervorgehoben",
+    "bv_flip": "Platine wird umgedreht",
+    "bv_annotate_near": "Anmerkung bei <span class=\"refdes\">{refdes}</span> wird gesetzt",
+    "bv_annotate_at": "Anmerkung bei ({x}, {y}) wird gesetzt",
+    "bv_annotate_blank": "Anmerkung wird gesetzt",
+    "bv_filter_by_type": "Typfilter wird gesetzt: {prefix}",
+    "bv_draw_arrow": "Pfeil von <span class=\"refdes\">{from}</span> nach <span class=\"refdes\">{to}</span> wird gezeichnet",
+    "bv_measure": "Messung zwischen <span class=\"refdes\">{a}</span> und <span class=\"refdes\">{b}</span> wird durchgeführt",
+    "bv_show_pin": "Pin {pin} von <span class=\"refdes\">{refdes}</span> wird angezeigt",
+    "bv_dim_unrelated": "Nicht relevante Elemente werden abgedunkelt",
+    "bv_layer_visibility": "Sichtbarkeit von Lage {layer} wird geändert",
+    "bv_scene_empty": "Szene wird aufgebaut (leer)",
+    "bv_scene": "Szene wird aufgebaut: {parts}",
+    "scene_highlight_one": "{n} Hervorhebung",
+    "scene_highlight_many": "{n} Hervorhebungen",
+    "scene_annotation_one": "{n} Anmerkung",
+    "scene_annotation_many": "{n} Anmerkungen",
+    "scene_arrow_one": "{n} Pfeil",
+    "scene_arrow_many": "{n} Pfeile",
+    "scene_focus": "Fokus <span class=\"refdes\">{refdes}</span>",
+    "scene_dim": "Abdunkeln",
+    "scene_reset": "Zurücksetzen",
+    "stock_search": "Lager wird nach <span class=\"refdes\">{type} {value}</span> durchsucht",
+    "stock_search_minimal": "Lager wird durchsucht",
+    "stock_consume": "<span class=\"refdes\">{refdes}</span> wird aus <span class=\"refdes\">{donor_id}</span> entnommen",
+    "stock_mark_donor": "<span class=\"refdes\">{device_slug}</span> wird als Spender markiert",
+    "stock_unmark_donor": "Spender <span class=\"refdes\">{donor_id}</span> wird entfernt",
+    "stock_list_donors": "Spender im Lager werden aufgelistet"
+  },
+  "memtool": {
+    "read": "Speicher wird gelesen: {path}",
+    "write": "Speicher wird beschrieben: {path}",
+    "edit": "Speicher wird bearbeitet: {path}",
+    "view": "Speicher wird angezeigt: {path}",
+    "grep": "grep <code class=\"mem-path\">{pattern}</code>",
+    "grep_in": "grep <code class=\"mem-path\">{pattern}</code> in {path}",
+    "glob": "glob <code class=\"mem-path\">{pattern}</code>",
+    "list": "Speicher wird aufgelistet",
+    "list_at": "Speicher wird aufgelistet: {path}"
+  },
+  "context_lost": {
+    "title": "Gesprächsverlauf verloren",
+    "reason_ma_empty": "Die vorherige Sitzung wurde vom Managed-Agents-Backend archiviert (events.list leer), und es ist kein lokales JSONL-Backup vorhanden.",
+    "reason_generic": "Die vorherige Sitzung konnte nicht wiederhergestellt werden, und es konnte keine Zusammenfassung erstellt werden.",
+    "preserved_label": "Von der Festplatte wiederhergestellt und dem Agenten erneut übergeben",
+    "preserved_none": "Für diese Reparatur wurde nichts Dauerhaftes gefunden (keine Messungen, kein Prüfablauf, kein Endergebnis).",
+    "context_reinject": "Gerät, Symptom und dein Profil werden unten automatisch erneut übergeben: Der Agent weiß, woran du arbeitest.",
+    "lost_explainer": "Verloren bleibt der <strong>Gesprächsfaden</strong> (Überlegungen des Agenten, aufgeworfene Hypothesen, freier Austausch). Wenn du Ansätze besprochen oder Entscheidungen außerhalb des Prüfablaufs getroffen hast, fass sie in einer Zeile zusammen, damit er sich neu ausrichten kann.",
+    "preserved_measurements_one": "{n} Messung",
+    "preserved_measurements_many": "{n} Messungen",
+    "preserved_protocol": "Prüfablauf „{title}“ ({completed}/{total})",
+    "preserved_outcome": "Endergebnis"
+  },
+  "resume": {
+    "title": "Wiederaufnahme der Sitzung",
+    "meta_summary": "Haiku-Zusammenfassung · {tok_in}→{tok_out} Token"
+  },
+  "session": {
+    "ready": "Sitzung bereit · {mode} · {model}",
+    "ready_with_repair": "Sitzung bereit · {mode} · {model} · Reparatur {repair}",
+    "subline": "{model} · {mode}",
+    "subline_with_repair": "{model} · {mode} · Reparatur {repair}",
+    "device_label_simple": "{slug}",
+    "device_label_with_repair": "{slug} · {repair}",
+    "tier_auto_align": "→ automatische Anpassung an die Stufe dieser Unterhaltung: {tier}",
+    "tier_switch": "→ Stufe wird gewechselt: {tier}. Neue Unterhaltung.",
+    "replay_count": "Wiedergabe · {n} frühere Ereignisse",
+    "replay_done": "Wiedergabe beendet, mach dort weiter, wo du aufgehört hast",
+    "context_loaded": "Geräte- und Symptomkontext geladen · der Agent wartet auf deine erste Nachricht",
+    "session_resumed": "Sitzung fortgesetzt · Verlauf und Agent-Speicher wiederhergestellt",
+    "session_terminated": "Sitzung beendet",
+    "interrupt_sent": "Unterbrechung gesendet · der Agent stoppt"
+  },
+  "image_bubble": {
+    "alt": "Makrofoto",
+    "macro_caption": "Makrofoto, vom Techniker gesendet.",
+    "capture_caption": "Aufnahme · {label}"
+  },
+  "capture": {
+    "no_camera": "Agent hat eine Aufnahme angefordert, aber es ist keine Kamera ausgewählt",
+    "requested": "Aufnahme vom Agenten angefordert · {reason}",
+    "no_reason": "kein Grund angegeben",
+    "failed": "Aufnahme fehlgeschlagen: {error}"
+  },
+  "upload": {
+    "too_large": "Foto zu groß ({size} MB > 5 MB)",
+    "unsupported": "nicht unterstütztes Format: {mime} · nur PNG oder JPEG",
+    "socket_closed": "Hochladen nicht möglich: Socket nicht offen",
+    "failed": "Hochladen fehlgeschlagen: {error}",
+    "rejected": "Hochladen abgelehnt · {reason}"
+  },
+  "preview": {
+    "select_camera_first": "Wähle zuerst eine Kamera in der Auswahl aus",
+    "open_failed": "Vorschau konnte nicht geöffnet werden, prüfe die Berechtigungen"
+  },
+  "send": {
+    "socket_closed": "Senden nicht möglich: Socket nicht offen",
+    "connect_failed": "Verbindung fehlgeschlagen: {error}"
+  },
+  "error": {
+    "generic": "Fehler: {text}",
+    "unknown_reason": "unbekannter Grund"
+  },
+  "fix": {
+    "validated_one": "Bestätigt ({n} Lösung)",
+    "validated_many": "Bestätigt ({n} Lösungen)"
+  }
+}

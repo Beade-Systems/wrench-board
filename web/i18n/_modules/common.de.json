@@ -1,0 +1,64 @@
+{
+  "app": {
+    "title": "Wrench Board: Wissensgraph"
+  },
+  "topbar": {
+    "brand": "wrench-board",
+    "repair_log": "Reparaturjournal",
+    "settings": "Einstellungen",
+    "agent": "Agent",
+    "agent_title": "Diagnose-Agent (⌘J)"
+  },
+  "session": {
+    "tag": "SITZUNG",
+    "pill_aria": "Aktive Sitzung. Klicke, um das Dashboard zu öffnen",
+    "pill_title": "Zurück zum Sitzungs-Dashboard",
+    "leave": "Sitzung verlassen"
+  },
+  "rail": {
+    "home": "Reparaturen",
+    "diagnostic": "Diagnose",
+    "pcb": "Platine",
+    "schematic": "Schaltplan",
+    "memory": "Wissensspeicher",
+    "stock": "Lager",
+    "profile": "Profil"
+  },
+  "metabar": {
+    "view_mode": "Ansichtsmodus",
+    "view_visual": "Visuell",
+    "view_raw": "Roh",
+    "filter_symptoms": "Symptome",
+    "filter_components": "Bauteile",
+    "filter_nets": "Netze",
+    "filter_actions": "Aktionen",
+    "search_placeholder": "Knoten suchen…"
+  },
+  "tweaks": {
+    "title": "Anpassungen",
+    "close": "Schließen",
+    "relations_visible": "Sichtbare Beziehungen",
+    "rel_causes": "verursacht",
+    "rel_powers": "versorgt",
+    "rel_connected": "verbunden",
+    "rel_resolves": "behebt",
+    "edge_labels": "Kantenbeschriftung",
+    "label_hover": "Bei Hover",
+    "label_all": "Alle",
+    "label_none": "Keine",
+    "min_confidence": "Mindestkonfidenz",
+    "particle_speed": "Partikeltempo",
+    "boardview_colors": "Pin-Farben",
+    "color_signal": "Signal",
+    "color_power": "Versorgung",
+    "color_ground": "Masse",
+    "color_clock": "Takt",
+    "color_reset": "Reset",
+    "color_nc": "NC",
+    "color_testpad": "Testpad",
+    "color_via": "Via",
+    "color_board_outline": "Platinenkontur",
+    "color_board_fill": "Platinenfüllung",
+    "reset_colors": "Farben zurücksetzen"
+  }
+}

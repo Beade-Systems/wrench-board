@@ -1,13 +1,14 @@
 // i18n core — vanilla, no build step.
 //
 // Loads per-module JSON dictionaries from /i18n/_modules/{module}.{lang}.json
-// and exposes a global `i18n` API. Locale: English. New locales = drop a
+// and exposes a global `i18n` API. Locales: English, German. New locales = drop a
 // `_modules/{module}.{lang}.json` alongside the existing ones, add the lang to
 // SUPPORTED, and seed an empty bucket in `dicts`.
 //
 // Public API:
 //   i18n.t(key, params?)       → translated string, params interpolate {name}
-//   i18n.locale                → current 'en'
+//   i18n.locale                → current 'en' | 'de'
+//   i18n.intlTag               → BCP-47 tag for Intl date/number formatting
 //   i18n.setLocale(lang)       → switch + persist + re-apply DOM
 //   i18n.applyDom(root?)       → re-translate `[data-i18n]` / `[data-i18n-attr]`
 //   i18n.ready                 → Promise resolved once first dictionary loaded
@@ -15,9 +16,10 @@
 //   i18n.onChange(fn)          → notify on locale switch (re-render hook)
 import { apiFetch } from "./shared/api.js";
 
-const SUPPORTED = ['en'];
+const SUPPORTED = ['en', 'de'];
 const DEFAULT_LOCALE = 'en';
 const STORAGE_KEY = 'wb.locale';
+const INTL_TAGS = { en: 'en-US', de: 'de-DE' };
 
 // Static module list — keep alphabetic. Each entry expects one file per
 // supported locale: web/i18n/_modules/{name}.en.json
@@ -40,9 +42,10 @@ const MODULES = [
   'router',
   'schematic',
   'stock',
+  'workbench',
 ];
 
-const dicts = { en: {} };
+const dicts = { en: {}, de: {} };
 const changeListeners = new Set();
 let currentLocale = pickInitialLocale();
 let readyResolve;
@@ -163,7 +166,7 @@ async function init() {
   readyResolve();
 }
 
-const api = { t, applyDom, setLocale, onChange, onReady, ready, get locale() { return currentLocale; }, SUPPORTED };
+const api = { t, applyDom, setLocale, onChange, onReady, ready, get locale() { return currentLocale; }, get intlTag() { return INTL_TAGS[currentLocale] || INTL_TAGS[DEFAULT_LOCALE]; }, SUPPORTED };
 window.i18n = api;
 window.t = t; // global shortcut for convenience inside JS files
 

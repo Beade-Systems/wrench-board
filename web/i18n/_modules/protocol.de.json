@@ -1,0 +1,63 @@
+{
+  "aria": {
+    "step_pin": "Schrittmarkierung",
+    "panel": "Prüfablauf",
+    "toggle": "Ein-/Ausklappen",
+    "abandon": "Prüfablauf aufgeben"
+  },
+  "title": {
+    "default": "(ohne Titel)"
+  },
+  "history": {
+    "summary": "Verlauf"
+  },
+  "toggle": {
+    "collapse": "Einklappen",
+    "expand": "Ausklappen"
+  },
+  "step": {
+    "value_placeholder": "Wert",
+    "nominal_placeholder": "Sollwert {value}",
+    "observation_placeholder": "was du beobachtest…",
+    "yes": "Ja",
+    "no": "Nein",
+    "done": "Erledigt",
+    "validate": "Bestätigen",
+    "skip": "Überspringen",
+    "skip_prompt": "Warum überspringst du diesen Schritt?",
+    "result": {
+      "yes": "ja",
+      "no": "nein",
+      "done": "erledigt",
+      "empty": "k. A."
+    }
+  },
+  "abandon": {
+    "confirm": "Laufenden Prüfablauf aufgeben?",
+    "modal": {
+      "badge": "Prüfablauf aufgeben",
+      "title": "Laufenden Prüfablauf aufgeben?",
+      "body": "Der Agent wird benachrichtigt und der Prüfablauf als aufgegeben markiert. Bereits erfasste Schrittergebnisse bleiben im Reparaturverlauf erhalten.",
+      "reason_label": "Grund (optional, wird dem Agenten mitgeteilt)",
+      "reason_placeholder": "Warum aufgeben? (falsche Hypothese, Sackgasse, Kunde gegangen…)",
+      "cancel": "Abbrechen",
+      "confirm": "Ja, aufgeben"
+    }
+  },
+  "system_event": {
+    "abandoned": "Prüfablauf aufgegeben",
+    "completed": "Prüfablauf abgeschlossen"
+  },
+  "confirm": {
+    "badge": "Vorgeschlagener Prüfablauf",
+    "step_count_placeholder": "Anzahl der Schritte",
+    "step_count": "{n} Schritte",
+    "rationale_label": "Begründung",
+    "steps_label": "Schritte",
+    "reject_reason_label": "Ablehnungsgrund (optional)",
+    "reject_reason_placeholder": "Warum lehnst du diesen Prüfablauf ab? Der Agent berücksichtigt das.",
+    "hint": "Der Agent wartet auf deine Entscheidung, bevor er den Prüfablauf startet.",
+    "reject": "Ablehnen",
+    "accept": "Annehmen"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "section": {
+    "home": "Reparaturjournal",
+    "pcb": "Boardview",
+    "schematic": "Schaltplan",
+    "graphe": "Wissensspeicher",
+    "stock": "Lager & Spender",
+    "profile": "Profil"
+  },
+  "mode": {
+    "journal_tag": "JOURNAL",
+    "journal_repairs": "Reparaturen",
+    "journal_session": "Sitzung",
+    "tool_tag": "WERKZEUG",
+    "tool_boardview": "Boardview",
+    "tool_schematic": "Elektrischer Graph",
+    "tool_stock": "Lager & Spender",
+    "wait_tag": "WARTET",
+    "wait_no_memory": "Kein Wissensspeicher geladen",
+    "wait_no_repair": "Keine aktive Reparatur",
+    "wait_unbuilt": "Wissensspeicher nicht erstellt",
+    "memory_tag": "SPEICHER",
+    "memory_graph": "Wissensgraph",
+    "build_tag": "ERSTELLUNG",
+    "build_in_progress": "Wissensspeicher wird erstellt",
+    "profile_tag": "PROFIL",
+    "profile_sub": "Techniker"
+  },
+  "metabar": {
+    "no_repair": "Keine aktive Reparatur",
+    "no_memory_for_device": "Kein Wissensspeicher für dieses Gerät. Lege eine Reparatur an, um ihn aufzubauen.",
+    "memory_loaded_approved": "Wissensspeicher geladen · Prüfung BESTANDEN",
+    "memory_building_missing": "Wissensspeicher wird erstellt, fehlt: {missing}",
+    "open_repair_to_view_graph": "Öffne eine Reparatur aus dem Journal, um ihren Graphen anzusehen."
+  }
+}

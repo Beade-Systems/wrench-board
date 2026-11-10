@@ -1,0 +1,77 @@
+{
+  "title": "Technikerprofil",
+  "head": {
+    "tag": "Techniker",
+    "no_name": "Ohne Namen",
+    "no_specialty": "Kein Spezialgebiet",
+    "edit_identity": "Identität bearbeiten",
+    "years_one": "{n} Jahr Erf.",
+    "years_other": "{n} Jahre Erf.",
+    "years_zero": "0 Jahre",
+    "updated": "Aktualisiert {date}"
+  },
+  "ribbon": {
+    "tag": "Fortschritt",
+    "title": "Stufe {level}",
+    "default_blurb": "Die Stufe ergibt sich aus der Anzahl geübter Fähigkeiten.",
+    "blurbs": {
+      "beginner": "Du fängst gerade erst an. Der Agent erklärt jeden Schritt, bevor er dich handeln lässt.",
+      "intermediate": "Du machst Fortschritte. Der Agent erklärt weniger und lässt dich öfter führen.",
+      "confirmed": "Du bist erfahren. Der Agent überlässt dir Entscheidungen und bestätigt deine Hypothesen.",
+      "expert": "Du bist Experte. Der Agent bleibt knapp und folgt dir bei komplexen Fehlern."
+    },
+    "rungs": {
+      "beginner": "Einsteiger",
+      "intermediate": "Fortgeschritten",
+      "confirmed": "Erfahren",
+      "expert": "Experte"
+    }
+  },
+  "stats": {
+    "tag_mastered": "beherrscht",
+    "tag_practiced": "geübt",
+    "tag_learning": "wird gelernt",
+    "tag_tools": "Ausstattung",
+    "sub_skills": "von {total} erfassten Fähigkeiten",
+    "sub_tools": "von {total} Katalog-Werkzeugen",
+    "block_skills_total": "{n} Fähigkeiten",
+    "block_tools_total": "{on} / {total} aktiv"
+  },
+  "blocks": {
+    "skills_tag": "Fähigkeiten",
+    "skills_heading": "Einsatzprofil",
+    "tools_tag": "Ausstattung",
+    "tools_heading": "Deine Werkstatt",
+    "prefs_tag": "Diagnose-Einstellungen",
+    "prefs_heading": "Verhalten des Agenten"
+  },
+  "status": {
+    "mastered": "Beherrscht",
+    "practiced": "Geübt",
+    "learning": "Wird gelernt",
+    "unlearned": "Ungeübt"
+  },
+  "drawer": {
+    "close": "Schließen",
+    "no_history": "Noch kein Verlauf für diese Fähigkeit. Er wird erfasst, sobald der Agent eine bestätigte Anwendung erkennt."
+  },
+  "prefs": {
+    "verbosity": "Ausführlichkeit",
+    "language": "Sprache"
+  },
+  "modal": {
+    "kicker": "Technikerprofil",
+    "title": "Identität bearbeiten",
+    "close": "Schließen",
+    "field_name": "Name",
+    "field_avatar": "Avatar (2 Buchstaben oder Emoji)",
+    "field_years": "Jahre Erfahrung",
+    "field_specialties": "Spezialgebiete (kommagetrennt)",
+    "specialties_placeholder": "Apple, Konsolen, Laptops",
+    "field_level": "Stufe erzwingen (optional)",
+    "level_auto": "(automatisch ermittelt)",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "save_failed": "Speichern fehlgeschlagen: {error}"
+  }
+}

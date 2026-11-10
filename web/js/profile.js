@@ -13,8 +13,9 @@ let _partialLoaded = false;
 
 const STATUS_KEYS = ["mastered", "practiced", "learning", "unlearned"];
 const VERBOSITIES = ["auto", "concise", "normal", "teaching"];
-// BCP-47 tag per locale for Intl date/number formatting.
-const DATE_LOCALES = { en: "en-US" };
+// Language names stay in their own language so they remain recognisable.
+const LANGUAGES = ["en", "de"];
+const LANGUAGE_LABELS = { en: "English", de: "Deutsch" };
 
 async function ensurePartial() {
   if (_partialLoaded) return;
@@ -48,7 +49,7 @@ function fmtUpdated(iso) {
   if (!iso) return "…";
   const d = new Date(iso);
   if (isNaN(d)) return "…";
-  const locale = DATE_LOCALES[currentLocale()] || "en-US";
+  const locale = window.i18n?.intlTag || "en-US";
   const date = d.toLocaleDateString(locale, { day: "numeric", month: "short" });
   return window.t("profile.head.updated", { date });
 }
@@ -62,7 +63,7 @@ function renderHead() {
     id.avatar || (id.name?.slice(0, 2)?.toUpperCase() || "?");
   document.getElementById("profName").textContent = id.name || window.t("profile.head.no_name");
   const levelEl = document.getElementById("profLevel");
-  levelEl.textContent = level.toUpperCase();
+  levelEl.textContent = window.t(`profile.ribbon.rungs.${level}`).toUpperCase();
   levelEl.dataset.level = level;
   document.querySelector(".prof-head")?.setAttribute("data-level", level);
   document.getElementById("profYears").textContent = fmtYears(id.years_experience);
@@ -78,7 +79,7 @@ function renderRibbon() {
   const ribbon = document.getElementById("profRibbon");
   const level = _state.derived.level;
   ribbon.dataset.level = level;
-  document.getElementById("profRibbonTitle").textContent = window.t("profile.ribbon.title", { level });
+  document.getElementById("profRibbonTitle").textContent = window.t("profile.ribbon.title", { level: window.t(`profile.ribbon.rungs.${level}`) });
   const idx = LEVEL_ORDER.indexOf(level);
   const total = LEVEL_ORDER.length;
   document.getElementById("profRibbonScore").textContent = `${idx + 1} / ${total}`;
@@ -224,6 +225,7 @@ function renderPrefs() {
   };
 
   host.appendChild(makeGroup(window.t("profile.prefs.verbosity"), "verbosity", VERBOSITIES));
+  host.appendChild(makeGroup(window.t("profile.prefs.language"), "language", LANGUAGES, LANGUAGE_LABELS));
 }
 
 async function changePref(key, value) {
@@ -237,6 +239,7 @@ async function changePref(key, value) {
   renderPrefs();
   renderHead();
   renderRibbon();
+  if (key === "language") await window.i18n?.setLocale(value);
 }
 
 function openDrawer(sid, entry, rec) {

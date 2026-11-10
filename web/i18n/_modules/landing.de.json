@@ -1,0 +1,154 @@
+{
+  "sidebar": {
+    "title": "Zuletzt",
+    "aria": "Letzte Reparaturen",
+    "delete_aria": "Diese Reparatur löschen",
+    "delete_title": "Löschen",
+    "count_one": "{n} Reparatur",
+    "count_many": "{n} Reparaturen",
+    "state_building": "Wird erstellt",
+    "state_paused": "Bestätigung nötig",
+    "state_failed": "Fehlgeschlagen",
+    "locked_hint": "Wissenspaket wird erstellt. Du kannst diese Seite schließen, es läuft weiter.",
+    "resume_aria": "Fortschritt dieser Erstellung ansehen"
+  },
+  "hero": {
+    "title": "Dein Assistent für Hardware-Reparaturen.",
+    "sub": "Nenn mir dein Gerät und das Symptom: Ich baue das Wissen auf und öffne die Diagnose.",
+    "device_placeholder": "Gerät (z. B. MNT Reform Mainboard, iPhone 11, Framework 13)",
+    "device_aria": "Welches Gerät",
+    "symptom_placeholder": "Symptom (z. B. geht nicht an, lädt nicht, schwarzer Bildschirm)",
+    "symptom_aria": "Was ist das Symptom",
+    "submit": "Diagnose starten"
+  },
+  "preflight": {
+    "badge": "Neues Gerät",
+    "title": "Diagnose starten · {device}",
+    "intro": "Für dieses Gerät gibt es noch kein Wissenspaket. Beim Start wird eines von Grund auf erstellt.",
+    "credit": "Diese Diagnose verbraucht 1 Credit für die Erstellung des Wissenspakets.",
+    "time": "Die Erstellung des vollständigen Wissenspakets kann über 15 Minuten dauern. Du kannst diese Seite schließen, es läuft weiter.",
+    "schematic_label": "Schaltplan: Am besten jetzt hinzufügen",
+    "schematic_none": "Kein Schaltplan hinzugefügt. Wenn du das Schaltplan-PDF hast, füg es jetzt hinzu. Das verbessert das Wissenspaket deutlich.",
+    "schematic_attached": "Schaltplan angehängt. Er wird eingelesen, um das Wissenspaket zu präzisieren.",
+    "schematic_replace": "Anderes PDF wählen",
+    "email_optin": "Schick mir eine E-Mail, wenn das Gerät bereit ist, damit ich hier nicht warten muss.",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "confirm": "Diagnose starten"
+  },
+  "timeline": {
+    "title_default": "Wissenspaket wird erstellt…",
+    "title_build": "Wissenspaket wird erstellt · {device}",
+    "title_expand": "Gezielte Erweiterung · {device}",
+    "title_loading": "Wissenspaket wird geladen · {device}",
+    "title_ready": "Wissenspaket bereit · {status}",
+    "title_failed": "Pipeline fehlgeschlagen",
+    "title_queued": "In Warteschlange · Position {position}",
+    "elapsed": "Laufzeit · {n} s",
+    "phase_scout": "Scout · Webrecherche",
+    "phase_registry": "Registry · kanonisches Vokabular",
+    "phase_mapper": "Mapper · Refdes ↔ Graph",
+    "phase_writers": "Writers · Graph + Regeln + Glossar",
+    "phase_audit": "Auditor · Prüfung",
+    "phase_schematic_ingest": "Schaltplan · seitenweise Bildanalyse",
+    "phase_device_kind": "Gerätetyp · Klassifizierung",
+    "phase_expand": "Gezielte Recherche zu deinem Symptom",
+    "detail": "Details",
+    "detail_hide": "Ausblenden",
+    "step": {
+      "search_round": "Websuche · Runde {index}",
+      "page": "Seite {index}/{total}",
+      "writer_graph": "Graph ✓ {count} Knoten",
+      "writer_rules": "Regeln ✓ {count}",
+      "writer_dict": "Glossar ✓ {count}",
+      "audit": "Prüfung läuft",
+      "revision": "Überarbeitung {index}"
+    }
+  },
+  "status": {
+    "pipeline_started": "Pipeline für {device} gestartet.",
+    "queued": "Warten: Position {position} in der Warteschlange ({ahead} davor). Die Diagnose startet automatisch, sobald ein Platz frei wird.",
+    "checking": "Ich speichere deine Reparatur und prüfe, ob ich dieses Gerät schon kenne…",
+    "rule_match": "Diesen Fall kenne ich schon ({rule_id}). Diagnose wird geöffnet…",
+    "device_known": "{device} kenne ich schon. Diagnose wird geöffnet…",
+    "expand": "Ich kenne {device}. Ich ergänze dein konkretes Symptom (~3 Min.).",
+    "build_new": "Neu für mich: Ich erstelle das Wissenspaket im Hintergrund. Schau gern zu.",
+    "build_delay": "Neues Gerät: Das Wissenspaket wird vorbereitet. Das kann eine Weile dauern. Du kannst diese Seite schließen und später zurückkommen, es läuft weiter.",
+    "notify_armed": "Erledigt. Wir schicken dir eine E-Mail, sobald das Gerät bereit ist.",
+    "ready": "Alles bereit. Diagnose wird geöffnet…",
+    "ws_lost": "Verbindung zur Pipeline verloren. Lade die Seite neu, wenn sich nichts tut.",
+    "error_create": "Erstellung fehlgeschlagen: {error}",
+    "error_pipeline": "Fehler: {error}.",
+    "error_unknown": "unbekannt",
+    "error_invalid_response": "ungültige Serverantwort",
+    "error_delete": "Löschen fehlgeschlagen: {error}",
+    "validation_device": "Gib das Gerät genauer an (mindestens ein paar Wörter).",
+    "validation_symptom": "Beschreib das Symptom etwas genauer."
+  },
+  "delete": {
+    "confirm": "Diese Reparatur löschen? Die Unterhaltung und die Notizen des Agenten werden endgültig gelöscht."
+  },
+  "kind": {
+    "none": "(Gerätetyp, optional)",
+    "aria": "Gerätetyp"
+  },
+  "knowledge": {
+    "button": "Wissen hinzufügen",
+    "aria": "Wissen über das Gerät hinzufügen",
+    "badge": "Optional",
+    "title": "Wissen über das Gerät hinzufügen",
+    "close": "Schließen",
+    "intro": "Mehr Kontext ergibt ein präziseres Wissenspaket. Alles hier ist optional.",
+    "done": "Fertig"
+  },
+  "board_number": {
+    "label": "Platinennummer (optional)",
+    "placeholder": "820-02016",
+    "aria": "Platinennummer",
+    "hint": "In die Platine graviert. Schaltet die bekannten Besonderheiten genau deiner Revision frei."
+  },
+  "schematic": {
+    "cta": "Schaltplan-PDF anhängen (optional)",
+    "aria": "Schaltplan-PDF",
+    "already_ingested": "Schaltplan bereits eingelesen ✓ (kein Anhang nötig)"
+  },
+  "suggest": {
+    "aria": "Gerätevorschläge",
+    "draft": "Entwurf",
+    "graph_label": "Graph",
+    "graph_title": "Elektrischer Graph bereit"
+  },
+  "tools": {
+    "stock": "Lager"
+  },
+  "free": {
+    "locked_hint": "Kostenloser Tarif: Wähl ein bereits analysiertes Gerät (✓) aus der Liste, um eine Diagnose zu starten.",
+    "upgrade_cta": "Wechsle zu Pro, um ein neues Gerät zu analysieren →"
+  },
+  "catalogue": {
+    "button": "Geräte durchsuchen",
+    "aria": "Verfügbare Geräte durchsuchen",
+    "title": "Verfügbare Geräte",
+    "search_placeholder": "Gerät, Marke oder Platinennummer suchen…",
+    "filter_aria": "Nach Gerätetyp filtern",
+    "filter_all": "Alle",
+    "empty": "Kein passendes Gerät.",
+    "draft": "Entwurf",
+    "graph": "Graph",
+    "fiche_back": "Alle Geräte",
+    "fiche_known": "Was wir wissen",
+    "fiche_registry": "Registry",
+    "fiche_graph": "Wissensgraph",
+    "fiche_rules": "Diagnoseregeln",
+    "fiche_dictionary": "Glossar",
+    "fiche_boardview": "Boardview",
+    "fiche_schematic": "Schaltplan",
+    "fiche_symptom_placeholder": "Beschreib das Problem (z. B. geht nicht an, lädt nicht)",
+    "fiche_launch": "Diagnose starten",
+    "fiche_draft_locked": "Dieses Gerät wird noch erstellt. Die Diagnose ist noch nicht verfügbar.",
+    "present": "ja",
+    "absent": "nein",
+    "button_short": "Durchsuchen",
+    "crumb_types": "Typen"
+  }
+}

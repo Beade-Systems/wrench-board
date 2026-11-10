@@ -1,0 +1,121 @@
+{
+  "minimap": {
+    "title": "Beziehungen",
+    "close": "Schließen",
+    "empty_click": "Klicke auf ein Bauteil der Platine.",
+    "no_device": "Kein Gerät in der URL.",
+    "no_schematic": "Für dieses Gerät wurde kein Schaltplan eingelesen.",
+    "unknown_in_schematic": "Im Schaltplan unbekannt: {refdes}",
+    "loading": "Wird geladen…",
+    "loading_short": "lädt…",
+    "kind": {
+      "comp": "BAUTEIL",
+      "net": "NETZ"
+    },
+    "subhead": {
+      "rail": "Rail",
+      "ground": "Masse",
+      "signal": "Signal",
+      "voltage": "{volt} V",
+      "pins_count": "{n} Pins",
+      "pin_count": "{n} Pin",
+      "nostuff": "DNP"
+    },
+    "tooltip": {
+      "open_rail_with_voltage": "{label} · {volt} V (im Schaltplan öffnen)",
+      "open_rail": "{label} (im Schaltplan öffnen)",
+      "decouple_cap": "{label}: Abblockkondensator an dieser Rail",
+      "open_rail_focus": "Im Schaltplan mit Rail-Fokus öffnen",
+      "pin_role_type": "{refdes}.{pin} · {role}",
+      "pin_role_type_full": "{refdes}.{pin} · {role} · {type}",
+      "comp_type": "{refdes} · {type}",
+      "comp_type_mpn": "{refdes} · {type} · {mpn}",
+      "pins_of_ref": "{refdes} · {type} · Pins {pins}",
+      "pin_of_ref": "{refdes} · {type} · Pin {pins}",
+      "pins_of_ref_no_type": "{refdes} · Pins {pins}",
+      "pin_of_ref_no_type": "{refdes} · Pin {pins}"
+    },
+    "rail": {
+      "label": "Rail",
+      "open_in_schematic": "Im Schaltplan öffnen",
+      "source": "Quelle: {refdes}",
+      "no_peers": "kein weiteres Bauteil gelistet",
+      "no_power_role": "Keine Versorgungsfunktion erkannt",
+      "more_pins_on_net": "+{n} weitere Pins an {net}"
+    },
+    "section": {
+      "pins": "Pins ({n})",
+      "powered_by": "Versorgt von",
+      "powers": "Versorgt",
+      "decouples": "Blockt ab ({n})",
+      "more": "+{n}",
+      "more_others": "({n} weitere)"
+    },
+    "spof": "versorgt {n} Verbraucher",
+    "spof_one": "versorgt {n} Verbraucher",
+    "pin": {
+      "ground_count": "{n} Pins",
+      "ground_count_one": "{n} Pin",
+      "ground_list": "({pins})",
+      "no_net": "(kein Netz)"
+    }
+  },
+  "loader": {
+    "status": "Platine wird geladen",
+    "row": {
+      "board_id": "Platinen-ID",
+      "format": "Format",
+      "components": "Bauteile",
+      "pins": "Pins",
+      "nets": "Netze"
+    }
+  },
+  "error": {
+    "default_code": "FEHLER",
+    "default_msg": "Unbekannter Fehler",
+    "fetch_failed_msg": "HTTP {status} bei {url}"
+  },
+  "empty": {
+    "code": "KEINE BOARDVIEW",
+    "msg_with_slug": "Für {slug} ist keine Boardview geladen. Lade auf der Reparaturseite eine Datei (.brd / .kicad_pcb / .fz) hoch, um die Platinenansicht zu aktivieren.",
+    "msg_no_slug": "Keine Boardview geladen. Lade auf der Reparaturseite eine Datei (.brd / .kicad_pcb / .fz) hoch, um die Platinenansicht zu aktivieren."
+  },
+  "toolbar": {
+    "side_top": "Oberseite",
+    "side_bottom": "Unterseite",
+    "annot_title": "Bestückungsdruck ein-/ausblenden",
+    "fit_title": "An Ansicht anpassen",
+    "minimap_title": "Minimap der Schaltplan-Beziehungen bei Klick"
+  },
+  "badge": {
+    "summary": "{parts} Bauteile · {pins} Pins"
+  },
+  "inspector": {
+    "close": "Schließen",
+    "value_dash": "k. A.",
+    "footprint_dash": "k. A.",
+    "rotation": "Drehung {deg}",
+    "rotation_dash": "k. A.",
+    "smd": "SMD",
+    "tht": "THT",
+    "layer_top": "TOP",
+    "layer_bottom": "BOTTOM",
+    "layer_both": "BEIDE",
+    "size": "{w} × {h} mm · {n} Pins",
+    "size_one": "{w} × {h} mm · {n} Pin",
+    "nets_section": "Netze des Bauteils ({n})",
+    "linked_section": "Verbundene Bauteile ({n})",
+    "net_count": "×{n}",
+    "link_count": "{n} Netze",
+    "link_count_one": "{n} Netz"
+  },
+  "net": {
+    "no_net_pin": "{refdes}.{pin} · kein Netz",
+    "with_count": "{net} · {n} Pins",
+    "with_count_one": "{net} · {n} Pin"
+  },
+  "cursor": {
+    "empty": "·",
+    "xy": "x: {x}  y: {y}"
+  }
+}

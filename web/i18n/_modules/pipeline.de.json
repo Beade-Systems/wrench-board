@@ -1,0 +1,61 @@
+{
+  "drawer": {
+    "header_label": "Wissensspeicher wird aufgebaut",
+    "device_placeholder": "...",
+    "close_aria": "Fortschrittsanzeige schließen"
+  },
+  "phase": {
+    "scout": {
+      "label": "Scout",
+      "sub": "Webrecherche"
+    },
+    "registry": {
+      "label": "Registry",
+      "sub": "Kanonisches Vokabular"
+    },
+    "writers": {
+      "label": "Writers",
+      "sub": "Graph · Regeln · Wörterbuch"
+    },
+    "audit": {
+      "label": "Auditor",
+      "sub": "Qualität & Konsistenz"
+    },
+    "schematic_ingest": {
+      "label": "Schaltplan eingelesen",
+      "sub": "Bildanalyse je Seite"
+    },
+    "device_kind": {
+      "label": "Gerätetyp",
+      "sub": "Graph-Klassifizierung"
+    }
+  },
+  "step": {
+    "time_placeholder": "...",
+    "in_progress": "läuft…",
+    "failed": "fehlgeschlagen"
+  },
+  "status": {
+    "waiting": "Warte auf erste Ereignisse…",
+    "connecting": "Verbinde mit Pipeline…",
+    "started": "Pipeline gestartet…",
+    "queued": "In Warteschlange · Position <b>{position}</b> ({ahead} davor) · startet automatisch, sobald ein Platz frei wird",
+    "phase_running": "Phase läuft · <b>{phase}</b>",
+    "ready": "Wissensspeicher bereit · Prüfung <b>{status}</b> · Konsistenz <b>{score}</b>",
+    "failed": "Pipeline fehlgeschlagen · <b>{status}</b>",
+    "lost_connection": "Verbindung zum Fortschrittsstream verloren.",
+    "closed_early": "Verbindung wurde vor Ende der Pipeline geschlossen."
+  },
+  "cta": {
+    "view_memory_bank": "Wissensspeicher öffnen",
+    "close": "Schließen"
+  },
+  "kind": {
+    "declared": "Angegeben",
+    "detected": "Erkannt",
+    "recommended": "empfohlen",
+    "confirm": "Bestätigen und fortsetzen",
+    "confirmed": "bestätigt",
+    "undeclared": "nicht angegeben"
+  }
+}

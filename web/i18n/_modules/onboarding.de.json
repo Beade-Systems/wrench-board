@@ -1,0 +1,156 @@
+{
+  "skip": "Überspringen",
+  "next": "Weiter",
+  "back": "Zurück",
+  "done": "Los geht's",
+  "welcome": {
+    "kicker": "Zum ersten Mal hier",
+    "title": "Willkommen bei Wrench Board.",
+    "body": "Ich bin dein Werkstatt-Assistent. Nenn mir ein Gerät und ein Symptom, dann erstelle ich das Wissenspaket und gehe die Diagnose mit dir durch: Boardview, Schaltplan, Ursachenanalyse, das volle Programm.",
+    "cta": "Zeig mir alles",
+    "skip": "Überspringen, ich schau mich selbst um"
+  },
+  "profile": {
+    "bubble": "Zuerst richten wir dich ein. Nur ein paar kurze Schritte, damit ich meine Hilfe auf dich und deine Werkstatt abstimmen kann.",
+    "panel_title": "Dein Technikerprofil",
+    "field_name": "Name",
+    "name_placeholder": "Wie soll ich dich nennen?",
+    "name_required": "Bitte gib deinen Namen ein, um fortzufahren.",
+    "field_avatar": "Avatar",
+    "avatar_placeholder": "Kürzel oder Emoji",
+    "field_level": "Erfahrungsstufe",
+    "level_auto": "Lass mich das einschätzen",
+    "level_beginner": "Einsteiger",
+    "level_intermediate": "Fortgeschritten",
+    "level_confirmed": "Erfahren",
+    "level_expert": "Experte",
+    "field_specialties": "Spezialgebiete",
+    "specialties_placeholder": "Apple, Konsolen, Laptops",
+    "field_tools": "Werkstattausstattung",
+    "tool_soldering_iron": "Lötkolben",
+    "tool_hot_air": "Heißluftstation",
+    "tool_bga_rework": "BGA-Rework",
+    "tool_preheater": "Vorheizplatte",
+    "tool_microscope": "Mikroskop",
+    "tool_thermal_camera": "Wärmebildkamera",
+    "tool_uv_lamp": "UV-Lampe",
+    "tool_multimeter": "Multimeter",
+    "tool_oscilloscope": "Oszilloskop",
+    "tool_bench_psu": "Labornetzteil",
+    "tool_reballing_kit": "Reballing-Kit",
+    "tool_stencil_printer": "Schablonendrucker",
+    "save": "Speichern und weiter",
+    "skip_step": "Vorerst überspringen",
+    "save_failed": "Dein Profil konnte nicht gespeichert werden: {error}"
+  },
+  "wizard": {
+    "config_title": "Einrichtung",
+    "step_identity": "Über dich",
+    "step_workshop": "Deine Werkstatt",
+    "step_posture": "Wie ich helfen soll",
+    "identity_intro": "Damit ich meinen Ton an deine Erfahrung anpassen kann.",
+    "workshop_intro": "Hak an, was du hast. Ich schlage nur vor, was mit deiner Ausstattung auch geht.",
+    "posture_intro": "Leg fest, wie viel ich erkläre. Das kannst du jederzeit ändern.",
+    "progress": "Schritt {n} von {total}"
+  },
+  "level": {
+    "desc_auto": "Ich leite deine Stufe mit der Zeit aus den Fähigkeiten ab, die du festhältst."
+  },
+  "workshop": {
+    "group_soldering": "Löten",
+    "group_rework": "Rework",
+    "group_inspection": "Inspektion",
+    "group_measurement": "Messung",
+    "group_power": "Stromversorgung",
+    "group_supplies": "Verbrauchsmaterial",
+    "group_custom": "Meine weiteren Werkzeuge",
+    "custom_placeholder": "z. B. Heißklebepistole, Stereomikroskop…",
+    "custom_add": "Hinzufügen",
+    "custom_remove": "Dieses Werkzeug entfernen"
+  },
+  "posture": {
+    "verbosity_label": "Erklärungstiefe",
+    "mode_auto": "Auto",
+    "mode_concise": "Knapp",
+    "mode_normal": "Normal",
+    "mode_teaching": "Erklärend",
+    "desc_auto": "Ich passe die Tiefe an deine Erfahrung an.",
+    "desc_concise": "Kurze Antworten, nur der nächste Schritt.",
+    "desc_normal": "Ausgewogen: Begründung und Schritte.",
+    "desc_teaching": "Ich erkläre bei jedem Schritt das Warum, wie ein Mentor."
+  },
+  "concept": {
+    "bubble": "Das Prinzip: Jede Reparatur ist eine dauerhafte Sitzung, wie ein Ticket, das du jederzeit liegen lassen und wieder aufnehmen kannst. Sobald du ein Gerät nennst, recherchiere ich es, erstelle sein Wissenspaket und öffne direkt hier die Diagnose."
+  },
+  "firstdiag": {
+    "bubble_device": "Probieren wir's aus. Trag hier ein Gerät ein. Der Modellname reicht, den Rest finde ich selbst.",
+    "bubble_symptom": "Jetzt das Symptom: Was stimmt mit der Platine nicht?",
+    "bubble_launch": "Mehr brauche ich nicht. Klick auf Start und schau zu, wie ich das Gerät Phase für Phase kennenlerne. Oder tipp unten einen Vorschlag an."
+  },
+  "finish": {
+    "bubble": "Alles eingerichtet. Ich bin da, sobald du eine Reparatur öffnest. Viel Erfolg an der Werkbank."
+  },
+  "menu": {
+    "open_aria": "Profileinstellungen öffnen",
+    "incomplete": "Profil einrichten",
+    "view_profile": "Profil ansehen",
+    "level_label": "Stufe",
+    "language": "Sprache",
+    "lang_en": "English",
+    "lang_fr": "Français",
+    "lang_zh": "中文",
+    "lang_hi": "हिन्दी"
+  },
+  "modal": {
+    "title": "Dein Profil",
+    "subtitle": "Stell ein, wie ich mit dir arbeite.",
+    "section_identity": "Identität",
+    "section_workshop": "Werkstatt",
+    "section_posture": "Verhalten des Agenten",
+    "full_profile": "Vollständiges Profil öffnen (Fortschritt & Fähigkeiten)",
+    "save": "Speichern",
+    "cancel": "Abbrechen"
+  },
+  "infohint": "Was ist das?",
+  "info": {
+    "cta": "Verstanden",
+    "knowledge": {
+      "title": "Wissen hinzufügen",
+      "intro": "Gib dem Gerät seine eigenen Quellen, damit der Agent mit der echten Platine arbeiten kann und nicht nur mit Allgemeinwissen.",
+      "p1": "Schaltplan-PDF: wird Seite für Seite zu einem elektrischen Graphen verarbeitet. Schaltet den Simulator, mb_hypothesize und die Ursachenanalyse auf Ebene der Spannungsschienen frei.",
+      "p2": "Boardview (.brd / .kicad_pcb / .fz): schaltet Hervorhebung auf Pad-Ebene, Netzverfolgung und Bauteilfokus auf der 3D-Platine frei.",
+      "p3": "Auch ohne sie hilft der Agent weiter, kann aber Ursache und Wirkung auf genau dieser Platine nicht nachvollziehen. Füg hinzu, was du hast, auch wenn es nur eins davon ist."
+    },
+    "stock": {
+      "title": "Spenderlager",
+      "intro": "Such Ersatzteile auf deinen Spenderplatinen, statt zu bestellen. Der Agent wählt dabei nur sichere Äquivalente aus.",
+      "p1": "Funktioniert bei Geräten mit analysiertem Wissenspaket (mit elektrischem Graphen): Bauteile werden nach Typ, Wert und Sicherheit eingestuft und in einem durchsuchbaren Index erfasst.",
+      "p2": "Markiere defekte Platinen als Spender. Ihre Bauteile werden durchsuchbar, und jedes entnommene Bauteil wird vermerkt, damit dein Bestand stimmt.",
+      "p3": "Möglicher Gewinn: Bauteile, die du schon hast, in Sekunden wiederverwenden, Äquivalente finden, an die du nicht gedacht hast, Lieferzeiten sparen.",
+      "p4": "Mit dem Agenten: Sobald eine Fehlerursache ein Ersatzteil erfordert, ruft er stock_search mit einem harten Sicherheitsfilter auf (schließt abgestimmte / Rückkopplungs- / RF- / SMPS- / IC-Funktionen aus) und schlägt passende Spender vor."
+    },
+    "repair": {
+      "title": "So läuft eine Reparatur ab",
+      "intro": "Eine Reparatur ist eine dauerhafte Sitzung: Ich lerne dein Gerät kennen und gehe dann die Diagnose mit dir durch.",
+      "p1": "Wissenspaket: Sobald du ein Gerät nennst, recherchiere ich es und baue seine elektrische Wissensbasis auf (die Zeitleiste, die du beim Start gesehen hast).",
+      "p2": "Ansichten: Die Leiste links wechselt zwischen Diagnose-Dashboard, Boardview, Schaltplan und Wissensgraph.",
+      "p3": "Die Möglichkeiten wachsen mit den Daten: Lade einen Schaltplan oder eine Boardview, und ich schalte Simulator, Hypothesen und Analysen auf Pad-Ebene frei.",
+      "p4": "Diagnose im Gespräch: Beschreib im Chat das Symptom und deine Messungen. Ich schlage Prüfabläufe, verdächtige Bauteile und den nächsten Schritt vor und halte die Befunde laufend fest."
+    }
+  },
+  "tour": {
+    "knowledge": "Siehst du das? Füg hier einen Schaltplan oder eine Platinendatei hinzu, um den Simulator und Analysen auf Pad-Ebene freizuschalten. Das ? hilft dir jederzeit weiter.",
+    "stock": "Und hier oben: dein Spenderlager. Verwende Bauteile von defekten Platinen wieder, statt zu bestellen. Tipp auf das ?, um zu sehen, wie es geht."
+  },
+  "coach": {
+    "skip": "Tour überspringen",
+    "done": "Verstanden",
+    "session": "Du bist jetzt in einer Reparatur: einer dauerhaften Sitzung, die du jederzeit verlassen und wieder aufnehmen kannst. Ich habe dieses Gerät gerade analysiert: Schaltplan, Bauteile, Spannungsschienen, alles gespeichert.",
+    "cap": "Das kann ich auf dieser Platine gerade leisten. Je mehr du mir gibst (einen Schaltplan, eine Boardview), desto höher steigt der Wert und desto mehr Tools werden freigeschaltet.",
+    "cards": "Die Gerätedaten, die ich gesammelt habe. Du kannst sie ergänzen (um einen Schaltplan oder eine Boardview), um tiefer einzusteigen.",
+    "pcb": "Platinenansicht: deine echte Platine. Markiere ein Bauteil, und ich hebe seine Pads, sein Netz und sein Umfeld hervor.",
+    "schematic": "Schaltplan-Ansicht: der navigierbare elektrische Schaltplan, Grundlage für Simulator und Fehlerhypothesen.",
+    "graph": "Wissensspeicher-Ansicht: die ganze Platine als Graph (Bauteile, Verbindungen und die Regeln, die ich abgeleitet habe).",
+    "chat": "Für die Diagnose sprich einfach mit mir: Beschreib das Symptom und deine Messungen, und ich führe dich Schritt für Schritt."
+  }
+}

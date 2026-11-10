@@ -1,0 +1,33 @@
+{
+  "page_title": "Wrench Board: Einführung",
+  "mascot": {
+    "aria": "Maskottchen von Wrench Board"
+  },
+  "sidebar": {
+    "aria": "Letzte Reparaturen",
+    "title": "Zuletzt",
+    "item1_symptom": "geht nicht an",
+    "item1_meta": "vor 2 Std.",
+    "item2_symptom": "startet nicht, schwarzer Bildschirm",
+    "item2_meta": "gestern",
+    "item3_symptom": "schwarzer Bildschirm beim Start",
+    "item3_meta": "vor 3 Tagen"
+  },
+  "hero": {
+    "mark": "Wrench Board",
+    "title": "Dein Assistent für Hardware-Reparaturen.",
+    "sub": "Nenn mir dein Gerät und das Symptom: Ich baue das Wissen auf und öffne die Diagnose."
+  },
+  "form": {
+    "device_placeholder": "Gerät (z. B. MNT Reform Mainboard, iPhone 11, Framework 13)",
+    "device_aria": "Welches Gerät",
+    "symptom_placeholder": "Symptom (z. B. geht nicht an, lädt nicht, schwarzer Bildschirm)",
+    "symptom_aria": "Was ist das Symptom",
+    "submit": "Diagnose starten"
+  },
+  "chips": {
+    "chip1": "MNT Reform: startet nicht",
+    "chip2": "iPhone 11: lädt nicht",
+    "chip3": "Framework: schwarzer Bildschirm"
+  }
+}

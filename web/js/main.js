@@ -93,7 +93,9 @@ if (!window.Boardview) {
   // below; it's awaited further down (before routing) so the synchronous
   // onboarding gates see server truth, not an empty localStorage on a new device.
   const _profileHydrated = hydrateOnboardingState().then((env) => {
-    const pref = env?.profile?.preferences?.language;
+    // A profile without a name has never been saved: its language is only the
+    // schema default, so it must not override the browser-detected locale.
+    const pref = env?.profile?.identity?.name ? env.profile.preferences?.language : null;
     if (pref && pref !== window.i18n.locale && window.i18n.SUPPORTED.includes(pref)) {
       return window.i18n.setLocale(pref);
     }

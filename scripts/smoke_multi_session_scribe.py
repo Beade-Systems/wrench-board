@@ -24,6 +24,7 @@ Costs ~$0.02-0.05 (two short Haiku-tier sessions, ~10k total tokens).
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import time
@@ -52,11 +53,11 @@ def _stub_custom_tool_result(name: str, payload: dict) -> str:
     if name == "mb_get_component":
         # Pretend the refdes is valid so the agent can move on.
         refdes = payload.get("refdes", "?")
-        return (
-            '{"found": true, "canonical_name": "%s", '
-            '"memory_bank": {"role": "decoupling", "kind": "passive_c"}, '
-            '"board": null}' % refdes
-        )
+        return json.dumps({
+            "found": True, "canonical_name": refdes,
+            "memory_bank": {"role": "decoupling", "kind": "passive_c"},
+            "board": None,
+        })
     if name == "mb_get_rules_for_symptoms":
         # No matches — encourages the agent to fall back to its own reasoning.
         return '{"matches": [], "total_available_rules": 0}'
@@ -215,7 +216,7 @@ async def main() -> None:
 
     # Fresh repair_id every run guarantees a virgin scribe store.
     repair_id = f"smoke-multi-{int(time.time())}"
-    print(f"=== Multi-session scribe test ===")
+    print("=== Multi-session scribe test ===")
     print(f"repair_id : {repair_id}")
     print(f"planted   : {PLANTED_TOKEN}")
 

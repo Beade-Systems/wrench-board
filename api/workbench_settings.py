@@ -39,6 +39,7 @@ def apply_preferences(settings):
         "anthropic_model_main",
         "anthropic_model_fast",
         "anthropic_api_key",
+        "allegro_heap_mb",
     ):
         if name in values:
             setattr(settings, name, values[name])
@@ -65,6 +66,7 @@ def local_access(request: Request):
 class Preferences(BaseModel):
     folders: list[str] = Field(default_factory=list, max_length=30)
     active_folder: str = ""
+    allegro_heap_mb: int | None = Field(default=None, ge=128, le=4096)
     fz_key: str | None = Field(default=None, max_length=2000)
     xzz_key: str | None = Field(default=None, max_length=32)
     anthropic_api_key: str | None = Field(default=None, max_length=500)
@@ -104,6 +106,7 @@ def current():
     return {
         "folders": values.get("folders", [root] if root else []),
         "active_folder": root,
+        "allegro_heap_mb": settings.allegro_heap_mb,
         "anthropic_model_main": settings.anthropic_model_main,
         "anthropic_model_fast": settings.anthropic_model_fast,
         "configured": {name: bool(os.environ.get(env)) for name, env in SECRET_ENV.items()},

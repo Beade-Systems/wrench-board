@@ -117,19 +117,23 @@ def main() -> int:
     def _row(ext: str, s: dict) -> str:
         total = s["ok"] + s["fail"] + s["hang"]
         pct = 100.0 * s["ok"] / total if total else 0
-        t = sorted(s["times_ms"]); r = sorted(s["peak_kb"])
+        t = sorted(s["times_ms"])
+        r = sorted(s["peak_kb"])
         p50, p95, mx = _pct(t, .50), _pct(t, .95), (t[-1] if t else 0)
         mbps = 0.0
         if s["times_ms"] and s["sizes"]:
-            per = [(sz/1e6)/(ms/1000) for sz, ms in zip(s["sizes"], s["times_ms"]) if ms > 0]
+            per = [(sz/1e6)/(ms/1000) for sz, ms in zip(s["sizes"], s["times_ms"], strict=True) if ms > 0]
             mbps = sorted(per)[len(per)//2] if per else 0.0
-        ram95 = _pct(r, .95)/1024; rammax = (r[-1]/1024 if r else 0)
+        ram95 = _pct(r, .95)/1024
+        rammax = (r[-1]/1024 if r else 0)
         binflag = "B" if ext in BINARY_EXT else "·"
         return (f"{ext:6s} {binflag:>3s} {s['ok']:4d} {s['fail']:4d} {s['hang']:4d} {pct:6.1f} "
                 f"{p50:8.1f} {p95:9.1f} {mx:9.1f} {mbps:6.1f} "
                 f"{ram95:7.1f}M {rammax:7.1f}M {s['parts']:7d} {s['pins']:8d}")
 
-    print("=" * 110); print(hdr); print("-" * 110)
+    print("=" * 110)
+    print(hdr)
+    print("-" * 110)
     for ext in sorted(sample):
         s = dict(ok=0, fail=0, hang=0, parts=0, pins=0, nets=0,
                  times_ms=[], peak_kb=[], sizes=[], errors=[])

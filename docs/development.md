@@ -184,3 +184,24 @@ und das Löschen von Website-Daten können Offline-Kopien entfernen. Neue Origin
 PDFs und KI-Diagnosen sind nicht Teil dieses Offline-Modus. Kopien lassen sich einzeln
 löschen. Bei Änderungen am Offline-Assetbestand die Cache-Version in
 `web/offline-sw.js` erhöhen und die Import-Abhängigkeiten in `ASSETS` aktualisieren.
+
+### Allegro mit eigenen Dateien prüfen
+
+Der Browser-Integrationstest kann eine vorhandene Allegro-Datei durch den echten
+Upload und Viewer schicken. Die Datei bleibt außerhalb des Repositorys:
+
+```sh
+WRENCH_BOARD_ALLEGRO_SAMPLE='/pfad/zur/platine.brd' \
+CHROMIUM_EXECUTABLE=/usr/bin/chromium \
+.venv/bin/pytest -q -m browser tests/browser/test_workbench.py \
+  -k real_allegro_import_in_library
+```
+
+Der Test prüft den Import als `ALLEGRO`, vorhandene Bauteile und Pins,
+Seitenwechsel, Einpassen und die Importer-Anzeige in den Einstellungen.
+Ohne `WRENCH_BOARD_ALLEGRO_SAMPLE` wird nur dieser optionale Test übersprungen.
+
+Große Allegro-Dateien können ein höheres Speicherlimit benötigen. Unter
+**Einstellungen → Boardview-Schlüssel und Import** lässt sich das V8-Heap-Limit
+von 128 bis 4096 MiB setzen (Standard 1024 MiB); alternativ `ALLEGRO_HEAP_MB`
+in `.env`. Das ist kein Limit für den gesamten Prozessspeicher.

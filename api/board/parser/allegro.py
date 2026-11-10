@@ -151,6 +151,9 @@ class AllegroParser(BoardParser):
     extensions = (".brd",)
 
     def parse(self, raw, *, file_hash, board_id):
+        from api.config import get_settings
+
+        heap_mb = get_settings().allegro_heap_mb
         executable = node_executable()
         if not executable or not BRIDGE.is_file():
             raise InvalidBoardFile(
@@ -158,7 +161,7 @@ class AllegroParser(BoardParser):
             )
         try:
             process = subprocess.run(
-                [executable, "--max-old-space-size=512", str(BRIDGE)],
+                [executable, f"--max-old-space-size={heap_mb}", str(BRIDGE)],
                 input=raw,
                 capture_output=True,
                 timeout=TIMEOUT_SECONDS,
@@ -172,6 +175,12 @@ class AllegroParser(BoardParser):
                 f"Allegro-Importer konnte nicht gestartet werden: {exc}"
             ) from exc
         if process.returncode:
+            stderr = process.stderr.decode(errors="replace")
+            if "heap out of memory" in stderr.lower() or "allocation failed" in stderr.lower():
+                raise InvalidBoardFile(
+                    f"Allegro-Import überschreitet das Speicherlimit von {heap_mb} MiB. "
+                    "Unter Einstellungen → Boardview-Schlüssel und Import das Allegro-Speicherlimit erhöhen."
+                )
             raise InvalidBoardFile(
                 "Allegro-Import fehlgeschlagen: " + process.stderr.decode(errors="replace")[-1000:]
             )

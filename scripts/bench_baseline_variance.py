@@ -4,7 +4,12 @@ one page and diff against the existing on-disk baseline. Tells us whether
 """
 from __future__ import annotations
 
-import argparse, asyncio, json, logging, os, sys
+import argparse
+import asyncio
+import json
+import logging
+import os
+import sys
 from pathlib import Path
 
 sys.stdout.reconfigure(line_buffering=True)
@@ -14,9 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv  # noqa: E402
+
 load_dotenv(ROOT / ".env")
 
 from anthropic import AsyncAnthropic  # noqa: E402
+
 from api.pipeline.schematic.page_vision import extract_page  # noqa: E402
 from api.pipeline.schematic.renderer import render_pages  # noqa: E402
 from api.pipeline.schematic.schemas import SchematicPageGraph  # noqa: E402

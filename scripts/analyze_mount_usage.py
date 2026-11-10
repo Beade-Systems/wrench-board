@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -36,15 +37,15 @@ def classify_mount(path_or_pattern: str) -> str:
     """
     if not path_or_pattern:
         return "other"
-    p = str(path_or_pattern)
-    if "/wrench-board-global-patterns/" in p or "wrench-board-global-patterns" in p:
-        return "patterns"
-    if "/wrench-board-global-playbooks/" in p or "wrench-board-global-playbooks" in p:
-        return "playbooks"
-    if "/wrench-board-repair-" in p or "wrench-board-repair-" in p:
-        return "repair"
-    if "/wrench-board-" in p or "wrench-board-" in p:
-        return "device"
+    for part in re.split(r"[/\s\"']+", str(path_or_pattern)):
+        if part == "wrench-board-global-patterns":
+            return "patterns"
+        if part == "wrench-board-global-playbooks":
+            return "playbooks"
+        if part.startswith("wrench-board-repair-"):
+            return "repair"
+        if part.startswith("wrench-board-"):
+            return "device"
     return "other"
 
 
@@ -52,7 +53,7 @@ def extract_path(tool_input: dict) -> str:
     """Pull a path/pattern from a fs-tool input, regardless of which key holds it."""
     if not isinstance(tool_input, dict):
         return ""
-    for key in ("file_path", "path", "pattern", "glob", "directory", "cwd"):
+    for key in ("file_path", "path", "directory", "cwd", "pattern", "glob"):
         v = tool_input.get(key)
         if isinstance(v, str) and v:
             return v
@@ -133,7 +134,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "(no scenarios)"
 
-    headers = [r["id"][:24] for r in rows] + ["TOTAL"]
+    headers = [str(r["id"] or "?")[:24] for r in rows] + ["TOTAL"]
     lines: list[str] = []
 
     def fmt_row(label: str, vals: list[Any], width: int = 12) -> str:
@@ -147,7 +148,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
     lines.append(fmt_row("", headers))
     lines.append("-" * 100)
 
-    all_mounts = ["patterns", "playbooks", "device", "repair", "other"]
+    all_mounts = ["patterns", "playbooks", "device", "repair", "other", "server-side"]
     all_fs = sorted({t for r in rows for t in r["fs_by_tool_mount"]})
     for tool in all_fs:
         for mount in all_mounts:
@@ -215,18 +216,23 @@ def main() -> int:
     ap.add_argument("path", type=Path, help="JSON output from eval_diagnostic_agent")
     args = ap.parse_args()
 
-    if not args.path.exists():
-        sys.exit(f"file not found: {args.path}")
-
-    payload = json.loads(args.path.read_text())
-    scenarios = (
-        payload.get("per_scenario")
-        or payload.get("scenarios")
-        or payload.get("results")
-        or []
-    )
-    if not scenarios and isinstance(payload, list):
+    try:
+        payload = json.loads(args.path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        ap.error(f"cannot read JSON payload: {exc}")
+    if isinstance(payload, list):
         scenarios = payload
+    elif isinstance(payload, dict):
+        scenarios = (
+            payload.get("per_scenario")
+            or payload.get("scenarios")
+            or payload.get("results")
+            or []
+        )
+    else:
+        ap.error("JSON payload must be an object or a list of scenarios")
+    if not isinstance(scenarios, list) or any(not isinstance(s, dict) for s in scenarios):
+        ap.error("scenarios must be a list of objects")
     if not scenarios:
         sys.exit("no scenarios found in JSON payload (expected 'scenarios' or 'results' key)")
 

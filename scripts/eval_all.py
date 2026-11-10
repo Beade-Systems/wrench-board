@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
 import re
 import socket
@@ -33,7 +34,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -117,9 +118,9 @@ def _parse_stdout_score(stdout: str) -> tuple[float | None, dict[str, Any], str 
         payload = json.loads(text)
         if isinstance(payload, dict) and "score" in payload:
             score = payload["score"]
-            if isinstance(score, (int, float)):
+            if type(score) in (int, float) and math.isfinite(score):
                 return float(score), payload, None
-            return None, payload, f"score not numeric: {score!r}"
+            return None, payload, f"score not numeric or finite: {score!r}"
     except json.JSONDecodeError:
         pass
 
@@ -134,22 +135,29 @@ def _parse_stdout_score(stdout: str) -> tuple[float | None, dict[str, Any], str 
             continue
         if isinstance(payload, dict) and "score" in payload:
             score = payload["score"]
-            if isinstance(score, (int, float)):
+            if type(score) in (int, float) and math.isfinite(score):
                 return float(score), payload, None
+            return None, payload, f"score not numeric or finite: {score!r}"
         break
 
     # Regex fallback (no full JSON anywhere).
     m = _SCORE_RE.search(text)
     if m:
         try:
-            return float(m.group(1)), {}, None
+            score = float(m.group(1))
+            if not math.isfinite(score):
+                return None, {}, "score not finite"
+            return score, {}, None
         except ValueError:
             return None, {}, "score regex matched but not parseable as float"
 
     return None, {}, "no score field found in stdout"
 
 
-def _truncate(text: str, limit: int = 4000) -> str:
+def _truncate(text: str | bytes, limit: int = 4000) -> str:
+    # TimeoutExpired carries bytes even when subprocess.run uses text=True.
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
     if len(text) <= limit:
         return text
     head = text[: limit - 200]
@@ -167,7 +175,7 @@ class _SubprocessRunner:
 
     def run(self) -> EvalResult:
         started = time.monotonic()
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         try:
             proc = subprocess.run(
                 self.cmd,
@@ -370,7 +378,7 @@ def build_report(
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "host": socket.gethostname(),
         "platform": platform.platform(),
         "python": platform.python_version(),
@@ -476,7 +484,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     if args.output:
         output_path = Path(args.output)
     else:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         output_path = output_dir / f"{ts}.json"
 
     include_all = bool(args.include_all)

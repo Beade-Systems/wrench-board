@@ -36,7 +36,6 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
 
@@ -85,9 +84,11 @@ async def _stub_or_real_tool(
         return json.dumps(status)
 
     if name == "mb_get_component":
-        return ('{"found": true, "canonical_name": "%s", '
-                '"memory_bank": {"role": "PMIC", "kind": "ic"}, '
-                '"board": null}' % payload.get("refdes", "?"))
+        return json.dumps({
+            "found": True, "canonical_name": payload.get("refdes", "?"),
+            "memory_bank": {"role": "PMIC", "kind": "ic"},
+            "board": None,
+        })
     if name == "mb_get_rules_for_symptoms":
         return '{"matches": [], "total_available_rules": 0}'
     if name == "mb_record_finding":
@@ -211,7 +212,9 @@ async def main() -> None:
 
     from api.agent.managed_ids import load_managed_ids
     from api.agent.memory_stores import (
-        ensure_global_store, ensure_memory_store, ensure_repair_store,
+        ensure_global_store,
+        ensure_memory_store,
+        ensure_repair_store,
     )
     from api.config import get_settings
 
@@ -226,7 +229,7 @@ async def main() -> None:
     conv_a = f"c-{uuid.uuid4().hex[:6]}"
     conv_b = f"c-{uuid.uuid4().hex[:6]}"
 
-    print(f"=== conversation_log smoke ===", flush=True)
+    print("=== conversation_log smoke ===", flush=True)
     print(f"device      : {DEVICE_SLUG}", flush=True)
     print(f"repair A    : {repair_a} (conv {conv_a})", flush=True)
     print(f"repair B    : {repair_b} (conv {conv_b})", flush=True)

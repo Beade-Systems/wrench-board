@@ -51,7 +51,7 @@ make install   # create .venv and install deps (incl. [dev])
 make run       # uvicorn api.main:app --reload on :8000
 make test      # pytest tests/ -v -m "not slow" — fast subset (~1 min)
 make test-all  # pytest tests/ -v — full suite incl. slow accuracy gates (7+ min)
-make lint      # ruff check api/ tests/
+make lint      # ruff check api/ tests/ scripts/
 make check-web # validate web/ ESM imports (no-build guard — see below)
 make format    # ruff format api/ tests/
 make clean     # drop __pycache__, .pytest_cache, .ruff_cache, egg-info

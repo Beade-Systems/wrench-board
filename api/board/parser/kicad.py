@@ -17,6 +17,7 @@ Keep KICAD_PARSE_TIMEOUT modest so a hung child is bounded.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -25,6 +26,8 @@ from pathlib import Path
 from api.board.model import Board, Layer, Nail, Net, Part, Pin, Point
 from api.board.parser.base import BoardParser, InvalidBoardFile, register
 from api.board.parser.test_link import _GROUND_RE, _POWER_RE
+
+logger = logging.getLogger(__name__)
 
 _EXTRACT_SCRIPT = Path(__file__).parent / "_kicad_extract.py"
 KICAD_PARSE_TIMEOUT = 30  # seconds — MNT Reform at ~400 KB parses in ~2s
@@ -98,8 +101,14 @@ class KicadPcbParser(BoardParser):
 
         if result.returncode != 0:
             stderr = result.stderr.decode("utf-8", errors="replace").strip()
+            # stderr carries a Python traceback with absolute server paths —
+            # keep it in the server log, never in the client-facing message.
+            logger.warning(
+                "KiCad extractor failed for %s (exit=%s): %s",
+                path.name, result.returncode, stderr[-2000:],
+            )
             raise KicadSubprocessError(
-                f"KiCad extractor failed (exit={result.returncode}): {stderr[:500]}"
+                f"KiCad extractor could not read this file (exit={result.returncode})"
             )
 
         try:

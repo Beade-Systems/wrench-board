@@ -248,6 +248,11 @@ def _parse_pins_and_patch_parts(
     pin_refs_by_part: list[list[int]] = [[] for _ in parts_raw]
     prev_end = 0
     for k, (_, _, end) in enumerate(parts_raw):
+        # end_of_pins must be monotonic and within the Pins: block — an
+        # out-of-range value would otherwise allocate a huge range (memory
+        # DoS) or index past the parsed pins below.
+        if end < prev_end or end > num_pins:
+            raise MalformedHeaderError("Parts")
         pin_refs_by_part[k] = list(range(prev_end, end))
         prev_end = end
 

@@ -237,6 +237,10 @@ def _parse_pins_and_link(
     pin_refs_by_part: list[list[int]] = []
     prev_end = 0
     for _, _, end in parts_raw:
+        # Bound the range by the pins actually present: a forged end_of_pins
+        # would otherwise allocate gigabytes before cross-validation runs.
+        if end < prev_end or end > len(body):
+            raise MalformedHeaderError("Parts")
         pin_refs_by_part.append(list(range(prev_end, end)))
         prev_end = end
 

@@ -107,7 +107,10 @@ def _walk_string_heap(raw: bytes) -> list[tuple[int, str]]:
     gap = 0
     while i < n - 5:
         ptr = struct.unpack_from("<I", raw, i)[0]
-        end = raw.find(b"\x00", i + 4)
+        # Bounded search: a valid entry body is <= 48 bytes, so never scan
+        # further than that. An unbounded find() at every 4-byte step made
+        # NUL-free input quadratic (10 MB → minutes).
+        end = raw.find(b"\x00", i + 4, i + 4 + 49)
         body = raw[i + 4 : end] if end > i + 4 else b""
         ok = (
             0 < end - (i + 4) <= 48
@@ -121,7 +124,9 @@ def _walk_string_heap(raw: bytes) -> list[tuple[int, str]]:
         else:
             i += 4
             gap += 4
-            if gap >= 256 and out:
+            # Stop at the first sizeable junk run. Before any entry was found,
+            # allow a larger lead-in, but never walk an entire junk file.
+            if gap >= (256 if out else 4096):
                 break
     return out
 
@@ -233,7 +238,10 @@ def _heap_addr_index(raw: bytes) -> dict[int, str]:
     i = _HEAP_START
     while i < n - 5:
         ptr = struct.unpack_from("<I", raw, i)[0]
-        end = raw.find(b"\x00", i + 4)
+        # Bounded search: a valid entry body is <= 48 bytes, so never scan
+        # further than that. An unbounded find() at every 4-byte step made
+        # NUL-free input quadratic (10 MB → minutes).
+        end = raw.find(b"\x00", i + 4, i + 4 + 49)
         if 0 < end - (i + 4) <= 48 and (ptr >> 16) != 0:
             body = raw[i + 4 : end]
             if all(33 <= b < 127 for b in body):

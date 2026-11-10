@@ -18,6 +18,8 @@ genuinely-unrecognised binary (looks binary but is not JET4) still trips a clear
 
 from __future__ import annotations
 
+import struct
+
 from api.board.model import Board, Layer, Nail, Part, Pin, Point
 from api.board.parser._ascii_boardview import (
     DialectMarkers,
@@ -27,7 +29,12 @@ from api.board.parser._ascii_boardview import (
     parse_test_link_shape,
 )
 from api.board.parser._jet_engine import is_jet4, read_jet_tables
-from api.board.parser.base import BoardParser, ObfuscatedFileError, register
+from api.board.parser.base import (
+    BoardParser,
+    InvalidBoardFile,
+    ObfuscatedFileError,
+    register,
+)
 
 
 @register
@@ -39,8 +46,13 @@ class BVParser(BoardParser):
             # Native ATE output is a JET4 (MS Access) database. Route it to the
             # read-only JET4 engine and map the relational tables to a Board.
             if is_jet4(raw):
+                try:
+                    tables = read_jet_tables(raw)
+                except (IndexError, KeyError, ValueError, struct.error) as exc:
+                    # Truncated / corrupt JET pages: typed error, not a crash.
+                    raise InvalidBoardFile(f"bv: corrupt JET4 database ({exc})") from exc
                 return _board_from_jet_tables(
-                    read_jet_tables(raw), board_id=board_id, file_hash=file_hash
+                    tables, board_id=board_id, file_hash=file_hash
                 )
             raise ObfuscatedFileError(
                 "bv: this file looks like a binary ATE BoardView container "

@@ -1,5 +1,7 @@
 """HTTP error translation shared by upload and catalog endpoints."""
 
+import logging
+import struct
 from contextlib import contextmanager
 
 from fastapi import HTTPException
@@ -14,6 +16,8 @@ from api.board.parser.base import (
     PinPartMismatchError,
     UnsupportedFormatError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -70,4 +74,14 @@ def import_errors():
         raise HTTPException(
             status_code=400,
             detail={"detail": "io-error", "message": str(e)},
+        ) from e
+    except (IndexError, KeyError, ValueError, struct.error, MemoryError) as e:
+        # Last line of defence: a parser bug on hostile / truncated input
+        # must surface as a typed 422, not an HTTP 500. The traceback stays
+        # server-side (it names internal paths); the client gets a generic
+        # message.
+        logger.warning("board parser crashed on malformed input", exc_info=True)
+        raise HTTPException(
+            status_code=422,
+            detail={"detail": "invalid-board-file", "message": "file could not be parsed"},
         ) from e

@@ -415,6 +415,28 @@ def get_pack_schematic(
     return payload
 
 
+def _require_api_key() -> None:
+    """503 up front for the re-runnable Opus passes when no key is configured.
+
+    Without this guard the route answers 202 and the background task fails
+    (analyze-boot) or silently degrades (classify-nets → regex fallback) —
+    the client is told "started" for work that can never happen.
+    """
+    if not _pkg.get_settings().anthropic_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail={"reason": "missing_api_key", "message": "ANTHROPIC_API_KEY is not set"},
+        )
+
+
+def _is_llm_classification(path: Path) -> bool:
+    """True when `path` holds a classification produced by a model (not regex)."""
+    try:
+        return json.loads(path.read_text()).get("model_used", "regex") != "regex"
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 async def _run_boot_analyzer_in_background(device_slug: str, pack_dir: Path) -> None:
     """Background task — load the electrical graph, run Opus, persist analyzer output."""
     t0 = time.monotonic()
@@ -462,6 +484,7 @@ async def post_analyze_boot(device_slug: str) -> dict:
             status_code=404,
             detail=f"No schematic ingested yet for device_slug={slug!r}",
         )
+    _require_api_key()
     logger.info("[API] /packs/%s/schematic/analyze-boot · queued", slug)
     asyncio.create_task(_run_boot_analyzer_in_background(slug, pack_dir))
     return {"device_slug": slug, "started": True}
@@ -480,7 +503,17 @@ async def _run_net_classifier_in_background(device_slug: str, pack_dir: Path) ->
     client = AsyncAnthropic(api_key=_s.anthropic_api_key, max_retries=_s.anthropic_max_retries)
     try:
         classification = await _pkg.classify_nets(graph, client=client)
-        (pack_dir / "nets_classified.json").write_text(classification.model_dump_json(indent=2))
+        out_path = pack_dir / "nets_classified.json"
+        if classification.model_used == "regex" and _is_llm_classification(out_path):
+            # The LLM call failed and classify_nets degraded to regex — never
+            # replace a richer model-produced file with the fallback.
+            logger.warning(
+                "[API] classify-nets for %s fell back to regex — keeping existing "
+                "model classification on disk",
+                device_slug,
+            )
+            return
+        out_path.write_text(classification.model_dump_json(indent=2))
         logger.info(
             "[API] classify-nets finished for %s in %.1fs (nets=%d model=%s)",
             device_slug,
@@ -510,6 +543,7 @@ async def post_classify_nets(device_slug: str) -> dict:
             status_code=404,
             detail=f"No schematic ingested yet for device_slug={slug!r}",
         )
+    _require_api_key()
     logger.info("[API] /packs/%s/schematic/classify-nets · queued", slug)
     asyncio.create_task(_run_net_classifier_in_background(slug, pack_dir))
     return {"device_slug": slug, "started": True}

@@ -515,3 +515,36 @@ def test_get_schematic_passives_returns_classifier_output(memory_root, client):
 def test_get_schematic_passives_404_when_missing(memory_root, client):
     res = client.get("/pipeline/packs/ghost/schematic/passives")
     assert res.status_code == 404
+
+
+@pytest.mark.parametrize("route", ["analyze-boot", "classify-nets"])
+def test_opus_passes_503_without_api_key(memory_root, client, monkeypatch, route):
+    slug = "demo"
+    (memory_root / slug).mkdir()
+    (memory_root / slug / "electrical_graph.json").write_text(
+        json.dumps(_make_electrical_graph(slug))
+    )
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr(config_mod, "_settings", None)
+    res = client.post(f"/pipeline/packs/{slug}/schematic/{route}")
+    assert res.status_code == 503
+    assert res.json()["detail"]["reason"] == "missing_api_key"
+
+
+def test_classify_nets_regex_fallback_never_overwrites_llm_file(memory_root, client):
+    slug = "demo"
+    (memory_root / slug).mkdir()
+    (memory_root / slug / "electrical_graph.json").write_text(
+        json.dumps(_make_electrical_graph(slug))
+    )
+    existing = json.dumps({"model_used": "claude-opus-4-8", "nets": {"VIN": {"note": "rich"}}})
+    out = memory_root / slug / "nets_classified.json"
+    out.write_text(existing)
+    fallback = type("Fake", (), {
+        "model_dump_json": lambda self, **k: json.dumps({"model_used": "regex", "nets": {}}),
+        "nets": {}, "model_used": "regex",
+    })()
+    with patch("api.pipeline.classify_nets", new=AsyncMock(return_value=fallback)):
+        res = client.post(f"/pipeline/packs/{slug}/schematic/classify-nets")
+    assert res.status_code == 202
+    assert out.read_text() == existing

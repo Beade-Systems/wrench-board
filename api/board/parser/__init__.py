@@ -17,6 +17,7 @@ from api.board.parser import (  # noqa: F401
     bv,
     bvr,
     cad,
+    cad_import,
     cst,
     f2b,
     fz,

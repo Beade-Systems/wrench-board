@@ -57,7 +57,7 @@ def test_validation_still_applies_to_cached_bytes(counted):
     with pytest.raises(UploadRejected):
         load(service, declared=2 << 20)
     with pytest.raises(UnsupportedFormatError):
-        load(service, name="cached.xyz")
+        load(service, data=b"unrecognized content", name="cached.xyz")
     with pytest.raises(UploadRejected) as error:
         load(service, data=b"")
     assert error.value.status == 400
@@ -77,7 +77,7 @@ def test_encrypted_formats_recheck_their_key(counted):
     service = BoardImportService()
     for _ in range(2):
         with pytest.raises(BoardParserError):
-            load(service, name="board.pcb")
+            load(service, data=b"not a valid encrypted board" * 4, name="board.pcb")
     assert len(counted) == 2
 
 
@@ -136,7 +136,7 @@ def test_library_duplicate_skips_parser_after_cache_restart(tmp_path, monkeypatc
     with pytest.raises(UploadRejected):
         imports.import_into_library(io.BytesIO(DATA), "renamed.brd", 1, store)
     with pytest.raises(UnsupportedFormatError):
-        imports.import_into_library(io.BytesIO(DATA), "renamed.xyz", 1 << 20, store)
+        imports.import_into_library(io.BytesIO(b"unrecognized content"), "renamed.xyz", 1 << 20, store)
 
 
 def test_concurrent_failed_imports_are_released_and_retryable(monkeypatch):
@@ -158,3 +158,20 @@ def test_concurrent_failed_imports_are_released_and_retryable(monkeypatch):
             with pytest.raises(InvalidBoardFile):
                 task.result(timeout=5)
     assert service._get_or_build(("failing",), lambda: b"valid") == b"valid"
+
+
+def test_content_detected_xzz_never_reuses_plain_import_cache(monkeypatch):
+    from api.board.parser.test_link import BRDParser
+    from api.board.parser.xzz import XZZParser
+    from tests.board.test_xzz_decryption import _fixture
+
+    calls = []
+    def parse(self, raw, **kwargs):
+        calls.append(1)
+        return BRDParser().parse(DATA, **kwargs)
+    monkeypatch.setattr(XZZParser, 'parse', parse)
+    raw, _ = _fixture('DCFC12AC00000000')
+    service = BoardImportService()
+    load(service, data=raw, name='renamed.brd')
+    load(service, data=raw, name='renamed.brd')
+    assert len(calls) == 2

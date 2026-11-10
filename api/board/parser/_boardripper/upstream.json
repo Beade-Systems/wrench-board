@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/AlexeyInwerp/BoardRipper",
+  "commit": "2f869414a192bcf77985f6148a6343eaa7cf12e5",
+  "files": {
+    "src/frontend/src/parsers/allegro/allegro-assembler.ts": "190b6475b40bcab22182dfc8508c72a114f6aa36f459898944f862c7796f9904",
+    "src/frontend/src/parsers/allegro/allegro-blocks.ts": "5a2b780f468218b7cb886e9232af641c253ef20f0723312824b0e392856c99f0",
+    "src/frontend/src/parsers/allegro/allegro-brd-parser.ts": "6856daa09cb2e714c860cc73e9fcd65000f7e71d7a0375e9182e342083315805",
+    "src/frontend/src/parsers/allegro/allegro-db.ts": "6f92ee471583673a5bd8bf1dfae0eb12f520de429ffcb4746a0f0a095df8ea72",
+    "src/frontend/src/parsers/allegro/allegro-header.ts": "2201e7594e8ad1d2ec0b1cc3e65aa99e46012312b811dd86627b5d05a5ae13f1",
+    "src/frontend/src/parsers/allegro/allegro-infer-placement.ts": "67501927d6da9917b707068be1fa8c61f064e3affa2efa037541b12deaa17060",
+    "src/frontend/src/parsers/allegro/allegro-stream.ts": "8b7ebf97d1cd5ca4a1d58447f04fee124d6bc555fa433951d750674938eeb602",
+    "src/frontend/src/parsers/allegro/allegro-types.ts": "598bbc198c15356552ba93268b3519cc0a63dba5f04b4527c50d9cec3a0bb8d3",
+    "src/frontend/src/parsers/types.ts": "2c593712332d0e2dc646fbeb61141e13e91bae2b5800809c8bc21bf5b6c15369",
+    "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "THIRD_PARTY.md": "63ba9e52d08ad331768b4ec5b1a7bebada2713f522d87d6053d75d95d673a084"
+  }
+}

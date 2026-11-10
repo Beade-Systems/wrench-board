@@ -1,0 +1,1472 @@
+/**
+ * allegro-assembler.ts — Converts an AllegroDb into BoardData.
+ *
+ * Walks the resolved object database and string table to extract:
+ *   - Components (parts) and their pins
+ *   - Nets (via net assignment map)
+ *   - Traces (ETCH-class track segments)
+ *   - Vias
+ *   - Board outline
+ *   - Layer names
+ *
+ * Derived from KiCad 10's Allegro importer (GPL-3.0).
+ * TypeScript implementation is original code for BoardRipper.
+ */
+
+import type { BoardData, Net, Pad, PadShape, Part, Pin, Point, SilkscreenPath, Surface, Trace, Via } from '../types';
+import { computeBBox, buildNets } from '../types';
+import { AllegroDb } from './allegro-db';
+import { buildDanglingIndex, inferPlacement, pointKey } from './allegro-infer-placement';
+import { BoardUnits, FmtVer, LayerClass } from './allegro-types';
+import type {
+  Blk0x04NetAssign,
+  Blk0x05Track,
+  Blk0x07ComponentInst,
+  Blk0x08PinNumber,
+  Blk0x0DPad,
+  Blk0x11PinName,
+  Blk0x14Graphic,
+  Blk0x15_16_17Segment,
+  Blk0x01Arc,
+  Blk0x1BNet,
+  Blk0x1CPadstack,
+  Blk0x28Shape,
+  Blk0x2ALayerList,
+  Blk0x2BFootprintDef,
+  Blk0x2DFootprintInst,
+  Blk0x32PlacedPad,
+  Blk0x33Via,
+} from './allegro-types';
+import { log } from '../../store/log-store';
+
+const dbg = log.parser;
+
+/**
+ * Physical side of a placed footprint instance.
+ *
+ * `inst.layer` (0x2D byte +0x02) is the usual signal, but some exporters leave
+ * it 0 for every part regardless of side — e.g. Nvidia_5000M_Dell.brd reports
+ * 838/4 when the board is really ~355 top / ~453 bottom. Allegro also records
+ * the side on the per-footprint PACKAGE_GEOMETRY assembly drawing via the 0x14
+ * graphic's layer subclass (0xF7=top, 0xF6=bottom). That subclass agrees with
+ * inst.layer on every other corpus file where it appears, so prefer it when
+ * present and fall back to inst.layer otherwise.
+ */
+const SUBCLASS_ASSEMBLY_TOP = 0xF7;
+const SUBCLASS_ASSEMBLY_BOTTOM = 0xF6;
+function footprintSide(db: AllegroDb, fpInst: Blk0x2DFootprintInst): 'top' | 'bottom' {
+  const gfx = db.getBlockAs<Blk0x14Graphic>(fpInst.graphicPtr, 0x14);
+  if (gfx) {
+    if (gfx.layer.subclass === SUBCLASS_ASSEMBLY_TOP) return 'top';
+    if (gfx.layer.subclass === SUBCLASS_ASSEMBLY_BOTTOM) return 'bottom';
+  }
+  return fpInst.layer === 0 ? 'top' : 'bottom';
+}
+
+/**
+ * True if `key` references a 0x2B footprint definition.
+ *
+ * Placed board copper (vias, tracks) carries a `netPtr`/`netAssignment` that
+ * resolves to a 0x04 NET_ASSIGN (or 0 when unconnected). Footprint-library
+ * via-in-pad and copper templates instead point at their parent 0x2B footprint
+ * definition and store footprint-LOCAL coords, so they render as a phantom
+ * grid at the board origin. Use this to drop those template records.
+ */
+function pointsToFootprintDef(db: AllegroDb, key: number): boolean {
+  return key !== 0 && !!db.getBlockAs<Blk0x2BFootprintDef>(key, 0x2B);
+}
+
+/** Mils per one board unit, for converting raw Allegro coords to internal mils. */
+function milsPerUnit(units: BoardUnits): number {
+  switch (units) {
+    case BoardUnits.MILS:        return 1;
+    case BoardUnits.INCHES:      return 1000;
+    case BoardUnits.MILLIMETERS: return 1 / 0.0254;     // 39.3700787…
+    case BoardUnits.CENTIMETERS: return 10 / 0.0254;    // 393.700787…
+    case BoardUnits.MICROMETERS: return 0.001 / 0.0254; // 0.0393700787…
+    default:                     return 1;
+  }
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
+export function assembleBoard(db: AllegroDb): BoardData {
+  const ver = db.header.fmtVer;
+  // Every coordinate/dimension downstream is converted to internal mils via
+  // `value / div`. Allegro stores raw integers in (boardUnit / unitsDivisor)
+  // steps, so the divisor that lands us in mils is `unitsDivisor / milsPerUnit`.
+  // For MILS files (the common case) milsPerUnit=1, so div == unitsDivisor and
+  // nothing changes. Metric files (mm/µm) and inch files need the unit scale or
+  // the whole board comes out wrong-sized (e.g. a mm board read as mils is
+  // 39.37× too small). Verified: Nvidia_5000M_Dell.brd ships UNITS=mm.
+  const rawDiv = db.header.unitsDivisor || 1;
+  const div = rawDiv / milsPerUnit(db.header.boardUnits);
+
+  // Build net assignment map first — needed by pins, traces, vias
+  const netAssignMap = buildNetAssignMap(db);
+  const layerNamesEarly = (() => { let c: string[] | null = null; return () => (c ??= extractLayerNames(db)); })();
+
+  // Extract components + pins
+  const { parts, allPinPositions } = extractComponents(db, ver, div, netAssignMap);
+
+  // Detect files where the `inst.layer` convention is inverted relative to
+  // the physical top side. Some Allegro exports (Quanta Y0D/Z8I/Z8IA) place
+  // big chips (CPU/SoC/chipset) on layer=1 despite the ETCH layer-name
+  // table labelling layer 0 as "TOP". KiCad's `layer != 0 → bottom` check
+  // keeps the geometry right but mislabels sides from a user perspective.
+  // Pin-count majority reliably identifies the physical-top side for
+  // laptop/desktop motherboards (big chips always top-heavy).
+  const pinsOnTop = parts.filter(p => p.side === 'top')
+    .reduce((n, p) => n + p.pins.length, 0);
+  const pinsOnBottom = parts.filter(p => p.side === 'bottom')
+    .reduce((n, p) => n + p.pins.length, 0);
+  const totalPins = pinsOnTop + pinsOnBottom;
+  const primarySide: 'top' | 'bottom' =
+    (totalPins > 0 && pinsOnBottom / totalPins > 0.55) ? 'bottom' : 'top';
+  if (primarySide === 'bottom') {
+    dbg.log(
+      `Side inversion detected: pin majority on side='bottom' ` +
+      `(${pinsOnBottom}) vs side='top' (${pinsOnTop}). ` +
+      `Setting primarySide='bottom'; renderer will swap scene layers.`,
+    );
+  }
+
+  // Extract traces
+  const etchBase = etchSubclassBase(etchTrackSubclasses(db));
+  const traces = extractTraces(db, ver, div, netAssignMap, etchBase);
+  const surfaces = extractSurfaces(db, div, netAssignMap, etchBase);
+
+  // Extract vias
+  const vias = extractVias(db, div, netAssignMap);
+
+  // Recover components the file defines but never places, from the routing
+  // they left behind. See allegro-infer-placement.ts. Appended after the real
+  // parts so existing part indices are untouched.
+  const recovered = recoverUnplacedParts(db, ver, netAssignMap, parts, traces, vias, layerNamesEarly());
+  parts.push(...recovered);
+
+  // Extract board outline
+  const outline = extractOutline(db, ver, div);
+
+  // Extract per-component silkscreen / assembly outlines
+  const silkscreen = extractSilkscreen(db, div);
+
+  // Extract copper pads (placed pad rectangles)
+  const pads = extractPads(db, div, netAssignMap);
+
+  // Extract layer names
+  const layerNames = layerNamesEarly();
+
+  // Compute bounds from all geometry
+  const allPoints: Point[] = [];
+  for (const p of outline) allPoints.push(p);
+  for (const part of parts) allPoints.push(part.origin);
+  for (const p of allPinPositions) allPoints.push(p);
+  const bounds = computeBBox(allPoints);
+
+  dbg.log(
+    `Assembled: ${parts.length} parts, ` +
+    `${parts.reduce((n, p) => n + p.pins.length, 0)} pins, ` +
+    `${traces.length} traces, ${vias.length} vias, ` +
+    `${outline.length} outline pts, ${silkscreen.length} silkscreen paths, ` +
+    `${pads.length} pads, ${surfaces.length} surfaces, ${layerNames.length} layers`
+  );
+
+  // Components the file defines but never places: a BLK_0x07 with no
+  // fpInstPtr, whose pads carry a real net per pin but coords of (0,0,0,0),
+  // no padstack and no footprint definition for their package. They are
+  // genuinely un-drawable — there is no XY anywhere in the file — but they
+  // are *not* noise: on Compal LA-P161P the 67 of them include the BQ24800
+  // charger (PUB1), the GPU VRM controller (PUV1), every board-edge connector
+  // and every mounting hole, each with a complete pin→net table. Dropping
+  // them silently is what makes a search for "PUB1" return nothing at all, so
+  // name them in a load-time note until unplaced parts have a home of their
+  // own in BoardData.
+  const unplaced = collectUnplacedRefdes(db);
+  const notes: string[] = [];
+  if (db.parseWarning) notes.push(db.parseWarning);
+  if (unplaced.length > 0) {
+    const stillLost = unplaced.length - recovered.length;
+    notes.push(
+      `${unplaced.length} component${unplaced.length === 1 ? '' : 's'} have a netlist but no stored position in this file. ` +
+      (recovered.length > 0
+        ? `${recovered.length} were located from the routing that ends on their pads and are drawn with a dashed amber outline — ` +
+          `their pads are recovered, not read, and only some pads of each resolve. `
+        : '') +
+      (stillLost > 0
+        ? `${stillLost} could not be located (mounting holes and parts with too little routing).`
+        : ''),
+    );
+  }
+
+  // v15 also lists the nets the file names but no pad resolved to, so the
+  // Net List shows the whole netlist rather than only the connected part.
+  const nets = ver === FmtVer.V_15X ? buildV15Nets(db, parts) : buildNets(parts);
+
+  return {
+    format: 'ALLEGRO_BRD',
+    formatVersion: fmtVerLabel(ver),
+    outline,
+    parts,
+    nails: [],
+    nets,
+    bounds,
+    traces: traces.length > 0 ? traces : undefined,
+    vias: vias.length > 0 ? vias : undefined,
+    silkscreen: silkscreen.length > 0 ? silkscreen : undefined,
+    pads: pads.length > 0 ? pads : undefined,
+    surfaces: surfaces.length > 0 ? surfaces : undefined,
+    layerNames: layerNames.length > 0 ? layerNames : undefined,
+    primarySide: primarySide === 'bottom' ? 'bottom' : undefined,
+    // Surface a truncated block-stream parse (see AllegroDb.parseWarning) as a
+    // load-time note so an incomplete board is flagged, not silent.
+    parserNotes: notes.length > 0 ? notes : undefined,
+  };
+}
+
+/**
+ * Refdes of every component the file defines but never places.
+ *
+ * A placed component is a BLK_0x07 whose `fpInstPtr` reaches a BLK_0x2D
+ * footprint instance; that instance is the only thing carrying an XY. The
+ * unplaced ones still own a pad chain (via `nextInCompInst`) with a real net
+ * per pin, but every pad has zero coords and no padstack, and no footprint
+ * definition exists for their package — so there is no geometry to recover,
+ * only a name worth reporting.
+ */
+function collectUnplacedRefdes(db: AllegroDb): string[] {
+  const out: Array<{ name: string; pins: number }> = [];
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x07) continue;
+    const inst = blk as Blk0x07ComponentInst;
+    const fp = inst.fpInstPtr ? db.getBlock(inst.fpInstPtr) : null;
+    if (fp && fp.blockType === 0x2D) continue;
+    const name = db.getString(inst.refDesStrPtr);
+    if (!name) continue;
+
+    // Pad chain hangs off the component instance itself here (nextInCompInst),
+    // not off a footprint instance's nextInFp — there is no footprint.
+    let pins = 0;
+    let key = inst.firstPadPtr;
+    const seen = new Set<number>();
+    for (let i = 0; i < 100_000 && key !== 0 && !seen.has(key); i++) {
+      seen.add(key);
+      const pad = db.getBlock(key);
+      if (!pad) break;
+      if (pad.blockType === 0x32) pins++;
+      key = (pad as Blk0x32PlacedPad).nextInCompInst ?? 0;
+    }
+    out.push({ name, pins });
+  }
+  // Pin count descending: an unplaced charger IC or DIMM socket matters more
+  // to whoever reads the note than the twenty unplaced mounting holes.
+  out.sort((a, b) => b.pins - a.pins || a.name.localeCompare(b.name));
+  return out.map((c) => c.name);
+}
+
+function fmtVerLabel(v: FmtVer): string | undefined {
+  switch (v) {
+    case FmtVer.V_160: return '16.0';
+    case FmtVer.V_162: return '16.2';
+    case FmtVer.V_164: return '16.4';
+    case FmtVer.V_165: return '16.5';
+    case FmtVer.V_166: return '16.6';
+    case FmtVer.V_172: return '17.2';
+    case FmtVer.V_174: return '17.4';
+    case FmtVer.V_175: return '17.5';
+    case FmtVer.V_180: return '18.0';
+    default: return undefined;
+  }
+}
+
+// ── Net assignment map ────────────────────────────────────────────────────────
+
+/**
+ * Build a map from block key → net name string.
+ * Sources: all 0x04 NET_ASSIGN blocks. Maps both the 0x04 key AND its
+ * connItem to the net name (resolved via 0x1B NET → string table).
+ */
+function buildNetAssignMap(db: AllegroDb): Map<number, string> {
+  const map = new Map<number, string>();
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x04) continue;
+    const na = blk as Blk0x04NetAssign;
+
+    // Resolve net name: na.net → 0x1B NET → netName → string table
+    const netBlk = db.getBlockAs<Blk0x1BNet>(na.net, 0x1B);
+    if (!netBlk) continue;
+    const netName = db.getString(netBlk.netName);
+    if (!netName) continue;
+
+    map.set(na.key, netName);
+    if (na.connItem !== 0) {
+      map.set(na.connItem, netName);
+    }
+  }
+
+  return map;
+}
+
+// ── Components & Pins ─────────────────────────────────────────────────────────
+
+function extractComponents(
+  db: AllegroDb,
+  ver: FmtVer,
+  div: number,
+  netAssignMap: Map<number, string>,
+): { parts: Part[]; allPinPositions: Point[] } {
+  // v15 takes a separate path: BLK_0x2D records are not chained per-footprint
+  // (single contiguous file region, mixed-fpDef order) and BLK_0x07/0x32 walks
+  // are not yet implemented. Build parts directly from BLK_0x2D coords +
+  // BLK_0x2B (footprint definition) bbox + name. Refdes is synthesized as
+  // {fpName}_{idx} until BLK_0x07 lands.
+  if (ver === FmtVer.V_15X) {
+    return extractComponentsV15(db, div);
+  }
+  const parts: Part[] = [];
+  const allPinPositions: Point[] = [];
+
+  // Walk LL_0x2B → 0x2B footprint defs → firstInstPtr → 0x2D chain
+  const fpDefs = db.walkLinkedList(
+    db.header.LL_0x2B,
+    (blk) => (blk as Blk0x2BFootprintDef).next,
+  );
+
+  for (const fpDefBlk of fpDefs) {
+    if (fpDefBlk.blockType !== 0x2B) continue;
+    const fpDef = fpDefBlk as Blk0x2BFootprintDef;
+
+    // Footprint name is shared by every instance of this 0x2B definition —
+    // resolve once. This is the package name as authored in Allegro
+    // (e.g., "RES_0402_R1", "QFN32_5x5_0p5"). Allegro doesn't store BOM
+    // values directly in the binary DB; values live in 0x31 STRING_GRAPHIC
+    // labels on the assembly layer and are out of scope here.
+    const footprintName = fpDef.fpStrRef ? db.getString(fpDef.fpStrRef) : '';
+
+    // Walk 0x2D instance chain
+    let instKey = fpDef.firstInstPtr;
+    const MAX_INST = 1_000_000;
+    // Guard against a self-referential inst.next chain (mirrors extractPads /
+    // extractPins) — otherwise a cyclic instance list re-emits parts until the
+    // MAX_INST cap. Both advance sites below (skip + normal) are covered.
+    const visitedInst = new Set<number>();
+
+    for (let ii = 0; ii < MAX_INST && instKey !== 0; ii++) {
+      if (visitedInst.has(instKey)) break;
+      visitedInst.add(instKey);
+      const inst = db.getBlockAs<Blk0x2DFootprintInst>(instKey, 0x2D);
+      if (!inst) break;
+
+      // Resolve refdes: instRef (>= V172) or instRef16x (< V172) → 0x07 → refDesStrPtr → string
+      const instRefKey = ver >= FmtVer.V_172 ? inst.instRef : inst.instRef16x;
+      let refdes = '';
+      if (instRefKey) {
+        const compInst = db.getBlockAs<Blk0x07ComponentInst>(instRefKey, 0x07);
+        if (compInst) {
+          refdes = db.getString(compInst.refDesStrPtr);
+        }
+      }
+
+      // Skip unplaced instances (no refdes)
+      if (!refdes) {
+        instKey = inst.next;
+        continue;
+      }
+
+      const origin: Point = { x: inst.coordX / div, y: inst.coordY / div };
+      const side = footprintSide(db, inst);
+
+      // Extract pins for this footprint instance
+      const { pins, hasThru } = extractPins(db, inst, ver, div, netAssignMap);
+      for (const pin of pins) {
+        allPinPositions.push(pin.position);
+      }
+
+      // Compute bounds from pin positions + origin
+      const pinPts: Point[] = pins.map((p) => p.position);
+      pinPts.push(origin);
+      const bounds = computeBBox(pinPts);
+
+      // Through-hole when any resolved pin's padstack spans multiple etch
+      // layers / carries a drill (same criterion as extractPads' side='both').
+      const partType: 'smd' | 'throughhole' = hasThru ? 'throughhole' : 'smd';
+
+      parts.push({
+        name: refdes,
+        side,
+        type: partType,
+        origin,
+        pins,
+        bounds,
+        ...(footprintName ? { meta: { package: footprintName } } : {}),
+      });
+
+      instKey = inst.next;
+    }
+  }
+
+  return { parts, allPinPositions };
+}
+
+/**
+ * v15-only: build the Net map from the BLK_0x1B net records first, so every
+ * net the file names appears in the Net List even when no pad resolved to it,
+ * then fill `pinIndices` from the assembled parts (pin.net comes from the
+ * routes in `AllegroDb.indexV15Pads`).
+ */
+export function buildV15Nets(db: AllegroDb, parts: Part[]): Map<string, Net> {
+  const m = new Map<string, Net>();
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x1B) continue;
+    const netBlk = blk as unknown as { netName: number };
+    const raw = db.getString(netBlk.netName);
+    if (!raw) continue;
+    // Mirror the slash strip from allegro-db.ts so Net List matches Pin nets.
+    const name = raw.startsWith('/') ? raw.slice(1) : raw;
+    if (!m.has(name)) m.set(name, { name, pinIndices: [] });
+  }
+  // Populate pin connectivity from assembled parts (pin.net is set per
+  // BLK_0xC8 padGeoToNetName lookup in extractComponentsV15).
+  for (let pi = 0; pi < parts.length; pi++) {
+    const part = parts[pi];
+    for (let pni = 0; pni < part.pins.length; pni++) {
+      const pin = part.pins[pni];
+      if (!pin.net) continue;
+      let net = m.get(pin.net);
+      if (!net) {
+        net = { name: pin.net, pinIndices: [] };
+        m.set(pin.net, net);
+      }
+      net.pinIndices.push({ partIndex: pi, pinIndex: pni });
+    }
+  }
+  return m;
+}
+
+/**
+ * v15-specific component extraction.
+ *
+ * Parts are the BLK_0x2D placed instances that reach a BLK_0x07 component
+ * instance (refdes). Kronos carries 141 more BLK_0x2D records with no
+ * instance — drawing symbols (FAB_NUMBER, DIAMETRAL_DIMENSION, logos,
+ * fiducials, tooling marks) — that used to become zero-pin "UNK_n" parts and
+ * blew the board bounds out to −7885..18313 mils on a 10351×8206 board; they
+ * are skipped here.
+ *
+ * Pins come from `db.v15Pads` (the BLK_0xC8 pad ring per instance, with the
+ * inline pin numbers and every net route — see `AllegroDb.indexV15Pads`).
+ */
+function extractComponentsV15(
+  db: AllegroDb,
+  div: number,
+): { parts: Part[]; allPinPositions: Point[] } {
+  const parts: Part[] = [];
+  const allPinPositions: Point[] = [];
+  const pads = db.v15Pads;
+  let skippedSymbols = 0;
+  let ringless = 0;
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x2D) continue;
+    const inst = blk as unknown as {
+      key: number;
+      coordX: number;
+      coordY: number;
+      layer: number;        // 0=top, 1=bottom (decoded from prefix byte 2)
+      rotation: number;     // millidegrees
+      unknownPtr1: number;  // footprint definition → BLK_0x2B (resolved via the +0x18 chain)
+      instRef16x: number;   // → BLK_0x07 for refdes (v15-specific link via +0x1C)
+    };
+
+    // Refdes via BLK_0x07 (v15 stores it inline at +0x08). No instance = a
+    // drawing symbol, not a component.
+    const compInst = inst.instRef16x
+      ? (db.blocks.get(inst.instRef16x) as unknown as { blockType: number; v15Refdes?: string } | undefined)
+      : undefined;
+    const refdes = compInst && compInst.blockType === 0x07 ? (compInst.v15Refdes ?? '') : '';
+    if (!refdes) { skippedSymbols++; continue; }
+
+    const fpDef = db.blocks.get(inst.unknownPtr1) as unknown as { blockType: number; fpStrRef?: number } | undefined;
+    const fpName = fpDef && fpDef.blockType === 0x2B && fpDef.fpStrRef ? db.getString(fpDef.fpStrRef) : '';
+
+    const ox = inst.coordX / div;
+    const oy = inst.coordY / div;
+    const side: 'top' | 'bottom' = inst.layer === 1 ? 'bottom' : 'top';
+
+    const pins: Pin[] = [];
+    let hasThru = false;
+    const ring = pads?.byInstance.get(inst.key) ?? [];
+    if (ring.length === 0) ringless++;
+    for (const pad of ring) {
+      const [x1, y1, x2, y2] = pad.coords;
+      const cx = (x1 + x2) / 2 / div;
+      const cy = (y1 + y2) / 2 / div;
+      const w = Math.abs(x2 - x1) / div;
+      const h = Math.abs(y2 - y1) / div;
+      // A pad wider than 500 mils is a mis-keyed record, not copper.
+      if (!(w < 500 && h < 500) || (cx === 0 && cy === 0)) continue;
+      // Through-hole pads carry prefix byte 3 = 0x80/0xa0 (the connector and
+      // mounting-hole pads on Kronos, none of its SMD pads).
+      if (pad.flags & 0x80) hasThru = true;
+      const radius = Math.max(2, Math.min(w, h) / 2);
+      pins.push({
+        // '' when the footprint gives the pad no number — the mounting posts
+        // of the BGA/TSOP sockets on Kronos; Allegro's own v17 re-save leaves
+        // them blank too, and a ring-position stand-in would collide with the
+        // real pins 1, 2, … of the same part.
+        name: pad.name,
+        number: pad.number,
+        position: { x: cx, y: cy },
+        radius,
+        side,
+        net: pad.net,
+        padBounds: { minX: cx - w / 2, minY: cy - h / 2, maxX: cx + w / 2, maxY: cy + h / 2 },
+      });
+      allPinPositions.push({ x: cx, y: cy });
+    }
+
+    // Bounds: pin extents + margin when pins exist; otherwise a small
+    // placeholder around the origin so a pinless part is a mark, not a box
+    // built from footprint-local coordinates in the board frame.
+    let bounds: { minX: number; minY: number; maxX: number; maxY: number };
+    if (pins.length > 0) {
+      const xs = pins.map(p => p.position.x);
+      const ys = pins.map(p => p.position.y);
+      const margin = 20;
+      bounds = {
+        minX: Math.min(...xs) - margin,
+        minY: Math.min(...ys) - margin,
+        maxX: Math.max(...xs) + margin,
+        maxY: Math.max(...ys) + margin,
+      };
+    } else {
+      const placeholderHalf = 30;
+      bounds = { minX: ox - placeholderHalf, minY: oy - placeholderHalf, maxX: ox + placeholderHalf, maxY: oy + placeholderHalf };
+    }
+
+    parts.push({
+      name: refdes,
+      side,
+      type: hasThru ? 'throughhole' : 'smd',
+      origin: { x: ox, y: oy },
+      pins,
+      bounds,
+      ...(fpName ? { meta: { package: fpName } } : {}),
+    });
+  }
+
+  dbg.log(
+    `v15: ${parts.length} parts (${skippedSymbols} instance-less drawing symbols skipped, ` +
+    `${ringless} parts without a pad ring), ${allPinPositions.length} pins, ` +
+    `${parts.reduce((n, p) => n + p.pins.filter(q => q.net).length, 0)} with a net`,
+  );
+  return { parts, allPinPositions };
+}
+
+function extractPins(
+  db: AllegroDb,
+  fpInst: Blk0x2DFootprintInst,
+  ver: FmtVer,
+  div: number,
+  netAssignMap: Map<number, string>,
+): { pins: Pin[]; hasThru: boolean } {
+  const pins: Pin[] = [];
+  let padKey = fpInst.firstPadPtr;
+  const MAX_PADS = 1_000_000;
+  // Guard against a self-referential nextInFp chain (mirrors extractPads) —
+  // a corrupt/cyclic pad ring would otherwise spin to MAX_PADS re-pushing the
+  // same pins.
+  const visited = new Set<number>();
+  // True once any resolved pin sits on a through-hole padstack (multi-layer /
+  // drilled), so the caller can tag the part 'throughhole'.
+  let hasThru = false;
+
+  for (let i = 0; i < MAX_PADS && padKey !== 0; i++) {
+    if (visited.has(padKey)) break;
+    visited.add(padKey);
+    const pad = db.getBlockAs<Blk0x32PlacedPad>(padKey, 0x32);
+    if (!pad) break;
+
+    // Position: 0x32 bbox midpoint gives board-absolute coords.
+    // (0x0D coords are footprint-local offsets, not board-absolute.)
+    const [cx1, cy1, cx2, cy2] = pad.coords;
+    const px = ((cx1 + cx2) / 2) / div;
+    const py = ((cy1 + cy2) / 2) / div;
+
+    // Pin number: 0x32 ptrPinNumber → 0x08 PIN_NUMBER
+    let pinNumber = '';
+    const pinNumBlk = db.getBlockAs<Blk0x08PinNumber>(pad.ptrPinNumber, 0x08);
+    if (pinNumBlk) {
+      const strKey = ver >= FmtVer.V_172 ? pinNumBlk.strPtr : pinNumBlk.strPtr16x;
+      if (strKey) {
+        pinNumber = db.getString(strKey);
+      }
+    }
+
+    // Pin name: 0x08 pinNamePtr → 0x11 PIN_NAME → pinNameStrPtr → string
+    let pinName = '';
+    if (pinNumBlk && pinNumBlk.pinNamePtr) {
+      const pinNameBlk = db.getBlockAs<Blk0x11PinName>(pinNumBlk.pinNamePtr, 0x11);
+      if (pinNameBlk) {
+        pinName = db.getString(pinNameBlk.pinNameStrPtr);
+      }
+    }
+
+    // Net: 0x32 netPtr → net assignment map
+    const net = netAssignMap.get(pad.netPtr) ?? '';
+
+    // Radius: from 0x32 bbox. The bbox includes clearance/mask extent,
+    // so use the smaller dimension as a better pad-body estimate.
+    const bw = Math.abs(cx2 - cx1) / div;
+    const bh = Math.abs(cy2 - cy1) / div;
+    const rawRadius = Math.min(bw, bh) / 2;
+    const radius = Math.max(3, Math.min(30, rawRadius));
+
+    const side = footprintSide(db, fpInst);
+
+    // Resolve pad shape & real copper dims via the padstack so the
+    // selection highlight matches the rendered pad rectangle exactly.
+    // For THT pads the placedPad coords are the clearance frame, not the
+    // copper — recompute the bounds from the resolved pad dims centred on
+    // the pin position.
+    const fallbackW = Math.abs(cx2 - cx1) / div;
+    const fallbackH = Math.abs(cy2 - cy1) / div;
+    let padShape: PadShape | undefined;
+    let padW = fallbackW;
+    let padH = fallbackH;
+    // Pad rotation in degrees. Composed of the footprint instance rotation
+    // (board-frame placement) and the pad's own rotation in the footprint's
+    // local frame (e.g. the 90° rotation between adjacent QFN sides).
+    // Only meaningful when padstack resolution succeeds — otherwise padW/padH
+    // fall back to the already-rotated AABB extents and applying rotation
+    // would double-count.
+    let padAngleDeg = 0;
+    const padBlock = db.getBlockAs<Blk0x0DPad>(pad.padPtr, 0x0D);
+    if (padBlock) {
+      const ps = db.getBlockAs<Blk0x1CPadstack>(padBlock.padStack, 0x1C);
+      if (ps) {
+        // Through-hole padstacks span multiple etch layers (side='both' in
+        // extractPads) and usually carry a drill — reuse that criterion so the
+        // part type reflects real THT pins instead of the old hardcoded 'smd'.
+        if (ps.layerCount > 1 || ps.drill > 0) hasThru = true;
+        const resolved = resolvePadShape(ps);
+        if (resolved) {
+          padShape = resolved.shape;
+          padW = resolved.w / div;
+          padH = resolved.h / div;
+          padAngleDeg = (fpInst.rotation + padBlock.rotation) / 1000;
+        }
+      }
+    }
+    // Compute AABB of the (possibly rotated) padW × padH rectangle for
+    // hit-test bounds. For 0/90/180/270 this matches the un-rotated rect
+    // (with W/H swap at 90/270). For 45° it's the diamond's bounding box.
+    const rad = padAngleDeg * Math.PI / 180;
+    const aCo = Math.abs(Math.cos(rad));
+    const aSi = Math.abs(Math.sin(rad));
+    const aabbW = padW * aCo + padH * aSi;
+    const aabbH = padW * aSi + padH * aCo;
+    const padMinX = px - aabbW / 2;
+    const padMaxX = px + aabbW / 2;
+    const padMinY = py - aabbH / 2;
+    const padMaxY = py + aabbH / 2;
+    const padCornerRadius = padShape === 'roundrect' ? Math.min(padW, padH) / 2 : undefined;
+
+    pins.push({
+      name: pinName,
+      number: pinNumber,
+      position: { x: px, y: py },
+      radius,
+      side,
+      net,
+      padBounds: { minX: padMinX, minY: padMinY, maxX: padMaxX, maxY: padMaxY },
+      ...(padShape ? { padShape, padWidth: padW, padHeight: padH } : {}),
+      ...(padAngleDeg !== 0 ? { padAngleDeg } : {}),
+      ...(padCornerRadius != null ? { padCornerRadius } : {}),
+    });
+
+    // Follow nextInFp (NOT next!) for footprint pad chain
+    padKey = pad.nextInFp;
+  }
+
+  return { pins, hasThru };
+}
+
+// ── Recovering unplaced components ───────────────────────────────────────────
+
+/**
+ * Build parts for components the file defines but never places, positioning
+ * their pads from the dangling routing they left behind.
+ *
+ * What is claimed here is the **pads**, not the package body. Measured
+ * leave-one-out against placed parts on LA-P161P, a claimed pad lands on the
+ * true pad 98% of the time (1552/1579 within 1 mil), but only a biased subset
+ * of a part's pins can be claimed at all, so the centre of that subset is a
+ * poor estimate of the package centre (median 134 mils out). So a recovered
+ * part is exactly the pads we are sure of — its `bounds` is their extent, not
+ * a footprint — and it is flagged `placementInferred` so nothing downstream
+ * presents it as the file's own data.
+ */
+function recoverUnplacedParts(
+  db: AllegroDb,
+  ver: FmtVer,
+  netAssignMap: Map<number, string>,
+  placed: Part[],
+  traces: Trace[],
+  vias: Via[],
+  layerNames: string[],
+): Part[] {
+  if (traces.length === 0) return [];
+
+  // A trace may legitimately end on a pad that exists, or on a via.
+  const terminators = new Set<string>();
+  for (const p of placed) for (const q of p.pins) terminators.add(pointKey(q.position));
+  for (const v of vias) terminators.add(pointKey(v.position));
+
+  const idx = buildDanglingIndex(traces, terminators);
+  const lastLayer = Math.max(0, layerNames.length - 1);
+  const out: Part[] = [];
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x07) continue;
+    const inst = blk as Blk0x07ComponentInst;
+    const fp = inst.fpInstPtr ? db.getBlock(inst.fpInstPtr) : null;
+    if (fp && fp.blockType === 0x2D) continue;              // placed already
+    const name = db.getString(inst.refDesStrPtr);
+    if (!name) continue;
+
+    // Pads hang off the component instance itself when there is no footprint.
+    const pinNames: string[] = [];
+    const pinNets: string[] = [];
+    let key = inst.firstPadPtr;
+    const seen = new Set<number>();
+    for (let i = 0; i < 100_000 && key !== 0 && !seen.has(key); i++) {
+      seen.add(key);
+      const pad = db.getBlock(key);
+      if (!pad) break;
+      if (pad.blockType === 0x32) {
+        const pp = pad as Blk0x32PlacedPad;
+        // Same chain the placed-pin path walks: 0x32 → 0x08 PIN_NUMBER → string.
+        let num = '';
+        const numBlk = db.getBlockAs<Blk0x08PinNumber>(pp.ptrPinNumber, 0x08);
+        if (numBlk) {
+          const strKey = ver >= FmtVer.V_172 ? numBlk.strPtr : numBlk.strPtr16x;
+          if (strKey) num = db.getString(strKey);
+        }
+        pinNames.push(num || String(pinNames.length + 1));
+        pinNets.push(netAssignMap.get(pp.netPtr) ?? '');
+      }
+      key = (pad as Blk0x32PlacedPad).nextInCompInst ?? 0;
+    }
+    if (pinNets.length === 0) continue;
+
+    const guess = inferPlacement(pinNets, idx, pinNames);
+    if (!guess) continue;
+
+    // Side follows the copper the recovered pads sit on: outer-layer routing
+    // is the only side evidence a footprint-less component leaves.
+    let top = 0, bottom = 0;
+    const pins: Pin[] = [];
+    guess.pinPositions.forEach((pos, i) => {
+      if (!pos) return;
+      const layer = idx.layerAt.get(pointKey(pos)) ?? 0;
+      if (layer === lastLayer && lastLayer !== 0) bottom++; else top++;
+      pins.push({
+        name: pinNames[i],
+        number: pinNames[i],
+        position: pos,
+        radius: 8,
+        side: layer === lastLayer && lastLayer !== 0 ? 'bottom' : 'top',
+        net: pinNets[i],
+      });
+    });
+    if (pins.length === 0) continue;
+    const side: 'top' | 'bottom' = bottom > top ? 'bottom' : 'top';
+    for (const q of pins) q.side = side;
+
+    out.push({
+      name,
+      side,
+      type: 'unknown',
+      origin: guess.origin,
+      pins,
+      bounds: guess.bounds,
+      placementInferred: true,
+      meta: {
+        package: db.getString((db.getBlock(inst.next) as { compDeviceType?: number } | null)?.compDeviceType ?? 0) ?? undefined,
+        note:
+          `Position recovered from routing — ${guess.resolved} of ${pinNets.length} pads located` +
+          (guess.interpolated > 0
+            ? ` (${guess.resolved - guess.interpolated} from trace ends, ${guess.interpolated} filled in from the pad pitch)`
+            : '') +
+          `. Not stored in the file.`,
+      },
+    });
+  }
+
+  return out;
+}
+
+// ── Traces ────────────────────────────────────────────────────────────────────
+
+/**
+ * The ETCH subclasses used by a file's copper tracks.
+ *
+ * Split out from `extractTraces` so the rebasing rule below is unit-testable.
+ */
+function* etchTrackSubclasses(db: AllegroDb): Generator<number> {
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x05) continue;
+    const t = blk as Blk0x05Track;
+    if (t.layer.classCode === LayerClass.ETCH) yield t.layer.subclass;
+  }
+}
+
+/**
+ * Lowest ETCH subclass a file actually uses — the subclass of its first etch
+ * layer, and therefore the origin to rebase every trace's layer index against.
+ *
+ * ETCH subclass numbering is not consistent across writers, and — measured
+ * across a 24-board v16 corpus plus LA-P161P — **0-based is the norm**: 23 of
+ * 24 number the stackup TOP = 0, and only one small ODD board starts at 1. The
+ * old fixed `subclass - 1` was therefore wrong on nearly every Allegro board,
+ * not on an exotic few: it collapsed subclasses 0 and 1 onto layer index 0
+ * (merging TOP with the second layer) and shifted every layer above them one
+ * name out of step with `layerNames`. On a 2-layer file like LA-P161P that
+ * showed up as top and bottom copper in a single container.
+ *
+ * Deriving the base from the file is self-describing and still reproduces the
+ * old `subclass - 1` exactly on a genuinely 1-based file.
+ *
+ * Returns 0 for a file with no etch tracks at all.
+ */
+export function etchSubclassBase(subclasses: Iterable<number>): number {
+  let base = Infinity;
+  for (const s of subclasses) if (s < base) base = s;
+  return Number.isFinite(base) ? base : 0;
+}
+
+/** Rebase one ETCH subclass onto a 0-based layer index. */
+export function etchLayerIndex(subclass: number, base: number): number {
+  return Math.max(0, subclass - base);
+}
+
+function extractTraces(
+  db: AllegroDb,
+  _ver: FmtVer,
+  div: number,
+  netAssignMap: Map<number, string>,
+  subclassBase: number,
+): Trace[] {
+  const traces: Trace[] = [];
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x05) continue;
+    const track = blk as Blk0x05Track;
+
+    // Only ETCH-class tracks (actual copper traces)
+    if (track.layer.classCode !== LayerClass.ETCH) continue;
+
+    // Skip footprint-definition copper templates (see pointsToFootprintDef) —
+    // local-coord segments that otherwise render as a phantom cluster at the
+    // origin (340 such tracks on Nvidia_5000M_Dell.brd).
+    if (pointsToFootprintDef(db, track.netAssignment)) continue;
+
+    // Resolve net name via netAssignment → net assign map
+    const net = netAssignMap.get(track.netAssignment) ?? '';
+
+    // Resolve layer index from subclass, rebased to 0 (see etchSubclassBase)
+    const layerIdx = etchLayerIndex(track.layer.subclass, subclassBase);
+
+    // Walk segment chain: firstSegPtr → 0x15/16/17 segments + 0x01 arcs
+    let segKey = track.firstSegPtr;
+    const MAX_SEGS = 1_000_000;
+
+    for (let i = 0; i < MAX_SEGS && segKey !== 0; i++) {
+      const seg = db.getBlock(segKey);
+      if (!seg) break;
+
+      if (seg.blockType === 0x15 || seg.blockType === 0x16 || seg.blockType === 0x17) {
+        const s = seg as Blk0x15_16_17Segment;
+        const width = s.width / div;
+
+        traces.push({
+          start: { x: s.startX / div, y: s.startY / div },
+          end: { x: s.endX / div, y: s.endY / div },
+          width: width > 0 ? width : 1,
+          net,
+          layer: layerIdx,
+        });
+
+        segKey = s.next;
+      } else if (seg.blockType === 0x01) {
+        // Arc — linearize into polyline segments (~10 degrees each)
+        const arc = seg as Blk0x01Arc;
+        const arcTraces = linearizeArc(arc, div, net, layerIdx);
+        for (const t of arcTraces) traces.push(t);
+        segKey = arc.next;
+      } else {
+        // Unknown segment type — stop following chain
+        break;
+      }
+    }
+  }
+
+  return traces;
+}
+
+/**
+ * Linearize an arc into polyline trace segments.
+ * Uses ~10-degree angular steps for smooth curves.
+ */
+function linearizeArc(
+  arc: Blk0x01Arc,
+  div: number,
+  net: string,
+  layer: number,
+): Trace[] {
+  const traces: Trace[] = [];
+  const cx = arc.centerX / div;
+  const cy = arc.centerY / div;
+  const sx = arc.startX / div;
+  const sy = arc.startY / div;
+  const ex = arc.endX / div;
+  const ey = arc.endY / div;
+  const width = (arc.width / div) || 1;
+
+  // Calculate start and end angles
+  const startAngle = Math.atan2(sy - cy, sx - cx);
+  const endAngle = Math.atan2(ey - cy, ex - cx);
+  const radius = arc.radius / div;
+
+  if (radius <= 0) {
+    // Degenerate arc — just draw a line
+    traces.push({ start: { x: sx, y: sy }, end: { x: ex, y: ey }, width, net, layer });
+    return traces;
+  }
+
+  // Determine sweep direction from subType bit 6
+  const clockwise = (arc.subType & 0x40) !== 0;
+
+  let sweep: number;
+  if (clockwise) {
+    sweep = startAngle - endAngle;
+    if (sweep <= 0) sweep += 2 * Math.PI;
+  } else {
+    sweep = endAngle - startAngle;
+    if (sweep <= 0) sweep += 2 * Math.PI;
+  }
+
+  // Number of segments (~10 degrees each)
+  const steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI / 18)));
+  const dAngle = (clockwise ? -sweep : sweep) / steps;
+
+  let prevX = sx;
+  let prevY = sy;
+
+  for (let i = 1; i <= steps; i++) {
+    const angle = startAngle + dAngle * i;
+    const nx = i === steps ? ex : cx + radius * Math.cos(angle);
+    const ny = i === steps ? ey : cy + radius * Math.sin(angle);
+
+    traces.push({
+      start: { x: prevX, y: prevY },
+      end: { x: nx, y: ny },
+      width,
+      net,
+      layer,
+    });
+
+    prevX = nx;
+    prevY = ny;
+  }
+
+  return traces;
+}
+
+// ── Silkscreen / assembly outlines ────────────────────────────────────────────
+
+/**
+ * Walk every Blk0x07ComponentInst → Blk0x2DFootprintInst → graphicPtr chain.
+ * Each 0x14 in the chain is one polyline (segments + arcs). Filter to
+ * PACKAGE_GEOMETRY (cc=0x09) — that's where Allegro stores per-part assembly
+ * and silkscreen drawings. Segments arrive in board coordinates already
+ * (pre-rotated, pre-translated), so no transform pass is needed here.
+ *
+ * Side comes from `footprintSide()` — the 0x14 assembly subclass (0xF7=top,
+ * 0xF6=bottom) when present, else the `fpInst.layer` flag.
+ */
+function extractSilkscreen(db: AllegroDb, div: number): SilkscreenPath[] {
+  const out: SilkscreenPath[] = [];
+  const MAX_CHAIN = 10_000; // safety cap per component
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x07) continue;
+    const inst = blk as Blk0x07ComponentInst;
+    const fp = db.getBlock(inst.fpInstPtr);
+    if (!fp || fp.blockType !== 0x2D) continue;
+    const fpInst = fp as Blk0x2DFootprintInst;
+    if (!fpInst.graphicPtr) continue;
+
+    const side = footprintSide(db, fpInst);
+
+    let key = fpInst.graphicPtr;
+    const visited = new Set<number>();
+    for (let i = 0; i < MAX_CHAIN; i++) {
+      if (key === 0 || visited.has(key)) break;
+      visited.add(key);
+      const g = db.getBlock(key);
+      if (!g || g.blockType !== 0x14) break;
+      const gfx = g as Blk0x14Graphic;
+
+      // Filter to PACKAGE_GEOMETRY — drops layer-name text, board-level art, etc.
+      if (gfx.layer.classCode === LayerClass.PACKAGE_GEOMETRY) {
+        const points = walkSegmentChain(db, gfx.segmentPtr, div);
+        if (points.length >= 2) out.push({ points, side });
+      }
+
+      key = gfx.next;
+    }
+  }
+
+  return out;
+}
+
+// ── Copper pads ───────────────────────────────────────────────────────────────
+
+/**
+ * Walk every Blk0x07 → Blk0x2D → firstPadPtr → Blk0x32 (placed-pad) chain.
+ * The 0x32 carries an axis-aligned bbox in board coordinates that's already
+ * pre-rotated and pre-translated by Allegro for the common 0/90/180/270°
+ * placements. Use it directly as the pad rectangle.
+ *
+ * Side: derived from the padstack (Blk0x1C) — layerCount > 1 means the pad
+ * connects multiple etch layers and is treated as through-hole (side='both');
+ * otherwise it's a single-side SMD pad on the footprint's side (fp.layer
+ * 0=top, 1=bottom).
+ */
+/**
+ * Resolve the geometric pad shape from a 0x1C Padstack's per-layer
+ * components.
+ *
+ * Each padstack carries an array of `components` with a `type` byte that
+ * encodes the primitive Allegro used (researched empirically against real
+ * Quanta/Acer boards):
+ *
+ *   type=2  → Round / Circle      (testpoints, BGA balls, vias)
+ *   type=6  → Rectangle           (default SMD pad — `RE148X60`, `S0402-…`)
+ *   type=12 → Oblong / Oval       (`O10X14M10X14`, `O8X12M8X12` — capsule)
+ *   type=22 → Oblong-class        (treat the same as 12 for rendering)
+ *   type=23 → Custom shape (poly) (`TR134X148X40-45` thermal reliefs)
+ *
+ * For SMD padstacks (`padType=0`, `layerCount=1`) the actual pad is in
+ * `components[0]`. For through-hole padstacks (`padType=2`, `layerCount>1`)
+ * `components[0]` is the clearance keep-out and `components[1]` carries the
+ * real pad shape. Falls back to undefined when the data doesn't match a
+ * recognised primitive — the renderer then draws the AABB rectangle.
+ */
+/** Resolved pad geometry: the primitive shape plus the actual copper-pad
+ *  dimensions in raw padstack units (Allegro stores w/h as int with
+ *  `div`-scaled mils). Caller divides w/h by `div` for board-space mils. */
+interface ResolvedPad {
+  shape: PadShape;
+  w: number;     // raw padstack units (divide by `div` for mils)
+  h: number;     // raw padstack units
+  isCircle: boolean;
+}
+
+function resolvePadShape(padstack: Blk0x1CPadstack): ResolvedPad | null {
+  // Pick the relevant component: comp[0] for SMD, first non-clearance
+  // shape for THT (skip leading `type=6` clearance frames + thermals).
+  const isSmd = padstack.layerCount <= 1;
+  let comp = padstack.components[0];
+  if (!isSmd) {
+    for (let i = 1; i < padstack.components.length; i++) {
+      const c = padstack.components[i];
+      if (c.type !== 0 && c.w > 0 && c.h > 0 && c.type !== 23) {
+        comp = c;
+        break;
+      }
+    }
+  }
+  if (!comp || comp.type === 0 || comp.w <= 0 || comp.h <= 0) return null;
+  const isCircle = comp.w === comp.h;
+  let shape: PadShape;
+  switch (comp.type) {
+    case 2:  shape = 'round'; break;
+    case 6:  shape = 'rect'; break;
+    case 12:
+    case 22: shape = isCircle ? 'round' : 'roundrect'; break;
+    case 23: shape = 'poly'; break;
+    default: return null;
+  }
+  return { shape, w: comp.w, h: comp.h, isCircle };
+}
+
+function extractPads(
+  db: AllegroDb,
+  div: number,
+  netAssignMap: Map<number, string>,
+): Pad[] {
+  const out: Pad[] = [];
+  const MAX_CHAIN = 100_000;
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x07) continue;
+    const inst = blk as Blk0x07ComponentInst;
+    const fp = db.getBlock(inst.fpInstPtr);
+    if (!fp || fp.blockType !== 0x2D) continue;
+    const fpInst = fp as Blk0x2DFootprintInst;
+    const fpSide = footprintSide(db, fpInst);
+
+    let key = fpInst.firstPadPtr;
+    const visited = new Set<number>();
+    for (let i = 0; i < MAX_CHAIN; i++) {
+      if (key === 0 || visited.has(key)) break;
+      visited.add(key);
+      const placed = db.getBlock(key);
+      if (!placed || placed.blockType !== 0x32) break;
+      const pp = placed as Blk0x32PlacedPad;
+
+      // The placedPad's `coords` is the ROTATED AABB of the *outermost*
+      // padstack component (= the actual pad for SMD, but the *clearance
+      // keep-out frame* for THT). We use coords only for centring. Real
+      // pad-copper dims come from `resolvePadShape` (components[1] for
+      // THT), so a 712-mil GND chassis pad doesn't show up rendered as
+      // a 712-mil disc when the actual copper is only ~150 mils.
+      const [bx1, by1, bx2, by2] = pp.coords;
+      const ccx = ((bx1 + bx2) / 2) / div;
+      const ccy = ((by1 + by2) / 2) / div;
+      const fallbackW = Math.abs(bx2 - bx1) / div;
+      const fallbackH = Math.abs(by2 - by1) / div;
+
+      // Resolve through-hole vs SMD via padstack.layerCount, plus the
+      // actual pad shape & dims for shape-aware rendering.
+      let side: 'top' | 'bottom' | 'both' = fpSide;
+      let drill: number | undefined;
+      let shape: PadShape | undefined;
+      let padW = fallbackW;
+      let padH = fallbackH;
+      // Pad rotation in degrees. Composed of footprint instance rotation +
+      // pad-local rotation in the footprint frame — see extractPins.
+      // Only meaningful when padstack resolution succeeds.
+      let angleDeg = 0;
+      const padBlock = db.getBlock(pp.padPtr);
+      if (padBlock && padBlock.blockType === 0x0D) {
+        const ps = db.getBlock((padBlock as Blk0x0DPad).padStack);
+        if (ps && ps.blockType === 0x1C) {
+          const padstack = ps as Blk0x1CPadstack;
+          if (padstack.layerCount > 1) side = 'both';
+          if (side === 'both' && padstack.drill > 0) {
+            drill = padstack.drill / div;
+          }
+          const resolved = resolvePadShape(padstack);
+          if (resolved) {
+            shape = resolved.shape;
+            padW = resolved.w / div;
+            padH = resolved.h / div;
+            angleDeg = (fpInst.rotation + (padBlock as Blk0x0DPad).rotation) / 1000;
+          }
+        }
+      }
+
+      // Drop degenerate pads — both fallback bbox and resolved dims unusable.
+      if (padW <= 0 || padH <= 0) { key = pp.nextInFp; continue; }
+
+      // Bounds = AABB of the (possibly rotated) padW × padH rectangle, so
+      // hit-test stays accurate at non-orthogonal angles.
+      const rad = angleDeg * Math.PI / 180;
+      const aCo = Math.abs(Math.cos(rad));
+      const aSi = Math.abs(Math.sin(rad));
+      const aabbW = padW * aCo + padH * aSi;
+      const aabbH = padW * aSi + padH * aCo;
+      const minX = ccx - aabbW / 2;
+      const maxX = ccx + aabbW / 2;
+      const minY = ccy - aabbH / 2;
+      const maxY = ccy + aabbH / 2;
+
+      const cornerRadius = shape === 'roundrect' ? Math.min(padW, padH) / 2 : undefined;
+      const net = netAssignMap.get(pp.netPtr);
+      out.push({
+        bounds: { minX, minY, maxX, maxY },
+        side,
+        net: net && net.length > 0 ? net : undefined,
+        drill,
+        ...(shape ? { shape, width: padW, height: padH } : {}),
+        ...(angleDeg !== 0 ? { angleDeg } : {}),
+        ...(cornerRadius != null ? { cornerRadius } : {}),
+      });
+
+      key = pp.nextInFp;
+    }
+  }
+
+  return out;
+}
+
+// ── Vias ──────────────────────────────────────────────────────────────────────
+
+function extractVias(
+  db: AllegroDb,
+  div: number,
+  netAssignMap: Map<number, string>,
+): Via[] {
+  const vias: Via[] = [];
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x33) continue;
+    const via = blk as Blk0x33Via;
+
+    // Skip footprint-definition via-in-pad templates (see pointsToFootprintDef).
+    // On Nvidia_5000M_Dell.brd these are ~2.8k vias (16 GDDR chips × 170 balls)
+    // dumped as a phantom BGA grid at the origin; also Compal LA-H271P / Dell XPS.
+    if (pointsToFootprintDef(db, via.netPtr)) continue;
+
+    const x = via.coordsX / div;
+    const y = via.coordsY / div;
+
+    // Net from netPtr → net assign map
+    const net = netAssignMap.get(via.netPtr) ?? '';
+
+    // Drill diameter: prefer the padstack's drill field — that's the actual
+    // hole size. Fall back to the placed-via bbox extent (which is really
+    // the pad ring, so it overstates the drill, but at least it's non-zero).
+    const padstack = db.getBlock(via.padstack);
+    let diameter = 0;
+    if (padstack && padstack.blockType === 0x1C) {
+      const ps = padstack as Blk0x1CPadstack;
+      if (ps.drill > 0) diameter = ps.drill / div;
+    }
+    if (diameter <= 0) {
+      const [bx1, , bx2] = via.bbox;
+      diameter = Math.abs(bx2 - bx1) / div;
+    }
+
+    vias.push({
+      position: { x, y },
+      diameter: diameter > 0 ? diameter : 10,
+      net,
+      layers: [], // through-hole (all layers)
+    });
+  }
+
+  return vias;
+}
+
+// ── Board outline ─────────────────────────────────────────────────────────────
+
+// ── Copper pours (ETCH-class shapes) ─────────────────────────────────────────
+
+/**
+ * Filled copper areas — ground/power pours and plane fragments.
+ *
+ * A pour is a BLK_0x28 shape on the ETCH class, its outline reachable through
+ * `firstSegmentPtr` exactly like the board outline's. Without these the board
+ * renders as bare traces: LA-P161P alone carries 1102 of them across its two
+ * copper layers, which is most of the copper on the board by area.
+ *
+ * Two filters matter. `ptr1` is the shape's net link: on a real pour it lands
+ * on a BLK_0x04 net assignment, but on 181 of LA-P161P's ETCH shapes it lands
+ * on a BLK_0x2B footprint *definition* instead — those are copper templates in
+ * footprint-local coordinates, the same trap `extractTraces` already guards
+ * against, and drawing them paints a phantom cluster at the origin. And a
+ * shape needs at least 3 points to enclose an area.
+ *
+ * `voids` is deliberately left unset: BLK_0x28 carries `firstKeepoutPtr`, but
+ * `board-scene` refuses to punch voids on perf grounds regardless.
+ */
+function extractSurfaces(
+  db: AllegroDb,
+  div: number,
+  netAssignMap: Map<number, string>,
+  subclassBase: number,
+): Surface[] {
+  const out: Surface[] = [];
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x28) continue;
+    const shape = blk as Blk0x28Shape;
+    if (shape.layer.classCode !== LayerClass.ETCH) continue;
+    if (pointsToFootprintDef(db, shape.ptr1)) continue;
+
+    const polygon = walkSegmentChain(db, shape.firstSegmentPtr, div);
+    if (polygon.length < 3) continue;
+
+    out.push({
+      polygon,
+      net: netAssignMap.get(shape.ptr1) ?? '',
+      layer: etchLayerIndex(shape.layer.subclass, subclassBase),
+    });
+  }
+
+  return out;
+}
+
+function extractOutline(db: AllegroDb, _ver: FmtVer, div: number): Point[] {
+  // Flat scan over all 0x28 blocks rather than walking LL_Shapes only.
+  // Many Allegro files (Quanta Y0D, Z8I, Acer Z8IA) don't link the real
+  // board outline shape into LL_Shapes — it exists in the block pool but
+  // is threaded on no known linked list. KiCad's reference importer
+  // walks three separate lists; flat iteration is simpler and catches
+  // every case without sensitivity to which LL the outline lives on.
+  //
+  // Filter: BOUNDARY class (0x15), or BOARD_GEOMETRY (0x01) / DRAWING_FORMAT
+  // (0x04) with subclass 0xEA (BGEOM_OUTLINE) or 0xFD (BGEOM_DESIGN_OUTLINE).
+  // Rank by bounding-box AREA — on Compal/Quanta files the BOUNDARY layer
+  // also carries routing keepins and copper-pour boundaries that have many
+  // more segments than the board edge but a much smaller bbox; ranking by
+  // segment count therefore picks the wrong shape (LA-H271P regression).
+  // The board outline is by definition the largest enclosed shape on these
+  // layers, so area-ranking is robust. 0xEA preferred as tiebreaker.
+  let best: Point[] = [];
+  let bestScore = -1;
+
+  for (const blk of db.blocks.values()) {
+    if (blk.blockType !== 0x28) continue;
+    const shape = blk as Blk0x28Shape;
+    const cc = shape.layer.classCode;
+    const sc = shape.layer.subclass;
+
+    const isBoundary = cc === LayerClass.BOUNDARY;
+    const isBoardGeomOutline =
+      (cc === LayerClass.BOARD_GEOMETRY || cc === LayerClass.DRAWING_FORMAT) &&
+      (sc === 0xEA || sc === 0xFD);
+    if (!isBoundary && !isBoardGeomOutline) continue;
+
+    const pts = walkSegmentChain(db, shape.firstSegmentPtr, div);
+    if (pts.length < 2) continue;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const area = (maxX - minX) * (maxY - minY);
+    const score = area * 10 + (sc === 0xEA ? 1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = pts;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Walk a segment/arc chain starting at headKey, collecting points.
+ */
+function walkSegmentChain(db: AllegroDb, headKey: number, div: number): Point[] {
+  const points: Point[] = [];
+  let key = headKey;
+  const MAX_ITER = 1_000_000;
+
+  for (let i = 0; i < MAX_ITER && key !== 0; i++) {
+    const seg = db.getBlock(key);
+    if (!seg) break;
+
+    if (seg.blockType === 0x15 || seg.blockType === 0x16 || seg.blockType === 0x17) {
+      const s = seg as Blk0x15_16_17Segment;
+      if (points.length === 0) {
+        points.push({ x: s.startX / div, y: s.startY / div });
+      }
+      points.push({ x: s.endX / div, y: s.endY / div });
+      key = s.next;
+    } else if (seg.blockType === 0x01) {
+      const arc = seg as Blk0x01Arc;
+      // Linearize arc into points
+      const cx = arc.centerX / div;
+      const cy = arc.centerY / div;
+      const sx = arc.startX / div;
+      const sy = arc.startY / div;
+      const ex = arc.endX / div;
+      const ey = arc.endY / div;
+      const radius = arc.radius / div;
+
+      if (points.length === 0) {
+        points.push({ x: sx, y: sy });
+      }
+
+      if (radius > 0) {
+        const startAngle = Math.atan2(sy - cy, sx - cx);
+        const endAngle = Math.atan2(ey - cy, ex - cx);
+        const clockwise = (arc.subType & 0x40) !== 0;
+
+        let sweep: number;
+        if (clockwise) {
+          sweep = startAngle - endAngle;
+          if (sweep <= 0) sweep += 2 * Math.PI;
+        } else {
+          sweep = endAngle - startAngle;
+          if (sweep <= 0) sweep += 2 * Math.PI;
+        }
+
+        const steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI / 18)));
+        const dAngle = (clockwise ? -sweep : sweep) / steps;
+
+        for (let j = 1; j <= steps; j++) {
+          const angle = startAngle + dAngle * j;
+          const nx = j === steps ? ex : cx + radius * Math.cos(angle);
+          const ny = j === steps ? ey : cy + radius * Math.sin(angle);
+          points.push({ x: nx, y: ny });
+        }
+      } else {
+        points.push({ x: ex, y: ey });
+      }
+
+      key = arc.next;
+    } else {
+      break;
+    }
+  }
+
+  return points;
+}
+
+// ── Layer names ───────────────────────────────────────────────────────────────
+
+function extractLayerNames(db: AllegroDb): string[] {
+  // Prefer layerMap[LayerClass.ETCH] — the slot that holds the ETCH list in
+  // v16/v17. v18.0.2 dropped the slot-by-class-code convention; LA-E331P puts
+  // the ETCH list at slot 1 instead. Fall back by scanning layerMap and
+  // picking the 0x2A block that's *most-referenced* by slots — empirically
+  // the ETCH list across every Allegro version (referenced by 8–11 slots)
+  // because each etch-aware layer entry points back at it.
+  const fromList = (layerList: Blk0x2ALayerList): string[] => {
+    const out: string[] = [];
+    if (layerList.refEntries) {
+      for (const e of layerList.refEntries) {
+        const name = db.getString(e.layerNameId);
+        if (name) out.push(name);
+      }
+    } else if (layerList.nonRefEntries) {
+      for (const e of layerList.nonRefEntries) if (e.name) out.push(e.name);
+    }
+    return out;
+  };
+
+  const tryAt = (idx: number): string[] => {
+    if (idx < 0 || idx >= db.header.layerMap.length) return [];
+    const ent = db.header.layerMap[idx];
+    if (!ent || ent.layerList0x2A === 0) return [];
+    const ll = db.getBlockAs<Blk0x2ALayerList>(ent.layerList0x2A, 0x2A);
+    return ll ? fromList(ll) : [];
+  };
+
+  const primary = tryAt(LayerClass.ETCH);
+  if (primary.length > 0) return primary;
+
+  // Fallback: most-referenced 0x2A block in layerMap.
+  const refCount = new Map<number, number>();
+  for (const ent of db.header.layerMap) {
+    if (ent.layerList0x2A === 0) continue;
+    refCount.set(ent.layerList0x2A, (refCount.get(ent.layerList0x2A) ?? 0) + 1);
+  }
+  let bestKey = 0, bestN = 0;
+  for (const [k, n] of refCount) if (n > bestN) { bestN = n; bestKey = k; }
+  if (bestKey === 0) return [];
+  const ll = db.getBlockAs<Blk0x2ALayerList>(bestKey, 0x2A);
+  return ll ? fromList(ll) : [];
+}

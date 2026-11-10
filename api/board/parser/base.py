@@ -134,18 +134,51 @@ def _sniff_brd_variant(path: Path) -> BoardParser | None:
 
 def parser_for(path: Path) -> BoardParser:
     ext = path.suffix.lower()
-    if not ext:
-        raise UnsupportedFormatError(f"file has no extension: {path.name!r}")
-
-    # `.brd` hosts two different formats (Test_Link and BRD2) — sniff the
-    # content to decide which parser to hand back. Other extensions route
-    # straight through the registry.
+    with path.open("rb") as source:
+        head = source.read(4096)
+    text = head.lstrip(b"\xef\xbb\xbf \r\n\t")
+    allegro_versions = {0x00130000, 0x00130400, 0x00130C00, 0x00131000, 0x00131500,
+                        0x00140400, 0x00140500, 0x00140600, 0x00140700, 0x00140E00, 0x00140900, 0x00141500, 0x00150000, 0x00150200}
+    if (int.from_bytes(head[:4], "little") & 0xFFFFFF00 in allegro_versions or head[2:4] == b"\x12\x00") and head[8:12] == b"\x01\x00\x00\x00":
+        from api.board.parser.cad_import import AllegroParser
+        return AllegroParser()
+    # Strong content signatures take precedence over possibly renamed extensions.
+    if text.startswith(b"(kicad_pcb"):
+        from api.board.parser.kicad import KicadPcbParser
+        return KicadPcbParser()
+    if b"<eagle" in text and (text.startswith(b"<?xml") or text.startswith(b"<eagle")):
+        from api.board.parser.cad_import import EagleParser
+        return EagleParser()
+    if len(head) >= 64:
+        from api.board.parser._xzz_engine.xzz_file import XZZFile
+        if XZZFile.verify_format(head):
+            from api.board.parser.xzz import XZZParser
+            return XZZParser()
+    if ext not in _REGISTRY or ext in (".brd", ".pcb", ".fz"):
+        sniffed = _sniff_brd_variant(path)
+        if sniffed is not None:
+            return sniffed
+    if head.startswith(_SUBST_BRD_MAGIC):
+        sniffed = _sniff_brd_variant(path)
+        if sniffed is not None:
+            return sniffed
+    # Only infer plain FZ when the decompressed prefix contains its schema.
+    if head[4:6] in (b"\x78\x9c", b"\x78\xda", b"\x78\x01"):
+        import zlib
+        try:
+            prefix = zlib.decompressobj().decompress(head[4:], 8192)
+            if b"A!REFDES!" in prefix or b"A!NET_NAME!" in prefix:
+                from api.board.parser.fz import FZParser
+                return FZParser()
+        except zlib.error:
+            pass
     if ext == ".brd":
         sniffed = _sniff_brd_variant(path)
         if sniffed is not None:
             return sniffed
-
     cls = _REGISTRY.get(ext)
     if cls is None:
+        if not ext:
+            raise UnsupportedFormatError(f"file has no extension: {path.name!r}")
         raise UnsupportedFormatError(f"no parser registered for extension {ext!r}")
     return cls()

@@ -18,7 +18,7 @@ FROM python:3.13.5-slim-bookworm AS runtime
 # The default slim image supports hash-verified KiCad sidecars and boardviews.
 ARG INSTALL_KICAD=0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends poppler-utils ghostscript \
+    && apt-get install -y --no-install-recommends poppler-utils ghostscript nodejs \
     && if [ "$INSTALL_KICAD" = 1 ]; then apt-get install -y --no-install-recommends kicad; fi \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv==0.13.7

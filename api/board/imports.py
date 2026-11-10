@@ -119,7 +119,10 @@ class BoardImportService:
             del board["board_id"]
             return json.dumps(board, allow_nan=False, separators=(",", ":")).encode()
 
-        if Path(filename).suffix.lower() in ENCRYPTED_SUFFIXES:
+        from api.board.parser.fz import FZParser
+        from api.board.parser.xzz import XZZParser
+
+        if Path(filename).suffix.lower() in ENCRYPTED_SUFFIXES or isinstance(parser, (FZParser, XZZParser)):
             encoded = build()
         else:
             encoded = self._get_or_build((owner, type(parser), file_hash), build)

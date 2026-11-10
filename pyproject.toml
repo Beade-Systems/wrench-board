@@ -98,3 +98,6 @@ markers = [
     "browser: automated Chromium tests (run via make test-browser)",
     "slow: accuracy or perf benchmarks that take >30s (skipped by default in `make test`, included in `make test-all`)",
 ]
+
+[tool.setuptools.package-data]
+"api.board.parser._boardripper" = ["*.cjs", "*.ts", "LICENSE", "*.md", "*.json", "vendor/parsers/*.ts", "vendor/parsers/allegro/*.ts", "vendor/store/*.ts"]

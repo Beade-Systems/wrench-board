@@ -77,6 +77,8 @@ class Part(BaseModel):
     # appears in the BOM and carries `value`, the other is DNP. The
     # parser flags the unplaced ghost with `is_dnp=True` and attaches
     # its refdes to the placed sibling's `dnp_alternates`.
+    placement_inferred: bool = False
+    import_note: str | None = None
     is_dnp: bool = False
     dnp_alternates: list[str] = []
 
@@ -204,6 +206,8 @@ class Board(BaseModel):
     arcs: list[Arc] = []
     markers: list[Marker] = []
     mech_holes: list[MechanicalHole] = []
+    parser_notes: list[str] = []
+    layer_names: list[str] = []
 
     # Private indexes built in model_post_init — excluded from serialization.
     # Pydantic v2 : PrivateAttr (NOT Field) for non-serialized state.

@@ -35,7 +35,16 @@ def nm_to_mils(nm: int) -> int:
 
 
 def main(path: str) -> None:
-    pcb = pcbnew.LoadBoard(path)
+    if len(sys.argv) > 2:
+        plugin = getattr(pcbnew.PCB_IO_MGR, sys.argv[2], None)
+        if plugin is None:
+            sys.stderr.write(f"Diese KiCad-Version bietet keinen {sys.argv[2]}-Importer. Eine KiCad-Version mit diesem Importer ist erforderlich.\n")
+            sys.exit(2)
+        pcb = pcbnew.PCB_IO_MGR.Load(plugin, path)
+    else:
+        pcb = pcbnew.LoadBoard(path)
+    if pcb is None:
+        raise ValueError("KiCad konnte die Platine nicht laden")
 
     # Outline: use GetBoardPolygonOutlines, take first polygon
     outlines = pcbnew.SHAPE_POLY_SET()
@@ -149,7 +158,7 @@ def main(path: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         sys.stderr.write("usage: _kicad_extract.py <kicad_pcb>\n")
         sys.exit(2)
     main(sys.argv[1])

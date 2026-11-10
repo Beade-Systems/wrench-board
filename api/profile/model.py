@@ -8,7 +8,7 @@ docs/superpowers/specs/2026-04-23-technician-profile-design.md §2.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -43,10 +43,14 @@ LanguageValue = Literal["fr", "en", "zh", "hi", "de"]
 class Identity(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = ""
-    avatar: str = ""  # 1 emoji or up to 2 letters
+    # Bounded so a client cannot persist (and re-inject into every agent
+    # prompt) an arbitrarily large blob. Limits are generous for real use.
+    name: str = Field(default="", max_length=120)
+    avatar: str = Field(default="", max_length=16)  # 1 emoji or up to 2 letters
     years_experience: int = Field(default=0, ge=0, le=80)
-    specialties: list[str] = Field(default_factory=list)
+    specialties: list[Annotated[str, Field(max_length=80)]] = Field(
+        default_factory=list, max_length=50
+    )
     level_override: LevelValue | None = None
 
 

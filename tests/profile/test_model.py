@@ -95,3 +95,13 @@ def test_legacy_profile_without_custom_tools_loads():
          "tools": {}, "skills": {}, "updated_at": "x"}
     )
     assert p.custom_tools == []
+
+
+def test_identity_rejects_oversized_fields():
+    with pytest.raises(ValidationError):
+        Identity(name="x" * 100_000)
+    with pytest.raises(ValidationError):
+        Identity(specialties=["s"] * 51)
+    with pytest.raises(ValidationError):
+        Identity(specialties=["x" * 81])
+    assert Identity(name="Ada Lovelace", specialties=["iphone", "macbook"]).name == "Ada Lovelace"

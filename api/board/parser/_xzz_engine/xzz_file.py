@@ -59,6 +59,7 @@ class XZZFile(BoardFormatBase):
 
     def __init__(self):
         super().__init__()
+        self.MASTER_KEY = os.environ.get(XZZ_KEY_ENV, self.MASTER_KEY).strip() or DEFAULT_XZZ_KEY
         self.logger = setup_logging()
         self.error_msg = ""
         self.image_block_start = 0

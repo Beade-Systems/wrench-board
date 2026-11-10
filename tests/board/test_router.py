@@ -103,7 +103,7 @@ def test_parse_fz_without_key_returns_422_with_clear_message(monkeypatch):
     )
     assert r.status_code == 422
     body = r.json()["detail"]
-    assert body["detail"] == "invalid-board-file"
+    assert body["detail"] == "fz-key-missing"
     assert "WRENCH_BOARD_FZ_KEY" in body["message"]
 
 

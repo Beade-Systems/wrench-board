@@ -16,7 +16,7 @@ applied per-byte over a rolling 16-byte ciphertext window:
     endian uint32s from the new window.
 
 The 44 × uint32 expanded key is loaded at runtime from the
-`FZ_RC6_SARRAY_HEX` environment variable (176 bytes, hex-encoded).
+`WRENCH_BOARD_FZ_KEY` environment variable (176 bytes, hex-encoded).
 If the variable is unset, FZ-xor parsing is disabled and callers
 receive a clear error message at parse time.
 """
@@ -98,7 +98,7 @@ def decrypt_fz_xor(cipher: bytes, key: tuple[int, ...] | None = None) -> bytes:
     result to `parse_fz_zlib` to finish the parse.
     """
     if key is None:
-        key = KEY_WORDS
+        key = _load_key_words()
     if key is None:
         raise FZKeyNotConfigured(
             f"FZ-xor cipher key not configured. Set {FZ_KEY_ENV} in your .env "

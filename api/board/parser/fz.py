@@ -28,12 +28,12 @@ from __future__ import annotations
 from api.board.model import Board
 from api.board.parser._fz_engine.cipher import (
     FZ_KEY_ENV,
-    KEY_WORDS,
     FZKeyNotConfigured,
+    _load_key_words,
     decrypt_fz_xor,
 )
 from api.board.parser._fz_zlib import looks_like_fz_zlib, parse_fz_zlib
-from api.board.parser.base import BoardParser, InvalidBoardFile, register
+from api.board.parser.base import BoardParser, InvalidBoardFile, MissingFZKeyError, register
 
 _KEY_WORDS_LEN = 44
 
@@ -45,7 +45,7 @@ class FZParser(BoardParser):
     def __init__(self, key: tuple[int, ...] | None = None):
         if key is not None and len(key) != _KEY_WORDS_LEN:
             key = None
-        self.key = key if key is not None else KEY_WORDS
+        self.key = key if key is not None else _load_key_words()
 
     def parse(self, raw: bytes, *, file_hash: str, board_id: str) -> Board:
         if looks_like_fz_zlib(raw):
@@ -53,7 +53,7 @@ class FZParser(BoardParser):
         try:
             plain = decrypt_fz_xor(raw, self.key)
         except FZKeyNotConfigured as exc:
-            raise InvalidBoardFile(str(exc)) from exc
+            raise MissingFZKeyError(str(exc)) from exc
         if not looks_like_fz_zlib(plain):
             raise InvalidBoardFile(
                 "fz-xor: decryption did not surface the expected zlib container "

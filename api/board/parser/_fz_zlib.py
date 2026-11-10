@@ -30,6 +30,7 @@ file. No code copied from any external codebase.
 
 from __future__ import annotations
 
+import math
 import zlib
 
 from api.board.model import Board, Layer, Nail, Net, Part, Pin, Point
@@ -303,7 +304,26 @@ def _detect_unit_scale(text: str) -> float:
             continue
         unit = line.split(":", 1)[1].strip().lower()
         if unit in ("millimeters", "millimetres", "mm"):
-            return _MILS_PER_MM
+            # Some ASUS exporters label mil coordinates as millimeters.
+            # Use the extent, not absolute position (boards may be translated).
+            section = _split_sections(text).get("NET_NAME", {})
+            schema = section.get("schema", [])
+            spans = []
+            for names in (("PIN_X", "X"), ("PIN_Y", "Y")):
+                column = next((schema.index(n) for n in names if n in schema), None)
+                if column is None:
+                    continue
+                values = []
+                for row in section.get("rows", []):
+                    try:
+                        value = float(row[column].replace(",", "."))
+                        if math.isfinite(value):
+                            values.append(value)
+                    except (ValueError, IndexError):
+                        continue
+                if values:
+                    spans.append(max(values) - min(values))
+            return 1.0 if spans and max(spans) > 700 else _MILS_PER_MM
         if unit == "inches":
             return _MILS_PER_INCH
         return 1.0
@@ -352,7 +372,8 @@ def _layer_from_mirror(mirror: str) -> Layer:
 
 def _safe_float(s: str) -> float:
     try:
-        return float(s)
+        value = float(s.replace(",", ".") if isinstance(s, str) else s)
+        return value if math.isfinite(value) else 0.0
     except (ValueError, TypeError):
         return 0.0
 

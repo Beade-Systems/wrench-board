@@ -1547,3 +1547,20 @@ def test_passive_outranks_ic_on_tied_rail_short():
     order = [h.kill_refdes[0] for h in result.hypotheses if h.kill_refdes]
     assert "C1" in order and "UMEM" in order
     assert order.index("C1") < order.index("UMEM")
+
+
+def test_all_alive_observations_yield_no_hypothesis():
+    """A healthy board (everything observed alive) has nothing to explain —
+    it must not come back with a confident fault."""
+    obs = Observations(
+        state_rails={"+5V": "alive", "+3V3": "alive"},
+        state_comps={"U12": "alive"},
+    )
+    r = hypothesize(_mini_graph(), observations=obs)
+    assert r.hypotheses == []
+
+
+def test_one_fault_among_alive_observations_still_ranks():
+    obs = Observations(state_rails={"+5V": "dead", "VIN": "alive"})
+    r = hypothesize(_mini_graph(), observations=obs)
+    assert r.hypotheses, "a dead rail must still be explained"

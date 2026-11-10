@@ -111,6 +111,13 @@ def mb_hypothesize(
     journal (below) stays at the slug root — it is per-repair, already tenant-scoped
     by repair ownership.
     """
+    # Agent payloads are unvalidated: a negative value sliced `[:-1]` (15
+    # results for -1), a huge one returned everything. Clamp like the HTTP
+    # route's Field(ge=1, le=20).
+    try:
+        max_results = min(max(int(max_results), 1), 20)
+    except (TypeError, ValueError):
+        max_results = 5
     pack = memory_root / device_slug
     # Owner source: explicit param wins (HTTP route forwards X-Owner-Ref);
     # the sentinel means "not passed" → fall back to the session ContextVar

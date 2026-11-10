@@ -111,3 +111,26 @@ def test_hypothesize_empty_body_returns_empty(tmp_memory: Path, client: TestClie
     )
     assert r.status_code == 200
     assert r.json()["hypotheses"] == []
+
+
+@pytest.mark.parametrize(("requested", "expected_max"), [(-1, 1), (0, 1), (999, 20), ("x", 5)])
+def test_tool_clamps_max_results(tmp_path, monkeypatch, requested, expected_max):
+    """Agent payloads bypass the HTTP Field(ge=1, le=20): the tool clamps."""
+    from api.tools import hypothesize as tool
+
+    seen = {}
+
+    def _fake(eg, *, analyzed_boot, observations, max_results):
+        seen["max_results"] = max_results
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(tool, "_load_pack", lambda _p: (_build_graph(), None, None))
+    monkeypatch.setattr(tool, "hypothesize", _fake)
+    try:
+        tool.mb_hypothesize(
+            device_slug=SLUG, memory_root=tmp_path, state_rails={"+5V": "dead"},
+            max_results=requested, owner_ref=None,
+        )
+    except RuntimeError:
+        pass
+    assert seen["max_results"] == expected_max

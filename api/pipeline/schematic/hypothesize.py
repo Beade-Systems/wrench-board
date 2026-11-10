@@ -148,6 +148,12 @@ class Observations(BaseModel):
     def is_empty(self) -> bool:
         return not (self.state_comps or self.state_rails)
 
+    def has_fault(self) -> bool:
+        """True when at least one observation is something other than alive."""
+        return any(m != "alive" for m in self.state_comps.values()) or any(
+            m != "alive" for m in self.state_rails.values()
+        )
+
 
 class HypothesisMetrics(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -1619,7 +1625,10 @@ def hypothesize(
     """Rank candidate (refdes, mode) kills that explain `observations`."""
     t0 = time.perf_counter()
     _validate_obs_against_graph(electrical, observations)
-    if observations.is_empty():
+    # Nothing to explain when every observation is "alive": "alive" matches
+    # count as true positives for every candidate, so ranking anyway returned
+    # a confident fault (e.g. +41) for a healthy board.
+    if observations.is_empty() or not observations.has_fault():
         return HypothesizeResult(
             device_slug=electrical.device_slug,
             observations_echo=observations,

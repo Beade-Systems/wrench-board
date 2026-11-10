@@ -72,7 +72,7 @@ function typeChip(type) {
 }
 
 function roleChip(role, safety) {
-  if (!role) return `<span class="role-chip role-unknown" title="${t("stock.col_role")}">(none)</span>`;
+  if (!role) return `<span class="role-chip role-unknown" title="${t("stock.col_role")}">${escapeHtml(t("workbench.common.none"))}</span>`;
   return `<span class="role-chip safety-${safety || "exact_only"}">${escapeHtml(role)}</span>`;
 }
 
@@ -212,7 +212,7 @@ function _renderHarvestRows() {
   const tbody = document.getElementById("harvest-tbody");
   if (!tbody) return;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="harvest-empty">No matching parts.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="harvest-empty">${escapeHtml(t("workbench.stock.no_matching_parts"))}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(p => `
@@ -247,7 +247,7 @@ async function openHarvestMode(donorId) {
   const typeCounts = {};
   for (const p of parts) typeCounts[p.type] = (typeCounts[p.type] || 0) + 1;
   const orderedTypes = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a]);
-  const typeOpts = ['<option value="">All types</option>']
+  const typeOpts = [`<option value="">${escapeHtml(t("workbench.stock.all_types"))}</option>`]
     .concat(orderedTypes.map(t => `<option value="${escapeHtml(t)}">${TYPE_LABEL[t] || "?"} · ${escapeHtml(t)} (${typeCounts[t]})</option>`))
     .join("");
 
@@ -345,7 +345,7 @@ async function runSearch() {
   };
   Object.keys(body).forEach(k => body[k] == null && delete body[k]);
   if (!body.type) {
-    alert("Select a component type to search.");
+    alert(t("workbench.stock.select_type_alert"));
     return;
   }
   const res = await fetchJson("/search", {

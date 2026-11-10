@@ -150,8 +150,15 @@ window.initBoardview = async function bridgedInit(_containerEl) {
       const empty = document.getElementById('no-file-message');
       if (empty) {
         empty.classList.remove('hidden');
-        empty.querySelector('.brd-empty-title').textContent = 'Boardview could not be loaded';
-        empty.querySelector('.brd-empty-sub').textContent = 'Check the selected file and try again.';
+        // data-i18n keeps the error text correct across a locale switch.
+        const setEmptyText = (selector, key, fallback) => {
+          const el = empty.querySelector(selector);
+          const text = window.t ? window.t(key) : key;
+          el.setAttribute('data-i18n', key);
+          el.textContent = text === key ? fallback : text;
+        };
+        setEmptyText('.brd-empty-title', 'workbench.boardview.load_failed_title', 'Boardview could not be loaded');
+        setEmptyText('.brd-empty-sub', 'workbench.boardview.load_failed_sub', 'Check the selected file and try again.');
       }
       return false;
     })
@@ -566,6 +573,13 @@ const _pending = (window.Boardview && window.Boardview.__pending) || [];
 _pending.forEach((ev) => {
   try { window.Boardview.apply(ev); } catch (_) {}
 });
+
+// Re-populate the open inspector so its translated labels follow a locale switch.
+if (window.i18n && typeof window.i18n.onChange === "function") {
+  window.i18n.onChange(() => {
+    if (viewer?.selectedItem) viewer.selectItem(viewer.selectedItem);
+  });
+}
 
 // Keep bfcache pages intact; release GPU resources on a real page departure.
 window.addEventListener('pagehide', event => {

@@ -1,5 +1,17 @@
 /** Selection operations on the shared PCB viewer state. */
 
+// Falls back to the literal when i18n is absent or dictionaries aren't loaded.
+const tr = (key, fallback, params) => {
+    const text = window.t ? window.t(key, params) : key;
+    return text === key ? fallback : text;
+};
+
+const TYPE_LABEL_KEYS = {
+    Pin: 'workbench.inspector.type_pin',
+    Component: 'workbench.inspector.type_component',
+    'IC (pinout stripped)': 'workbench.inspector.type_ic_stripped',
+};
+
 export const selectionMethods = {
 
     /**
@@ -295,8 +307,10 @@ export const selectionMethods = {
             if (el) el.textContent = txt;
         };
         setText('info-id', item.id || '…');
-        setText('info-value', item.value || item.net || '…');
-        setText('info-type', (item.type || 'Pin').toUpperCase());
+        setText('info-value', (item.valueKey && tr(item.valueKey, item.value)) || item.value || item.net || '…');
+        const typeRaw = item.type || 'Pin';
+        const typeKey = TYPE_LABEL_KEYS[typeRaw];
+        setText('info-type', (typeKey ? tr(typeKey, typeRaw) : typeRaw).toUpperCase());
         setText('info-layer', (item.layer || 'top').toUpperCase());
         setText('info-pos',
             `X: ${(item.x || 0).toFixed(2)}  Y: ${(item.y || 0).toFixed(2)}`);
@@ -315,15 +329,15 @@ export const selectionMethods = {
         const hasFootprint = !!(item.footprint && typeof item.footprint === 'string');
         if (fpEl) {
             fpEl.hidden = !hasFootprint;
-            if (hasFootprint) fpEl.textContent = `Footprint: ${item.footprint}`;
+            if (hasFootprint) fpEl.textContent = tr('workbench.inspector.footprint', `Footprint: ${item.footprint}`, { value: item.footprint });
         }
         const hasPinCount = Number.isFinite(item.pin_count) && item.pin_count > 0;
         if (pcEl) {
             pcEl.hidden = !hasPinCount;
             if (hasPinCount) {
                 pcEl.textContent = item.pin_count > 1
-                    ? `${item.pin_count} pins`
-                    : `1 pin`;
+                    ? tr('workbench.inspector.pins_many', `${item.pin_count} pins`, { n: item.pin_count })
+                    : tr('workbench.inspector.pins_one', '1 pin');
             }
         }
 
@@ -355,21 +369,24 @@ export const selectionMethods = {
             diagR.hidden = !hasDiagR;
             if (hasDiagR) {
                 if (diag.expected_open) {
-                    diagR.textContent = 'Résistance : OL (≥1 kΩ ou circuit ouvert)';
+                    diagR.textContent = tr('workbench.inspector.resistance_open', 'Resistance: OL (≥1 kΩ or open circuit)');
                 } else {
                     const ohms = diag.expected_resistance_ohms;
                     // Format: 0 → court / GND ; <1000 → "Ω" ; ≥1000 → "kΩ".
                     let r;
-                    if (ohms === 0)        r = 'court (~0 Ω, GND ou rail)';
+                    if (ohms === 0)        r = tr('workbench.inspector.resistance_short', 'short (~0 Ω, GND or rail)');
                     else if (ohms < 1000)  r = `${ohms.toFixed(0)} Ω`;
                     else                   r = `${(ohms / 1000).toFixed(2)} kΩ`;
-                    diagR.textContent = `Résistance : ${r}`;
+                    diagR.textContent = tr('workbench.inspector.resistance', `Resistance: ${r}`, { value: r });
                 }
             }
         }
         if (diagV) {
             diagV.hidden = !hasDiagV;
-            if (hasDiagV) diagV.textContent = `Tension : ${diag.expected_voltage_v.toFixed(2)} V`;
+            if (hasDiagV) {
+                const volts = diag.expected_voltage_v.toFixed(2);
+                diagV.textContent = tr('workbench.inspector.voltage', `Voltage: ${volts} V`, { value: volts });
+            }
         }
 
         // DFM alternate (DNP) section. The placed sibling carries a list
@@ -392,7 +409,7 @@ export const selectionMethods = {
                     const li = document.createElement('li');
                     if (alt) {
                         const fp = alt.footprint || alt.id;
-                        const v = alt.value || '(non listé au BOM, DNP)';
+                        const v = alt.value || tr('workbench.inspector.not_in_bom', '(not listed in BOM, DNP)');
                         li.innerHTML =
                             `<span class="mono">${refdes}</span> ` +
                             `<span class="muted">${fp}</span><br>` +
@@ -464,7 +481,9 @@ export const selectionMethods = {
             ref.textContent = compName;
             const cnt = document.createElement('span');
             cnt.className = 'brd-ins-link-count';
-            cnt.textContent = pins.length > 1 ? `${pins.length} pins` : '1 pin';
+            cnt.textContent = pins.length > 1
+                ? tr('workbench.inspector.pins_many', `${pins.length} pins`, { n: pins.length })
+                : tr('workbench.inspector.pins_one', '1 pin');
             li.appendChild(ref);
             li.appendChild(cnt);
             li.addEventListener('click', () => this.focusOnItem(pins[0]));
@@ -474,7 +493,8 @@ export const selectionMethods = {
         if (countEl) {
             if (names.length > maxDisplay) {
                 countEl.hidden = false;
-                countEl.textContent = `+ ${names.length - maxDisplay} autres composants`;
+                const more = names.length - maxDisplay;
+                countEl.textContent = tr('workbench.inspector.more_components', `+ ${more} more components`, { n: more });
             } else {
                 countEl.hidden = true;
             }

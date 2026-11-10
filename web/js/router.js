@@ -112,15 +112,16 @@ async function ensureRepairMeta(repairId) {
   try { return await p; } finally { _repairCacheInFlight.delete(repairId); }
 }
 
-const _dateFmt = new Intl.DateTimeFormat("fr-FR", {
-  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-});
 function formatRepairDate(iso) {
   if (!iso) return "…";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "…";
-  // fr-FR formats as "26 avr., 14:32" — drop the comma to read as one phrase.
-  return _dateFmt.format(d).replace(/,\s*/g, " ");
+  // Built per call so a locale switch applies without a reload. Drop the comma
+  // so "26 Apr., 14:32" reads as one phrase.
+  const fmt = new Intl.DateTimeFormat(window.i18n?.intlTag || "en-US", {
+    day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+  });
+  return fmt.format(d).replace(/,\s*/g, " ");
 }
 
 function truncateForCrumb(text, max = 38) {

@@ -141,7 +141,7 @@ function _wireConfirmModal() {
   function _resetRejectArm() {
     _rejectArmed = false;
     if (rejectField) rejectField.hidden = true;
-    if (rejectBtn) rejectBtn.textContent = "Refuser";
+    if (rejectBtn) rejectBtn.textContent = window.t ? window.t("protocol.confirm.reject") : "Reject";
   }
 
   acceptBtn?.addEventListener("click", () => {
@@ -161,7 +161,7 @@ function _wireConfirmModal() {
     if (!_rejectArmed) {
       _rejectArmed = true;
       if (rejectField) rejectField.hidden = false;
-      if (rejectBtn) rejectBtn.textContent = "Confirmer le refus";
+      if (rejectBtn) rejectBtn.textContent = window.t ? window.t("workbench.protocol.confirm_reject") : "Confirm rejection";
       reasonInput?.focus();
       return;
     }

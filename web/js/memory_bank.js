@@ -23,6 +23,10 @@ function tr(key, params) {
   return (window.t ? window.t(key, params) : key);
 }
 
+function noneHtml() {
+  return `<span class="muted">${escHtml(tr("workbench.common.none"))}</span>`;
+}
+
 function fmt(value, fallback = "…") {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "string" && value.trim() === "") return fallback;
@@ -159,8 +163,8 @@ function renderRegistry(registry) {
             <tr data-search="${escHtml([c.canonical_name, c.logical_alias, ...(c.aliases || []), c.description, c.kind].filter(Boolean).join(" ").toLowerCase())}">
               <td class="mono">${escHtml(c.canonical_name)}${c.logical_alias ? `<div style="font-size:10.5px;color:var(--text-3);font-family:inherit;font-style:italic">${escHtml(c.logical_alias)}</div>` : ""}</td>
               <td><span class="mb-kind ${escHtml(c.kind || "unknown")}">${escHtml(c.kind || "unknown")}</span></td>
-              <td>${(c.aliases || []).map(a => `<span class="mb-alias">${escHtml(a)}</span>`).join("") || '<span class="muted">(none)</span>'}</td>
-              <td>${escHtml(c.description) || '<span class="muted">(none)</span>'}</td>
+              <td>${(c.aliases || []).map(a => `<span class="mb-alias">${escHtml(a)}</span>`).join("") || noneHtml()}</td>
+              <td>${escHtml(c.description) || noneHtml()}</td>
             </tr>`).join("")}
         </tbody>
       </table>`}
@@ -173,7 +177,7 @@ function renderRegistry(registry) {
             <tr data-search="${escHtml([s.canonical_name, ...(s.aliases || []), s.kind].filter(Boolean).join(" ").toLowerCase())}">
               <td class="mono">${escHtml(s.canonical_name)}</td>
               <td><span class="mb-kind ${escHtml(s.kind || "unknown")}">${escHtml(s.kind || "unknown")}</span></td>
-              <td>${(s.aliases || []).map(a => `<span class="mb-alias">${escHtml(a)}</span>`).join("") || '<span class="muted">(none)</span>'}</td>
+              <td>${(s.aliases || []).map(a => `<span class="mb-alias">${escHtml(a)}</span>`).join("") || noneHtml()}</td>
               <td class="mono">${s.nominal_voltage !== null && s.nominal_voltage !== undefined ? `<span class="mb-volt">${s.nominal_voltage} V</span>` : '<span class="muted">n/a</span>'}</td>
             </tr>`).join("")}
         </tbody>
@@ -248,12 +252,12 @@ function renderRules(rules) {
           <div class="mb-rule-section">
             <h4>${escHtml(tr("memory_bank.rules.h_symptoms"))}</h4>
             <div class="mb-rule-symptoms">
-              ${(r.symptoms || []).map(s => `<span class="sym">${escHtml(s)}</span>`).join("") || '<span class="muted">(none)</span>'}
+              ${(r.symptoms || []).map(s => `<span class="sym">${escHtml(s)}</span>`).join("") || noneHtml()}
             </div>
           </div>
           <div class="mb-rule-section">
             <h4>${escHtml(tr("memory_bank.rules.h_likely_causes"))}</h4>
-            ${(r.likely_causes || []).length === 0 ? '<span class="muted">(none)</span>' :
+            ${(r.likely_causes || []).length === 0 ? noneHtml() :
               (r.likely_causes || []).map(c => {
                 const p = typeof c.probability === "number" ? c.probability : 0;
                 return `
@@ -267,7 +271,7 @@ function renderRules(rules) {
           </div>
           <div class="mb-rule-section">
             <h4>${escHtml(tr("memory_bank.rules.h_diagnostic_steps"))}</h4>
-            ${(r.diagnostic_steps || []).length === 0 ? '<span class="muted">(none)</span>' :
+            ${(r.diagnostic_steps || []).length === 0 ? noneHtml() :
               (r.diagnostic_steps || []).map(s => `
                 <div class="mb-step">
                   <span class="act">${escHtml(s.action)}</span>
@@ -317,11 +321,11 @@ function renderDictionary(dict) {
           return `
             <tr data-search="${escHtml(searchText)}">
               <td class="mono">${escHtml(e.canonical_name)}</td>
-              <td>${escHtml(e.role) || '<span class="muted">(none)</span>'}</td>
-              <td class="mono">${escHtml(e.package) || '<span class="muted">(none)</span>'}</td>
-              <td>${modes.length === 0 ? '<span class="muted">(none)</span>' :
+              <td>${escHtml(e.role) || noneHtml()}</td>
+              <td class="mono">${escHtml(e.package) || noneHtml()}</td>
+              <td>${modes.length === 0 ? noneHtml() :
                 modes.map(m => `<span class="mb-alias" style="color:var(--amber);background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.3)">${escHtml(m)}</span>`).join("")}</td>
-              <td>${escHtml(e.notes) || '<span class="muted">(none)</span>'}</td>
+              <td>${escHtml(e.notes) || noneHtml()}</td>
             </tr>`;
         }).join("")}
       </tbody>

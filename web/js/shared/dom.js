@@ -37,6 +37,6 @@ export function relativeTime(isoString) {
   const days = Math.floor(hours / 24);
   if (days === 1) return t("home.time.yesterday");
   if (days < 7) return t("home.time.days_ago", { n: days });
-  const localeTag = "en-US";
+  const localeTag = window.i18n?.intlTag || "en-US";
   return then.toLocaleDateString(localeTag, { day: "numeric", month: "short", year: "numeric" });
 }

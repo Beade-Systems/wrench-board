@@ -5,7 +5,7 @@
 // gating applies. DOM shell lives in index.html (#landingCatalogueBackdrop).
 
 import { loadBoards } from "../../../services/deviceCatalog.js";
-import { launchFromCatalogue, DEVICE_KIND_SHORT } from "./index.js";
+import { launchFromCatalogue, deviceKindShort } from "./index.js";
 import { apiGet } from "../../../shared/api.js";
 import { escapeHtml } from "../../../shared/dom.js";
 
@@ -40,7 +40,7 @@ let _search = "";
 
 const t = (k) => (window.t ? window.t(k) : k);
 const $ = (id) => document.getElementById(id);
-const _kindLabel = (kind) => DEVICE_KIND_SHORT[kind] || DEVICE_KIND_SHORT.other || "OTHER";
+const _kindLabel = (kind) => deviceKindShort(kind) || deviceKindShort("other") || "OTHER";
 const _brandLabel = (brand) => (brand === NO_BRAND ? "—" : brand);
 
 export async function openCatalogue() {

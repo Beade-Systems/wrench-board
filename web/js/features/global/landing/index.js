@@ -41,9 +41,17 @@ const STATUS_NEUTRAL = "";
 const STATUS_LOADING = "loading";
 const STATUS_ERROR = "error";
 
-// Short device-kind codes for the suggest chip — not i18n'd (compact mono
-// codes, same in every locale). Mirrors the backend device_kind enum.
-export const DEVICE_KIND_SHORT = { gpu_card:"GPU", laptop_logic_board:"PORTABLE", phone_logic_board:"TÉLÉPHONE", desktop_motherboard:"BUREAU", sbc_board:"SBC", power_charging_board:"ALIM", other:"AUTRE" };
+// Short device-kind codes for the suggest chip (compact mono labels).
+// Mirrors the backend device_kind enum; the values are the English fallbacks.
+const DEVICE_KIND_SHORT = { gpu_card:"GPU", laptop_logic_board:"LAPTOP", phone_logic_board:"PHONE", desktop_motherboard:"DESKTOP", sbc_board:"SBC", power_charging_board:"POWER", other:"OTHER" };
+
+export function deviceKindShort(kind) {
+  const fallback = DEVICE_KIND_SHORT[kind];
+  if (!fallback) return undefined;
+  const key = `workbench.device_kind_short.${kind}`;
+  const label = window.t ? window.t(key) : key;
+  return label === key ? fallback : label;
+}
 
 let isSubmitting = false;
 let progressConn = null;
@@ -73,7 +81,7 @@ function setLandingMascot(state) {
 // since commit 548ed20 dropped the topbar switch). Re-derived lazily so we
 // pick up locale changes mid-session without a page reload.
 function _landingDateFmt() {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(window.i18n?.intlTag || 'en-US', {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 }
@@ -475,7 +483,7 @@ async function _launchDiagnostic() {
       setSubmitting(false);
       _renderDisambiguation(repair.candidates || []);
       setStatus(
-        "Plusieurs cartes correspondent : choisis-en une, puis relance le diagnostic.",
+        t("workbench.landing.disambiguation"),
         STATUS_NEUTRAL,
       );
       return;
@@ -1041,11 +1049,11 @@ function _renderSuggest(query) {
     const iconText = d.complete ? "✓" : "•";
     // Readiness badges (right of line 1): draft marker (incomplete pack), the
     // graph badge (lit when an electrical graph is compiled), and the device-kind
-    // short code (GPU / PORTABLE / …).
+    // short code (GPU / LAPTOP / …).
     const draftBadge = d.complete ? "" : `<span class="landing-suggest-badge is-draft">${_escapeHtml(draftLabel)}</span>`;
     const graphBadge = `<span class="landing-suggest-badge${d.has_electrical_graph ? " is-on" : ""}" title="${_escapeHtml(tFn("landing.suggest.graph_title"))}">${_escapeHtml(tFn("landing.suggest.graph_label"))}</span>`;
     const kindBadge = (d.device_kind && d.device_kind !== "unknown")
-      ? `<span class="landing-suggest-badge mono">${_escapeHtml(DEVICE_KIND_SHORT[d.device_kind] || d.device_kind)}</span>`
+      ? `<span class="landing-suggest-badge mono">${_escapeHtml(deviceKindShort(d.device_kind) || d.device_kind)}</span>`
       : "";
     const idLine = _escapeHtml(_deviceIdLine(d));
     const brand = safeSub ? `<span class="landing-suggest-brand">${safeSub}</span>` : "";

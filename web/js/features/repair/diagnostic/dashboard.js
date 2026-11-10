@@ -685,7 +685,7 @@ function formatVersionDate(ts) {
   const [, y, mo, d, h, mi] = m;
   const dt = new Date(`${y}-${mo}-${d}T${h}:${mi}:00Z`);
   if (isNaN(dt)) return ts;
-  const localeTag = "en-US";
+  const localeTag = window.i18n?.intlTag || "en-US";
   return dt.toLocaleString(localeTag, {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   }).replace(",", " ·");
@@ -1261,7 +1261,7 @@ async function renderBoardDeltaCard(slug, boardNumber) {
       `</div>`
     ) : "") +
     `<div class="rd-delta-foot">` +
-      `${ics.length} ICs · ${rails.length} rails · ${pitfalls.length} ` +
+      `${escapeHtml(t("workbench.board_delta.foot_ics_rails", { ics: ics.length, rails: rails.length }))} · ${pitfalls.length} ` +
       escapeHtml(t("home.dashboard.board_delta.foot_pitfalls")) +
       ` · ${cousins.length} ` +
       escapeHtml(t("home.dashboard.board_delta.foot_cousins")) +
@@ -1380,7 +1380,7 @@ function renderDashboardFindings(findings, currentRid) {
       ? `<span class="rd-finding-session current">${escapeHtml(t("home.dashboard.findings.session_current"))}</span>`
       : (f.session_id
           ? `<span class="rd-finding-session">${escapeHtml(f.session_id.slice(0, 8))}</span>`
-          : `<span class="rd-finding-session">(none)</span>`);
+          : `<span class="rd-finding-session">${escapeHtml(t("workbench.common.none"))}</span>`);
     const notes = f.notes
       ? `<p class="rd-finding-notes">${escapeHtml(f.notes)}</p>`
       : "";

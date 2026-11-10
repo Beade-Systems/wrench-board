@@ -187,8 +187,8 @@
 <!-- Landing hero — visible only when body has class .show-landing -->
 <div id="landing-overlay" class="landing" hidden>
   <div class="landing-bg" aria-hidden="true"></div>
-  <nav class="landing-tools" aria-label="Tools">
-    <a href="/library.html" class="landing-tool-link">PCB-Bibliothek</a>
+  <nav class="landing-tools" aria-label="Tools" data-i18n-attr="aria-label:workbench.landing.tools_aria">
+    <a href="/library.html" class="landing-tool-link" data-i18n="workbench.landing.pcb_library">PCB Library</a>
     <!-- Mobile-only drawer trigger for the recent-repairs sidebar (hidden on
          desktop where the sidebar is a persistent left column, and hidden until
          there is at least one repair — landing.js syncs its `hidden` with the
@@ -422,8 +422,8 @@
           <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
         </svg>
       </div>
-      <p class="brd-empty-title">Aucun boardview chargé</p>
-      <p class="brd-empty-sub">Importez un fichier depuis le repair dashboard.</p>
+      <p class="brd-empty-title" data-i18n="workbench.boardview.empty_title">No boardview loaded</p>
+      <p class="brd-empty-sub" data-i18n="workbench.boardview.empty_sub">Import a file from the repair dashboard.</p>
     </div>
 
     <!-- Pointer-transparent host so events fall through to the canvas
@@ -433,13 +433,14 @@
 
     <!-- Top-right toolbar: layer toggle + Fit. Mirrors brd_viewer.js's chrome. -->
     <div class="brd-toolbar">
-      <div class="brd-seg" role="tablist" aria-label="Layer">
-        <button class="brd-seg-btn" id="brdLayerTop" data-layer="top" type="button">Top</button>
-        <button class="brd-seg-btn" id="brdLayerBoth" data-layer="both" type="button">Both</button>
-        <button class="brd-seg-btn" id="brdLayerBottom" data-layer="bottom" type="button">Bottom</button>
+      <div class="brd-seg" role="tablist" aria-label="Layer" data-i18n-attr="aria-label:workbench.boardview.layer_aria">
+        <button class="brd-seg-btn" id="brdLayerTop" data-layer="top" type="button" data-i18n="workbench.boardview.layer_top">Top</button>
+        <button class="brd-seg-btn" id="brdLayerBoth" data-layer="both" type="button" data-i18n="workbench.boardview.layer_both">Both</button>
+        <button class="brd-seg-btn" id="brdLayerBottom" data-layer="bottom" type="button" data-i18n="workbench.boardview.layer_bottom">Bottom</button>
       </div>
       <button class="brd-btn" id="brdRotL" type="button"
-              title="Rotation gauche (-90°)" aria-label="Rotation gauche">
+              title="Rotate left (-90°)" aria-label="Rotate left"
+              data-i18n-attr="title:workbench.boardview.rotate_left_title,aria-label:workbench.boardview.rotate_left">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 12a9 9 0 1 0 3-6.7"/>
@@ -447,7 +448,8 @@
         </svg>
       </button>
       <button class="brd-btn" id="brdRotR" type="button"
-              title="Rotation droite (+90°)" aria-label="Rotation droite">
+              title="Rotate right (+90°)" aria-label="Rotate right"
+              data-i18n-attr="title:workbench.boardview.rotate_right_title,aria-label:workbench.boardview.rotate_right">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12a9 9 0 1 1-3-6.7"/>
@@ -455,7 +457,8 @@
         </svg>
       </button>
       <button class="brd-btn" id="brdFitBtn" type="button"
-              title="Fit to view" aria-label="Fit to view">
+              title="Fit to view" aria-label="Fit to view"
+              data-i18n-attr="title:workbench.boardview.fit,aria-label:workbench.boardview.fit">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 8V4h4M16 4h4v4M4 16v4h4M16 20h4v-4"/>
@@ -467,8 +470,9 @@
            non-stuffed alternate footprints as dashed cyan outlines so
            a tech can spot DFM-alternate seats while diagnosing. -->
       <button class="brd-btn" id="brdToggleDnp" type="button"
-              title="Afficher les alternates DNP / DFM"
-              aria-label="Afficher les DNP" aria-pressed="false">
+              title="Show DNP / DFM alternates"
+              aria-label="Show DNP" aria-pressed="false"
+              data-i18n-attr="title:workbench.boardview.show_dnp_title,aria-label:workbench.boardview.show_dnp">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
              stroke-dasharray="3 2">
@@ -480,8 +484,9 @@
            clutter dense areas (around BGAs especially) — turn on
            when actually probing routing or stitching. -->
       <button class="brd-btn" id="brdToggleVias" type="button"
-              title="Afficher les vias"
-              aria-label="Afficher les vias" aria-pressed="false">
+              title="Show vias"
+              aria-label="Show vias" aria-pressed="false"
+              data-i18n-attr="title:workbench.boardview.show_vias,aria-label:workbench.boardview.show_vias">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="6"/>
@@ -492,8 +497,9 @@
            ship 30k+ routed segments — turn off for a clean
            silhouette + pads view, on for routing inspection. -->
       <button class="brd-btn" id="brdToggleTraces" type="button"
-              title="Afficher les pistes cuivre"
-              aria-label="Afficher les pistes" aria-pressed="false">
+              title="Show copper traces"
+              aria-label="Show traces" aria-pressed="false"
+              data-i18n-attr="title:workbench.boardview.show_traces_title,aria-label:workbench.boardview.show_traces">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
              stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 17h4l3-10h4l3 10h4"/>
@@ -503,9 +509,9 @@
 
     <!-- Bottom-left badge: counts. -->
     <div class="brd-badge" data-role="stats">
-      <span class="brd-badge-row"><span id="stats-components">0</span> Comp</span>
-      <span class="brd-badge-row"><span id="stats-pins">0</span> Pins</span>
-      <span class="brd-badge-row"><span id="stats-nets">0</span> Nets</span>
+      <span class="brd-badge-row"><span id="stats-components">0</span> <bdi data-i18n="workbench.boardview.stat_components">Comp</bdi></span>
+      <span class="brd-badge-row"><span id="stats-pins">0</span> <bdi data-i18n="workbench.boardview.stat_pins">Pins</bdi></span>
+      <span class="brd-badge-row"><span id="stats-nets">0</span> <bdi data-i18n="workbench.boardview.stat_nets">Nets</bdi></span>
     </div>
 
     <!-- Bottom-right badge: cursor + zoom. -->
@@ -520,7 +526,7 @@
     <aside id="component-info" class="brd-inspector" hidden>
       <header class="brd-ins-head">
         <span class="brd-ins-ref" id="info-id">…</span>
-        <button class="brd-ins-close" id="info-close" type="button" aria-label="Close">
+        <button class="brd-ins-close" id="info-close" type="button" aria-label="Close" data-i18n-attr="aria-label:common.tweaks.close">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round">
             <path d="M6 6l12 12M18 6L6 18"/>
@@ -542,14 +548,14 @@
           <div class="brd-ins-size" id="info-footprint" hidden></div>
           <div class="brd-ins-size" id="info-pincount" hidden></div>
         </div>
-        <div class="brd-ins-section-label" id="info-net-label" hidden>Net</div>
+        <div class="brd-ins-section-label" id="info-net-label" hidden data-i18n="workbench.inspector.net_label">Net</div>
         <div class="brd-ins-body" id="info-net-row" hidden>
           <span class="brd-ins-value" id="info-net">…</span>
         </div>
         <!-- Manufacturer-tagged diagnostic expectations from the
              source format (XZZ post-v6 block on iPad/iPhone dumps).
              Whole block stays hidden when the net carries no data. -->
-        <div class="brd-ins-section-label" id="info-diag-label" hidden>Diagnostic attendu</div>
+        <div class="brd-ins-section-label" id="info-diag-label" hidden data-i18n="workbench.inspector.diag_label">Expected readings</div>
         <div class="brd-ins-body" id="info-diag-row" hidden>
           <div class="brd-ins-size" id="info-diag-resistance" hidden></div>
           <div class="brd-ins-size" id="info-diag-voltage" hidden></div>
@@ -558,11 +564,11 @@
              from api/board/render.py. Visible only when the placed
              component shares its physical seat with one or more
              non-stuffed footprints (ASUS .fz dumps and similar). -->
-        <div class="brd-ins-section-label" id="info-alt-label" hidden>Alternates DNP</div>
+        <div class="brd-ins-section-label" id="info-alt-label" hidden data-i18n="workbench.inspector.alt_label">DNP alternates</div>
         <div class="brd-ins-body" id="info-alt-row" hidden>
           <ul class="brd-ins-linklist" id="info-alt-list"></ul>
         </div>
-        <div class="brd-ins-section-label" id="info-connections-label" hidden>Connections</div>
+        <div class="brd-ins-section-label" id="info-connections-label" hidden data-i18n="workbench.inspector.connections_label">Connections</div>
         <ul class="brd-ins-linklist" id="connections-list"></ul>
         <div class="brd-ins-size" id="connections-count" hidden></div>
       </div>
@@ -938,7 +944,7 @@
                  data-i18n-attr="placeholder:stock.ph_package">
         </label>
         <label class="finder-field finder-field-sm">
-          <span class="finder-lbl">V min</span>
+          <span class="finder-lbl" data-i18n="stock.ph_voltage">V min</span>
           <input id="stock-q-voltage" type="number" placeholder="V min"
                  data-i18n-attr="placeholder:stock.ph_voltage">
         </label>
@@ -1028,7 +1034,7 @@
       <div class="rd-cap-popover" id="rdCapPopover" hidden role="dialog" aria-modal="false">
         <header class="rd-cap-popover-head">
           <h3 id="rdCapPopoverTitle">…</h3>
-          <button type="button" class="rd-cap-popover-close" id="rdCapPopoverClose" aria-label="Close">
+          <button type="button" class="rd-cap-popover-close" id="rdCapPopoverClose" aria-label="Close" data-i18n-attr="aria-label:common.tweaks.close">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </header>
@@ -1137,7 +1143,7 @@
 
     <!-- Board-delta card — revision-specific overlay (ICs, rails, pitfalls, cousins).
          Hidden by default; renderBoardDeltaCard() shows it only when a delta exists. -->
-    <article class="rd-delta-card hidden" id="rdCardBoardDelta" aria-label="Board revision specs">
+    <article class="rd-delta-card hidden" id="rdCardBoardDelta" aria-label="Board revision specs" data-i18n-attr="aria-label:workbench.board_delta.aria">
     </article>
 
     <!-- Compatibility shim — the dashboard still derives an Electrical card.
@@ -1369,7 +1375,7 @@
       <header class="landing-catalogue-head">
         <h2 class="landing-catalogue-title" data-i18n="landing.catalogue.title">Available devices</h2>
         <button type="button" class="landing-catalogue-close" id="landingCatalogueClose"
-                data-i18n-attr="aria-label:common.close">
+                data-i18n-attr="aria-label:common.tweaks.close">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor"
                stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -1377,7 +1383,7 @@
       </header>
       <div class="landing-catalogue-controls">
         <input class="landing-catalogue-search" id="landingCatalogueSearch" type="text"
-               data-i18n-attr="placeholder:landing.catalogue.search_placeholder"
+               data-i18n-attr="placeholder:landing.catalogue.search_placeholder,aria-label:workbench.landing.search_devices_aria"
                aria-label="Search devices" maxlength="100" />
         <div class="landing-catalogue-kinds" id="landingCatalogueKinds" role="group"
              data-i18n-attr="aria-label:landing.catalogue.filter_aria"></div>
@@ -1461,7 +1467,7 @@
       <div class="modal-field" id="protocolConfirmRejectField" hidden>
         <label class="modal-label" for="protocolConfirmReason" data-i18n="protocol.confirm.reject_reason_label">Reason for rejection (optional)</label>
         <textarea class="modal-textarea" id="protocolConfirmReason" rows="2"
-                  data-i18n-placeholder="protocol.confirm.reject_reason_placeholder"
+                  data-i18n-attr="placeholder:protocol.confirm.reject_reason_placeholder"
                   placeholder="Why reject this protocol? The agent will take it into account."></textarea>
       </div>
       <p class="modal-hint" id="protocolConfirmHint" data-i18n="protocol.confirm.hint">
@@ -1498,7 +1504,7 @@
         <label class="modal-label" for="protocolAbandonReason"
                data-i18n="protocol.abandon.modal.reason_label">Reason (optional, surfaced to the agent)</label>
         <textarea class="modal-textarea" id="protocolAbandonReason" rows="2"
-                  data-i18n-placeholder="protocol.abandon.modal.reason_placeholder"
+                  data-i18n-attr="placeholder:protocol.abandon.modal.reason_placeholder"
                   placeholder="Why abandon? (wrong hypothesis, dead end, customer left…)"></textarea>
       </div>
     </div>
@@ -1541,15 +1547,15 @@
     <div class="tweak-row pcb-only">
       <label data-i18n="common.tweaks.boardview_colors">Boardview colors</label>
       <div class="brd-color-grid">
-        <div class="brd-color-row" title="Nets nommés non-spéciaux (DATA, ENABLE, …), fallback par défaut."><span class="brd-color-dot" data-cat="signal"></span><span data-i18n="common.tweaks.color_signal">Signal</span><span class="brd-color-count" data-cat-count="signal"></span></div>
-        <div class="brd-color-row" title="Nets matchant PP*, VDD, +V, *_PWR, AVDD, VBAT : alimentations."><span class="brd-color-dot" data-cat="power"></span><span data-i18n="common.tweaks.color_power">Power</span><span class="brd-color-count" data-cat-count="power"></span></div>
-        <div class="brd-color-row" title="GND, VSS, AGND, DGND, PGND, GROUND."><span class="brd-color-dot" data-cat="ground"></span><span data-i18n="common.tweaks.color_ground">Ground</span><span class="brd-color-count" data-cat-count="ground"></span></div>
-        <div class="brd-color-row" title="CLK_*, *_CLK, REFCLK, OSC_OUT : signaux d'horloge."><span class="brd-color-dot" data-cat="clock"></span><span data-i18n="common.tweaks.color_clock">Clock</span><span class="brd-color-count" data-cat-count="clock"></span></div>
-        <div class="brd-color-row" title="RESET_*, RST_*, NRST, PORST_* : lignes de reset."><span class="brd-color-dot" data-cat="reset"></span><span data-i18n="common.tweaks.color_reset">Reset</span><span class="brd-color-count" data-cat-count="reset"></span></div>
-        <div class="brd-color-row" title="Pins sans net assigné (NC, N/A, UNCONNECTED)."><span class="brd-color-dot" data-cat="no-net"></span><span data-i18n="common.tweaks.color_nc">NC</span><span class="brd-color-count" data-cat-count="no-net"></span></div>
-        <div class="brd-color-row" title="Test pads & probe pads (XZZ type_09 solid, TEST_POINT pins XW/TPxxx, mounting holes / vias mécaniques sans net)."><span class="brd-color-dot" data-cat="testPad"></span><span data-i18n="common.tweaks.color_testpad">Test pad</span><span class="brd-color-count" data-cat-count="testPad"></span></div>
-        <div class="brd-color-row" title="Contour de la carte (le trait du board outline)."><span class="brd-color-dot" data-cat="boardOutline"></span><span data-i18n="common.tweaks.color_board_outline">Contour board</span><span class="brd-color-count" data-cat-count="boardOutline"></span></div>
-        <div class="brd-color-row" title="Remplissage du substrat. Mettre la même couleur que le fond pour ne pas remplir."><span class="brd-color-dot" data-cat="boardFill"></span><span data-i18n="common.tweaks.color_board_fill">Fond board</span><span class="brd-color-count" data-cat-count="boardFill"></span></div>
+        <div class="brd-color-row" title="Named non-special nets (DATA, ENABLE, …), default fallback." data-i18n-attr="title:workbench.tweaks.color_title_signal"><span class="brd-color-dot" data-cat="signal"></span><span data-i18n="common.tweaks.color_signal">Signal</span><span class="brd-color-count" data-cat-count="signal"></span></div>
+        <div class="brd-color-row" title="Nets matching PP*, VDD, +V, *_PWR, AVDD, VBAT: power rails." data-i18n-attr="title:workbench.tweaks.color_title_power"><span class="brd-color-dot" data-cat="power"></span><span data-i18n="common.tweaks.color_power">Power</span><span class="brd-color-count" data-cat-count="power"></span></div>
+        <div class="brd-color-row" title="GND, VSS, AGND, DGND, PGND, GROUND." data-i18n-attr="title:workbench.tweaks.color_title_ground"><span class="brd-color-dot" data-cat="ground"></span><span data-i18n="common.tweaks.color_ground">Ground</span><span class="brd-color-count" data-cat-count="ground"></span></div>
+        <div class="brd-color-row" title="CLK_*, *_CLK, REFCLK, OSC_OUT: clock signals." data-i18n-attr="title:workbench.tweaks.color_title_clock"><span class="brd-color-dot" data-cat="clock"></span><span data-i18n="common.tweaks.color_clock">Clock</span><span class="brd-color-count" data-cat-count="clock"></span></div>
+        <div class="brd-color-row" title="RESET_*, RST_*, NRST, PORST_*: reset lines." data-i18n-attr="title:workbench.tweaks.color_title_reset"><span class="brd-color-dot" data-cat="reset"></span><span data-i18n="common.tweaks.color_reset">Reset</span><span class="brd-color-count" data-cat-count="reset"></span></div>
+        <div class="brd-color-row" title="Pins with no assigned net (NC, N/A, UNCONNECTED)." data-i18n-attr="title:workbench.tweaks.color_title_nc"><span class="brd-color-dot" data-cat="no-net"></span><span data-i18n="common.tweaks.color_nc">NC</span><span class="brd-color-count" data-cat-count="no-net"></span></div>
+        <div class="brd-color-row" title="Test pads & probe pads (XZZ type_09 solid, TEST_POINT pins XW/TPxxx, mounting holes / mechanical vias with no net)." data-i18n-attr="title:workbench.tweaks.color_title_testpad"><span class="brd-color-dot" data-cat="testPad"></span><span data-i18n="common.tweaks.color_testpad">Test pad</span><span class="brd-color-count" data-cat-count="testPad"></span></div>
+        <div class="brd-color-row" title="Board outline (the contour line)." data-i18n-attr="title:workbench.tweaks.color_title_board_outline"><span class="brd-color-dot" data-cat="boardOutline"></span><span data-i18n="common.tweaks.color_board_outline">Contour board</span><span class="brd-color-count" data-cat-count="boardOutline"></span></div>
+        <div class="brd-color-row" title="Substrate fill. Use the same color as the background to leave it unfilled." data-i18n-attr="title:workbench.tweaks.color_title_board_fill"><span class="brd-color-dot" data-cat="boardFill"></span><span data-i18n="common.tweaks.color_board_fill">Fond board</span><span class="brd-color-count" data-cat-count="boardFill"></span></div>
       </div>
       <button id="brdColReset" class="brd-color-reset">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>

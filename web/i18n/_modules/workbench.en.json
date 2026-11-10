@@ -1,0 +1,85 @@
+{
+  "common": {
+    "none": "(none)"
+  },
+  "landing": {
+    "tools_aria": "Tools",
+    "pcb_library": "PCB Library",
+    "search_devices_aria": "Search devices",
+    "disambiguation": "Several boards match: pick one, then run the diagnostic again."
+  },
+  "device_kind_short": {
+    "gpu_card": "GPU",
+    "laptop_logic_board": "LAPTOP",
+    "phone_logic_board": "PHONE",
+    "desktop_motherboard": "DESKTOP",
+    "sbc_board": "SBC",
+    "power_charging_board": "POWER",
+    "other": "OTHER"
+  },
+  "boardview": {
+    "empty_title": "No boardview loaded",
+    "empty_sub": "Import a file from the repair dashboard.",
+    "load_failed_title": "Boardview could not be loaded",
+    "load_failed_sub": "Check the selected file and try again.",
+    "layer_aria": "Layer",
+    "layer_top": "Top",
+    "layer_both": "Both",
+    "layer_bottom": "Bottom",
+    "rotate_left_title": "Rotate left (-90°)",
+    "rotate_left": "Rotate left",
+    "rotate_right_title": "Rotate right (+90°)",
+    "rotate_right": "Rotate right",
+    "fit": "Fit to view",
+    "show_dnp_title": "Show DNP / DFM alternates",
+    "show_dnp": "Show DNP",
+    "show_vias": "Show vias",
+    "show_traces_title": "Show copper traces",
+    "show_traces": "Show traces",
+    "stat_components": "Comp",
+    "stat_pins": "Pins",
+    "stat_nets": "Nets"
+  },
+  "inspector": {
+    "net_label": "Net",
+    "diag_label": "Expected readings",
+    "alt_label": "DNP alternates",
+    "connections_label": "Connections",
+    "type_pin": "Pin",
+    "type_component": "Component",
+    "type_ic_stripped": "IC (pinout stripped)",
+    "pinout_stripped": "Pinout unavailable (stripped by the manufacturer)",
+    "footprint": "Footprint: {value}",
+    "pins_one": "1 pin",
+    "pins_many": "{n} pins",
+    "resistance": "Resistance: {value}",
+    "resistance_open": "Resistance: OL (≥1 kΩ or open circuit)",
+    "resistance_short": "short (~0 Ω, GND or rail)",
+    "voltage": "Voltage: {value} V",
+    "not_in_bom": "(not listed in BOM, DNP)",
+    "more_components": "+ {n} more components"
+  },
+  "tweaks": {
+    "color_title_signal": "Named non-special nets (DATA, ENABLE, …), default fallback.",
+    "color_title_power": "Nets matching PP*, VDD, +V, *_PWR, AVDD, VBAT: power rails.",
+    "color_title_ground": "GND, VSS, AGND, DGND, PGND, GROUND.",
+    "color_title_clock": "CLK_*, *_CLK, REFCLK, OSC_OUT: clock signals.",
+    "color_title_reset": "RESET_*, RST_*, NRST, PORST_*: reset lines.",
+    "color_title_nc": "Pins with no assigned net (NC, N/A, UNCONNECTED).",
+    "color_title_testpad": "Test pads & probe pads (XZZ type_09 solid, TEST_POINT pins XW/TPxxx, mounting holes / mechanical vias with no net).",
+    "color_title_board_outline": "Board outline (the contour line).",
+    "color_title_board_fill": "Substrate fill. Use the same color as the background to leave it unfilled."
+  },
+  "board_delta": {
+    "aria": "Board revision specs",
+    "foot_ics_rails": "{ics} ICs · {rails} rails"
+  },
+  "stock": {
+    "no_matching_parts": "No matching parts.",
+    "all_types": "All types",
+    "select_type_alert": "Select a component type to search."
+  },
+  "protocol": {
+    "confirm_reject": "Confirm rejection"
+  }
+}

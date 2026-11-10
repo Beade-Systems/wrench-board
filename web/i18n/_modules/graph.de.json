@@ -29,6 +29,7 @@
     "fit": "Einpassen"
   },
   "inspector": {
+    "close": "Inspektor schließen",
     "type_inferred": "· vom Modell abgeleitet",
     "id_label": "ID: {id}",
     "confidence": "Konfidenz",

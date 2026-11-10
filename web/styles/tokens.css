@@ -19,7 +19,23 @@
   /* mascot-only danger red — NOT a semantic data color; scoped to the
      mascot's alert/error animations (see web/styles/mascot.css). */
   --mascot-danger: oklch(0.62 0.23 27);
+  /* KEYBOARD FOCUS ring — chrome affordance, NOT a semantic data color.
+     Its own token so focus never borrows --cyan (locked to component). */
+  --focus: oklch(0.80 0.11 255);
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,'Noto Sans CJK SC','Noto Sans Devanagari',sans-serif;font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+/* Keyboard focus — one visible ring for every interactive element. :where()
+   keeps specificity at zero so component rules (inputs that signal focus via
+   their border or a :focus-within wrapper) still win. Mouse clicks don't
+   trigger :focus-visible on buttons, so pointer users see no change. */
+:where(a,button,summary,select,textarea,input,[tabindex],[role="button"],[contenteditable]):focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* Honour the OS "reduce motion" setting across the whole shell: kill
+   infinite pulses, slide-ins and smooth scrolling. Individual stylesheets
+   (brd, landing, mascot) keep their finer-grained overrides. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

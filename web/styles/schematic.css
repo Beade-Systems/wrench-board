@@ -324,6 +324,7 @@ body.sch-mode-railfocus .sch-degraded-pop{left:276px}
 .sch-filter{position:absolute;top:16px;right:16px;z-index:5;display:flex;align-items:center;gap:8px;background:rgba(10,17,32,.92);border:1px solid var(--border);border-radius:20px;backdrop-filter:blur(6px);padding:4px 10px}
 .sch-filter input{background:transparent;border:0;color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;min-width:130px;outline:none}
 .sch-filter input::placeholder{color:var(--text-3)}
+.sch-filter:focus-within,.sch-pdf-search:focus-within{border-color:var(--focus)}
 .sch-filter-status{font-family:var(--mono);font-size:10px;color:var(--text-3);min-width:70px;text-align:right}
 
 /* =========== ZOOM CONTROLS =========== */

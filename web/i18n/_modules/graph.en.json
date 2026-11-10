@@ -29,6 +29,7 @@
     "fit": "Fit"
   },
   "inspector": {
+    "close": "Close inspector",
     "type_inferred": "· model inference",
     "id_label": "id: {id}",
     "confidence": "Confidence",

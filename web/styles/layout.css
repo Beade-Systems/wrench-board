@@ -38,6 +38,7 @@
 .filter-chip[data-kind="net"] .swatch{background:var(--emerald);box-shadow:0 0 6px var(--emerald);clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
 .filter-chip[data-kind="action"] .swatch{background:var(--violet);box-shadow:0 0 6px var(--violet);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);border-radius:0}
 .search{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--panel);border:1px solid var(--border);border-radius:6px;width:220px}
+.search:focus-within{border-color:var(--focus)}
 .search input{background:transparent;border:0;outline:0;color:var(--text);font-family:inherit;font-size:12px;width:100%}
 .search input::placeholder{color:var(--text-3)}
 .search kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);padding:1px 5px;border-radius:3px;background:var(--bg-2);border:1px solid var(--border)}
